@@ -36,10 +36,11 @@ The game uses a lightweight entity-systems architecture. Entities are plain data
 6. Event processing — floating text, score, energy collection from sweep events
 7. Energy magnet — auto-collects nearby resources if upgrade is active
 8. Beacon passive healing — allies with beacon subtype generate energy in range
-9. `CombatSystem.update()` — enemy AI (chase/fire), projectile movement, contact damage
-10. Shield countdown, screen shake decay
-11. Game over check
-12. `World.cleanup()` — removes inactive/distant entities
+9. `AbilitySystem.update()` — cooldown decrements, HoT healing, drone AI
+10. `CombatSystem.update()` — enemy AI (chase/fire), projectile movement, contact damage
+11. Shield countdown, screen shake decay
+12. Game over check
+13. `World.cleanup()` — removes inactive/distant entities
 
 **Render order:**
 
@@ -49,10 +50,11 @@ The game uses a lightweight entity-systems architecture. Entities are plain data
 4. Entity blips via `BlipRenderer` (color-coded by type)
 5. Sweep flash effects
 6. Enemy projectiles
-7. Floating damage/heal text
-8. HUD (health bar, energy, score, kills, distance, threat level)
-9. Upgrade panel (right side, toggled with E key)
-10. Game over overlay
+7. Helper drones (cyan blips)
+8. Floating damage/heal text
+9. HUD (health bar, energy, score, kills, distance, threat level, ability cooldowns)
+10. Upgrade panel (right side, toggled with E key)
+11. Game over overlay
 
 ### Directory layout
 
@@ -70,6 +72,7 @@ src/
     SweepSystem.ts           # Sweep-line entity detection using angle math
     CombatSystem.ts          # Enemy AI behaviors, projectile lifecycle, contact damage
     UpgradeSystem.ts         # 7 upgrades with cost formulas and apply callbacks
+    AbilitySystem.ts         # 3 cooldown abilities — blast, heal over time, helper drone
   world/
     World.ts                 # Chunk-based spawning, difficulty scaling, entity cleanup
   radar/
@@ -118,6 +121,14 @@ src/
 | engine_speed | 5 | 25 + lvl*30 | +15 movement speed |
 | energy_magnet | 5 | 40 + lvl*45 | Auto-collect resources within 50+lvl*30 px |
 
+**Abilities** (3 total, activated with number keys 1/2/3, always available):
+
+| ID | Key | Cooldown | Effect |
+|----|-----|----------|--------|
+| damage_blast | 1 | 8s | AoE 20 damage to all enemies within 200px |
+| heal_over_time | 2 | 15s | Heals 5 HP/sec for 4 seconds (20 HP total) |
+| helper_drone | 3 | 20s | Spawns a drone that chases enemies, deals 5 dmg/s contact, lasts 10s |
+
 **Damage formula:** `effective = max(0, rawDamage - armor) * (1 - shieldReduction)`
 
 **Scoring:** +energy_value for collecting resources, +50 for enemy kills
@@ -146,5 +157,5 @@ Commits follow the pattern: `prd-NNN: <description>` for features, `review:` / `
 - The game has no linter configured — `npm run lint` is a no-op
 - All rendering is procedural (no sprite sheets, no image assets, no audio)
 - The `index.html` contains a single `<canvas id="game-canvas">` element
-- The main branch is empty; all code lives on `autopilot/programmable-radar-game`
+- The main branch contains the full codebase
 - World chunks are 400px squares; the game loads a 5x5 grid around the player and cleans up entities beyond 2000px
