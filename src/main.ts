@@ -306,6 +306,7 @@ const loop = new GameLoop({
     ambientParticles.render(ctx, cx, cy, radar.getRadius());
 
     // Entity blips (positions are rotated by the canvas transform)
+    const worldRot = -player.heading - Math.PI / 2;
     blipRenderer.renderBlips(
       ctx,
       world.entities,
@@ -314,7 +315,8 @@ const loop = new GameLoop({
       cx,
       cy,
       radar.getRadius(),
-      resolutionLevel
+      resolutionLevel,
+      worldRot
     );
     sweepEffects.render(ctx, cx, cy);
 
@@ -349,8 +351,9 @@ const loop = new GameLoop({
       ctx.restore();
     }
 
-    // Floating text
-    floatingText.render(ctx, player.x, player.y, cx, cy);
+    // Floating text (counter-rotated so text stays upright)
+    const worldRotation = -player.heading - Math.PI / 2;
+    floatingText.render(ctx, player.x, player.y, cx, cy, worldRotation);
 
     ctx.restore();
 

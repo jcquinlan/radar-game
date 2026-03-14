@@ -33,7 +33,8 @@ export class BlipRenderer {
     radarCenterX: number,
     radarCenterY: number,
     radarRadius: number,
-    resolutionLevel: number
+    resolutionLevel: number,
+    worldRotation?: number
   ): void {
     for (const entity of entities) {
       if (!entity.active || !entity.visible) continue;
@@ -108,6 +109,13 @@ export class BlipRenderer {
 
       // Resolution upgrade: show type-specific labels at level 2+
       if (resolutionLevel >= 2) {
+        ctx.save();
+        // Counter-rotate labels so they stay upright
+        if (worldRotation) {
+          ctx.translate(screenX, screenY);
+          ctx.rotate(-worldRotation);
+          ctx.translate(-screenX, -screenY);
+        }
         ctx.font = '10px monospace';
         ctx.fillStyle = color;
         ctx.shadowBlur = 3;
@@ -121,6 +129,7 @@ export class BlipRenderer {
           label = ally.subtype === 'healer' ? '+' : ally.subtype === 'shield' ? 'S' : 'B';
         }
         ctx.fillText(label, screenX + size + 2, screenY + 3);
+        ctx.restore();
       }
 
       ctx.restore();
