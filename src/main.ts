@@ -466,11 +466,11 @@ const loop = new GameLoop({
 
     // Drop shadow beneath player
     ctx.save();
-    ctx.globalAlpha = 0.25;
+    ctx.globalAlpha = 0.4;
     ctx.shadowBlur = 0;
-    ctx.fillStyle = '#000000';
+    ctx.fillStyle = '#111111';
     ctx.beginPath();
-    ctx.ellipse(0, 8, 7, 3, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 9, 8, 3.5, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 

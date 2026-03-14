@@ -12,6 +12,7 @@
     "lint": "echo 'no linter configured'"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "jsdom": "^27.0.1",
     "typescript": "^5.7.0",
     "vite": "^6.2.0",

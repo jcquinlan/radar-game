@@ -33,11 +33,11 @@ export class BlipRenderer {
     size: number
   ): void {
     ctx.save();
-    ctx.globalAlpha = 0.25;
+    ctx.globalAlpha = 0.4;
     ctx.shadowBlur = 0;
-    ctx.fillStyle = '#000000';
+    ctx.fillStyle = '#111111';
     ctx.beginPath();
-    ctx.ellipse(x, y + size + 2, size * 1.3, size * 0.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, y + size + 3, size * 1.5, size * 0.6, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
