@@ -223,4 +223,56 @@ describe('PingSystem', () => {
     expect(p.getConfig().maxRadius).toBe(500);
     expect(p.getConfig().cooldown).toBe(3);
   });
+
+  it('creates ghost marker when new ping hides a visible enemy', () => {
+    const enemy = createEnemy(50, 0, 'scout');
+
+    // First ping reveals the enemy
+    ping.update([enemy], player, 0.1);
+    expect(enemy.visible).toBe(true);
+    expect(enemy.ghostX).toBeNull();
+
+    // Complete the ping
+    ping.update([enemy], player, 0.5);
+
+    // Fire new ping — enemy gets hidden, ghost created at current position
+    ping.update([enemy], player, 0.016);
+    // Enemy at dist=50, ping radius ≈ 9.6 < 50, so not yet re-revealed
+    expect(enemy.visible).toBe(false);
+    expect(enemy.ghostX).toBe(enemy.x);
+    expect(enemy.ghostY).toBe(enemy.y);
+  });
+
+  it('clears ghost marker when enemy is re-pinged', () => {
+    const enemy = createEnemy(50, 0, 'scout');
+
+    // First ping reveals
+    ping.update([enemy], player, 0.1);
+
+    // Complete ping, fire new ping (creates ghost), then expand past enemy
+    ping.update([enemy], player, 0.5);
+    ping.update([enemy], player, 0.016); // new ping fires, ghost created
+    expect(enemy.ghostX).not.toBeNull();
+
+    // Expand enough to re-reveal enemy (speed=600, need dt to reach 50px)
+    ping.update([enemy], player, 0.1);
+    expect(enemy.visible).toBe(true);
+    expect(enemy.ghostX).toBeNull();
+    expect(enemy.ghostY).toBeNull();
+  });
+
+  it('does not create ghost for enemies that were never visible', () => {
+    // Enemy beyond max radius — never revealed
+    const enemy = createEnemy(500, 0, 'scout');
+    expect(enemy.visible).toBe(false);
+
+    // Complete a full ping cycle
+    ping.update([enemy], player, 0.1);
+    ping.update([enemy], player, 0.5);
+    ping.update([enemy], player, 0.016); // new ping fires
+
+    // No ghost since enemy was never visible
+    expect(enemy.ghostX).toBeNull();
+    expect(enemy.ghostY).toBeNull();
+  });
 });

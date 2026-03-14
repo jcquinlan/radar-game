@@ -84,10 +84,16 @@ export class PingSystem {
       this.state.cooldownRemaining -= dt;
 
       if (this.state.cooldownRemaining <= 0) {
-        // Fire new ping — first hide all enemies
+        // Fire new ping — hide enemies and save ghost markers at last-known positions
         for (const entity of entities) {
           if (entity.type === 'enemy' && entity.active) {
-            entity.visible = false;
+            const enemy = entity as Enemy;
+            if (enemy.visible) {
+              // Save ghost at current position before hiding
+              enemy.ghostX = enemy.x;
+              enemy.ghostY = enemy.y;
+            }
+            enemy.visible = false;
           }
           entity.pingedThisWave = false;
         }
@@ -123,6 +129,9 @@ export class PingSystem {
 
           if (entity.type === 'enemy') {
             entity.visible = true;
+            // Clear ghost marker — live position is now visible
+            (entity as Enemy).ghostX = null;
+            (entity as Enemy).ghostY = null;
           }
 
           const event = this.processInteraction(entity, player);

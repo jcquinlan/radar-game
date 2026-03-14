@@ -37,7 +37,17 @@ export class BlipRenderer {
     worldRotation?: number
   ): void {
     for (const entity of entities) {
-      if (!entity.active || !entity.visible) continue;
+      if (!entity.active) continue;
+
+      // Enemies: render ghost marker if invisible but has last-known position
+      if (entity.type === 'enemy') {
+        const enemy = entity as Enemy;
+        if (!enemy.visible && enemy.ghostX !== null && enemy.ghostY !== null) {
+          this.renderGhostBlip(ctx, enemy, playerX, playerY, radarCenterX, radarCenterY, radarRadius);
+        }
+      }
+
+      if (!entity.visible) continue;
 
       // Convert world position to radar position
       const relX = entity.x - playerX;
@@ -134,5 +144,65 @@ export class BlipRenderer {
 
       ctx.restore();
     }
+  }
+
+  /** Render a faded ghost blip at the enemy's last-known position */
+  private renderGhostBlip(
+    ctx: CanvasRenderingContext2D,
+    enemy: Enemy,
+    playerX: number,
+    playerY: number,
+    radarCenterX: number,
+    radarCenterY: number,
+    radarRadius: number
+  ): void {
+    const relX = enemy.ghostX! - playerX;
+    const relY = enemy.ghostY! - playerY;
+    const dist = Math.sqrt(relX * relX + relY * relY);
+
+    if (dist > radarRadius) return;
+
+    const screenX = radarCenterX + relX;
+    const screenY = radarCenterY + relY;
+
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+
+    let color = BLIP_COLORS.enemy;
+    let ghostSize = BLIP_SIZES.enemy;
+
+    if (enemy.subtype === 'ranged') {
+      color = '#ff8841';
+      ghostSize = 4;
+    } else if (enemy.subtype === 'brute') {
+      ghostSize = 7;
+    } else {
+      ghostSize = 3;
+    }
+
+    // Dashed ring outline
+    ctx.beginPath();
+    ctx.setLineDash([3, 3]);
+    ctx.arc(screenX, screenY, ghostSize + 3, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Faded blip fill
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 4;
+    ctx.beginPath();
+    ctx.arc(screenX, screenY, ghostSize, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    // Ghost label "?"
+    ctx.font = '10px monospace';
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 2;
+    ctx.fillText('?', screenX + ghostSize + 2, screenY + 3);
+
+    ctx.restore();
   }
 }

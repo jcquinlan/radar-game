@@ -303,7 +303,7 @@ const loop = new GameLoop({
     ctx.rotate(-player.heading - Math.PI / 2); // Offset so heading=0 (up) maps to screen-up
     ctx.translate(-cx, -cy);
 
-    ambientParticles.render(ctx, cx, cy, radar.getRadius());
+    ambientParticles.renderDeep(ctx, cx, cy, radar.getRadius(), player.x, player.y);
 
     // Entity blips (positions are rotated by the canvas transform)
     const worldRot = -player.heading - Math.PI / 2;
@@ -354,6 +354,9 @@ const loop = new GameLoop({
     // Floating text (counter-rotated so text stays upright)
     const worldRotation = -player.heading - Math.PI / 2;
     floatingText.render(ctx, player.x, player.y, cx, cy, worldRotation);
+
+    // Foreground particles (on top of entities — closer to camera)
+    ambientParticles.renderForeground(ctx, cx, cy, radar.getRadius(), player.x, player.y);
 
     ctx.restore();
 

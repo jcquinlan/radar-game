@@ -24,13 +24,15 @@ export class CombatSystem {
       // Stop at standoff distance instead of stacking on top of the player
       const standoffDist = enemy.subtype === 'brute' ? 20 : 25;
       const enemyAccel = enemy.speed * enemy.friction;
-      if (enemy.subtype !== 'ranged' && dist < enemy.chaseRange && dist > standoffDist) {
+      const inChaseRange = dist < enemy.chaseRange;
+
+      if (enemy.subtype !== 'ranged' && inChaseRange && dist > standoffDist) {
         enemy.vx += (dx / dist) * enemyAccel * dt;
         enemy.vy += (dy / dist) * enemyAccel * dt;
       }
 
       // Ranged enemies: maintain distance and fire
-      if (enemy.subtype === 'ranged' && dist < enemy.chaseRange) {
+      if (enemy.subtype === 'ranged' && inChaseRange) {
         // Back away if too close
         if (dist < 100 && dist > 0) {
           enemy.vx -= (dx / dist) * enemyAccel * dt;
@@ -50,6 +52,18 @@ export class CombatSystem {
             lifetime: 3,
           });
         }
+      }
+
+      // Idle wandering when outside chase range
+      if (!inChaseRange) {
+        enemy.wanderTimer -= dt;
+        if (enemy.wanderTimer <= 0) {
+          enemy.wanderAngle = Math.random() * Math.PI * 2;
+          enemy.wanderTimer = 2 + Math.random();
+        }
+        const wanderAccel = enemyAccel * 0.2;
+        enemy.vx += Math.cos(enemy.wanderAngle) * wanderAccel * dt;
+        enemy.vy += Math.sin(enemy.wanderAngle) * wanderAccel * dt;
       }
 
       // Apply exponential friction and update position

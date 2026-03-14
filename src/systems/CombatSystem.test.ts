@@ -19,11 +19,14 @@ describe('CombatSystem', () => {
     expect(enemy.x).toBeLessThan(initialX);
   });
 
-  it('enemies do not chase when outside chase range', () => {
+  it('enemies wander when outside chase range', () => {
     const enemy = createEnemy(1000, 0, 'scout');
+    enemy.wanderAngle = 0; // wander to the right
+    enemy.wanderTimer = 5; // don't change direction during test
     const initialX = enemy.x;
     combat.update([enemy], player, 1);
-    expect(enemy.x).toBe(initialX);
+    // Enemy should have moved (wandered), not stayed still
+    expect(enemy.x).not.toBe(initialX);
   });
 
   it('scouts deal contact damage when close to the player', () => {
@@ -104,5 +107,50 @@ describe('CombatSystem', () => {
     const enemy = createEnemy(20, 0, 'scout');
     combat.update([enemy], player, 1);
     expect(player.health).toBeLessThan(player.maxHealth);
+  });
+
+  it('wandering speed is much slower than chase speed', () => {
+    // Enemy wandering (out of range)
+    const wanderer = createEnemy(1000, 0, 'scout');
+    wanderer.wanderAngle = 0;
+    wanderer.wanderTimer = 5;
+    const wanderStartX = wanderer.x;
+    combat.update([wanderer], player, 0.5);
+    const wanderDist = Math.abs(wanderer.x - wanderStartX);
+
+    // Enemy chasing (in range)
+    const chaser = createEnemy(100, 0, 'scout');
+    const chaseStartX = chaser.x;
+    combat.update([chaser], player, 0.5);
+    const chaseDist = Math.abs(chaser.x - chaseStartX);
+
+    // Wander movement should be significantly less than chase movement
+    expect(wanderDist).toBeLessThan(chaseDist * 0.5);
+  });
+
+  it('enemies pick new wander direction when timer expires', () => {
+    const enemy = createEnemy(1000, 0, 'scout');
+    enemy.wanderTimer = 0.1; // about to expire
+    const oldAngle = enemy.wanderAngle;
+
+    combat.update([enemy], player, 0.2); // dt > wanderTimer, triggers new direction
+    // Timer should have been reset to 2-3 seconds
+    expect(enemy.wanderTimer).toBeGreaterThan(1);
+  });
+
+  it('enemies immediately chase when player enters range', () => {
+    // Start outside chase range, wandering
+    const enemy = createEnemy(300, 0, 'scout');
+    enemy.chaseRange = 200;
+    enemy.wanderAngle = Math.PI; // wandering away from player
+    enemy.wanderTimer = 5;
+
+    // Move player close to enemy
+    player.x = 250; // now dist = 50, within chaseRange of 200
+    const initialX = enemy.x;
+    combat.update([enemy], player, 0.5);
+
+    // Enemy should be chasing (moving toward player), not wandering away
+    expect(enemy.x).toBeLessThan(initialX); // moved toward player at x=250
   });
 });
