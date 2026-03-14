@@ -329,8 +329,8 @@ const loop = new GameLoop({
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Radar (drawn without rotation — rings/crosshair are fixed)
-    radar.render(ctx, cx, cy);
+    // Radar background (rings, crosshair, border — fixed in screen space)
+    radar.renderBackground(ctx, cx, cy);
 
     // Rotated world layer — everything inside the radar rotates with player heading
     ctx.save();
@@ -393,6 +393,9 @@ const loop = new GameLoop({
     floatingText.render(ctx, renderX, renderY, cx, cy);
 
     ctx.restore();
+
+    // Sweep line (screen space, on top of rotated entities — NOT affected by player heading)
+    radar.renderSweep(ctx, cx, cy);
 
     // Player heading indicator (fixed to screen, always points up)
     ctx.save();

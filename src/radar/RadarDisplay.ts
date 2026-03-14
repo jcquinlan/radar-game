@@ -62,7 +62,9 @@ export class RadarDisplay {
     }
   }
 
-  render(ctx: CanvasRenderingContext2D, centerX: number, centerY: number): void {
+  /** Render the static radar frame: background, rings, crosshair, border, center dot, scanlines.
+   *  Call this BEFORE the rotated entity layer. */
+  renderBackground(ctx: CanvasRenderingContext2D, centerX: number, centerY: number): void {
     const { radius, ringCount, color, dimColor, bgColor } = this.config;
 
     ctx.save();
@@ -96,6 +98,37 @@ export class RadarDisplay {
     ctx.lineWidth = 1;
     ctx.stroke();
 
+    // Outer ring (border)
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Center dot
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    ctx.restore();
+
+    // Scanline overlay (outside clip for full effect)
+    this.renderScanlines(ctx, centerX, centerY, radius);
+  }
+
+  /** Render the sweep line and trail. Call this AFTER the rotated entity layer
+   *  so the sweep is always in screen space and on top of entities. */
+  renderSweep(ctx: CanvasRenderingContext2D, centerX: number, centerY: number): void {
+    const { radius, color } = this.config;
+
+    ctx.save();
+
+    // Clip to circle
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    ctx.clip();
+
     // Sweep trail (fading)
     for (let i = this.trailAngles.length - 1; i >= 0; i--) {
       const alpha = ((this.trailAngles.length - i) / this.trailAngles.length) * 0.3;
@@ -125,23 +158,13 @@ export class RadarDisplay {
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    // Outer ring (border)
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Center dot
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-
     ctx.restore();
+  }
 
-    // Scanline overlay (outside clip for full effect)
-    this.renderScanlines(ctx, centerX, centerY, radius);
+  /** @deprecated Use renderBackground() + renderSweep() separately */
+  render(ctx: CanvasRenderingContext2D, centerX: number, centerY: number): void {
+    this.renderBackground(ctx, centerX, centerY);
+    this.renderSweep(ctx, centerX, centerY);
   }
 
   private renderScanlines(
