@@ -16,6 +16,7 @@ import { UpgradePanel } from './ui/UpgradePanel';
 import { GameOverScreen } from './ui/GameOverScreen';
 import { FloatingText } from './ui/FloatingText';
 import { ScreenShake } from './ui/ScreenShake';
+import { AbilitySystem } from './systems/AbilitySystem';
 
 const canvas = createCanvas('game-canvas');
 const ctx = canvas.getContext('2d')!;
@@ -35,6 +36,7 @@ let upgradePanel: UpgradePanel;
 let gameOverScreen: GameOverScreen;
 let floatingText: FloatingText;
 let screenShake: ScreenShake;
+let abilitySystem: AbilitySystem;
 let resolutionLevel: number;
 let gameOver: boolean;
 let prevHealth: number;
@@ -63,6 +65,7 @@ function init() {
   upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
     resolutionLevel = lvl;
   });
+  abilitySystem = new AbilitySystem(player);
 
   input.attach();
   upgradePanel.attach(canvas, upgradeSystem, player);
@@ -73,6 +76,22 @@ function init() {
 window.addEventListener('keydown', (e) => {
   if ((e.key === 'e' || e.key === 'E') && !gameOver) {
     upgradePanel.toggle();
+  }
+  // Ability keybinds
+  if (e.key === '1' && !gameOver) {
+    const addText = (text: string, x: number, y: number, color: string) =>
+      floatingText.add(text, x, y, color);
+    abilitySystem.activate('damage_blast', world.entities, addText);
+  }
+  if (e.key === '2' && !gameOver) {
+    const addText = (text: string, x: number, y: number, color: string) =>
+      floatingText.add(text, x, y, color);
+    abilitySystem.activate('heal_over_time', world.entities, addText);
+  }
+  if (e.key === '3' && !gameOver) {
+    const addText = (text: string, x: number, y: number, color: string) =>
+      floatingText.add(text, x, y, color);
+    abilitySystem.activate('helper_drone', world.entities, addText);
   }
 });
 
@@ -172,6 +191,11 @@ const loop = new GameLoop({
       }
     }
 
+    // Abilities
+    const addText = (text: string, x: number, y: number, color: string) =>
+      floatingText.add(text, x, y, color);
+    abilitySystem.update(dt, world.entities, addText);
+
     // Combat
     const alive = combatSystem.update(world.entities, player, dt);
 
@@ -242,6 +266,20 @@ const loop = new GameLoop({
       ctx.beginPath();
       ctx.arc(px, py, 2, 0, Math.PI * 2);
       ctx.fillStyle = '#ff6641';
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Render drones
+    for (const drone of abilitySystem.drones) {
+      const droneX = cx + (drone.x - player.x);
+      const droneY = cy + (drone.y - player.y);
+      ctx.save();
+      ctx.shadowColor = '#00ffff';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(droneX, droneY, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#00ffff';
       ctx.fill();
       ctx.restore();
     }
