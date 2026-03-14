@@ -176,7 +176,7 @@ describe('corridor detection', () => {
 
 describe('selectPOI', () => {
   it('returns a POI type or null', () => {
-    const result = selectPOI(2000, 2000, 1.5);
+    const result = selectPOI(2000, 2000);
     if (result !== null) {
       expect(result.id).toBeTruthy();
       expect(typeof result.spawn).toBe('function');
@@ -190,9 +190,9 @@ describe('selectPOI', () => {
 
     for (let i = 0; i < trials; i++) {
       // On corridor (due east, far enough from origin)
-      if (selectPOI(3000, 0, 2) !== null) corridorPOICount++;
+      if (selectPOI(3000, 0) !== null) corridorPOICount++;
       // Off corridor (odd angle)
-      if (selectPOI(3000, -1500, 2) !== null) offCorridorPOICount++;
+      if (selectPOI(3000, -1500) !== null) offCorridorPOICount++;
     }
 
     // Corridor should produce more POIs due to weight boost

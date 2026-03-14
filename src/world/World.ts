@@ -1,10 +1,9 @@
 import {
   GameEntity,
-  Enemy,
   createEnemy,
   EnemySubtype,
 } from '../entities/Entity';
-import { selectPOI, spawnResourceVein } from './POIGenerator';
+import { selectPOI, spawnResourceVein, scaleEnemy } from './POIGenerator';
 
 const CHUNK_SIZE = 400;
 
@@ -53,7 +52,7 @@ export class World {
         const isNearPlayer = Math.abs(dx) <= 1 && Math.abs(dy) <= 1;
 
         // Try to place a POI in this chunk
-        const poi = isNearPlayer ? null : selectPOI(chunkCenterX, chunkCenterY, difficulty);
+        const poi = isNearPlayer ? null : selectPOI(chunkCenterX, chunkCenterY);
 
         if (poi) {
           // POI chunk — use structured spawning
@@ -92,18 +91,9 @@ export class World {
         chunkY + Math.random() * CHUNK_SIZE,
         subtype
       );
-      this.scaleEnemy(enemy, difficulty);
+      scaleEnemy(enemy, difficulty);
       this.entities.push(enemy);
     }
-  }
-
-  private scaleEnemy(enemy: Enemy, difficulty: number): void {
-    const scale = difficulty;
-    enemy.health = Math.floor(enemy.health * scale);
-    enemy.maxHealth = enemy.health;
-    enemy.damage = Math.floor(enemy.damage * scale);
-    enemy.energyDrop = Math.floor(enemy.energyDrop * scale);
-    enemy.speed = Math.floor(enemy.speed * (1 + (scale - 1) * 0.3)); // Speed scales less aggressively
   }
 
   /** Remove inactive entities that are far from the player */

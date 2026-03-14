@@ -1,6 +1,8 @@
 import {
   GameEntity,
+  Enemy,
   EnemySubtype,
+  Resource,
   createResource,
   createEnemy,
   createAlly,
@@ -76,10 +78,7 @@ function randInt(min: number, max: number): number {
 }
 
 /** Scale an enemy's stats by difficulty */
-function scaleEnemy(
-  enemy: ReturnType<typeof createEnemy>,
-  difficulty: number
-): void {
+export function scaleEnemy(enemy: Enemy, difficulty: number): void {
   enemy.health = Math.floor(enemy.health * difficulty);
   enemy.maxHealth = enemy.health;
   enemy.damage = Math.floor(enemy.damage * difficulty);
@@ -230,8 +229,7 @@ const CORRIDOR_POI_CHANCE_BOOST = 1.4;
  */
 export function selectPOI(
   chunkCenterX: number,
-  chunkCenterY: number,
-  _difficulty: number
+  chunkCenterY: number
 ): POIType | null {
   const onCorridor = isOnCorridor(chunkCenterX, chunkCenterY);
   const poiChance = onCorridor
@@ -264,10 +262,7 @@ export function selectPOI(
 /**
  * Spawn a cluster of 3-5 resources within 40px of a center point.
  */
-export function spawnResourceVein(
-  cx: number,
-  cy: number
-): ReturnType<typeof createResource>[] {
+export function spawnResourceVein(cx: number, cy: number): Resource[] {
   const count = randInt(3, 5);
   return scatterAround(cx, cy, count, 40).map((pt) =>
     createResource(pt.x, pt.y)
