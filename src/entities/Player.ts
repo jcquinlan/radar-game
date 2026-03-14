@@ -19,7 +19,7 @@ export class Player {
     this.maxHealth = 100;
     this.health = this.maxHealth;
     this.energy = 0;
-    this.speed = 200; // pixels per second
+    this.speed = 80; // pixels per second — slow, lumbering feel
     this.sweepDamage = 10;
   }
 

@@ -15,7 +15,7 @@ export interface RadarConfig {
 
 export const DEFAULT_RADAR_CONFIG: RadarConfig = {
   radius: 280,
-  sweepSpeed: Math.PI, // Half rotation per second
+  sweepSpeed: Math.PI * 0.25, // ~8 seconds per full rotation
   ringCount: 4,
   color: '#00ff41',
   dimColor: '#003b0f',
@@ -28,7 +28,7 @@ export class RadarDisplay {
 
   // Store previous sweep positions for the fading trail
   private trailAngles: number[] = [];
-  private readonly trailLength = 30;
+  private readonly trailLength = 60;
 
   constructor(config: Partial<RadarConfig> = {}) {
     this.config = { ...DEFAULT_RADAR_CONFIG, ...config };

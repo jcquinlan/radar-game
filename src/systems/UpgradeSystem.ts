@@ -24,7 +24,7 @@ export class UpgradeSystem {
         maxLevel: 5,
         cost: (lvl) => 20 + lvl * 30,
         apply: (lvl) => {
-          radar.setSweepSpeed(Math.PI * (1 + lvl * 0.5));
+          radar.setSweepSpeed(Math.PI * 0.25 * (1 + lvl * 0.6));
         },
       },
       {
