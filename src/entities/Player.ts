@@ -23,6 +23,11 @@ export class Player {
   turnVelocity: number;
   turnFriction: number;
 
+  // Previous-frame state for render interpolation
+  prevX: number;
+  prevY: number;
+  prevHeading: number;
+
   // Shield buff
   shieldActive: boolean;
   shieldReduction: number;
@@ -40,8 +45,11 @@ export class Player {
     this.y = y;
     this.vx = 0;
     this.vy = 0;
+    this.prevX = x;
+    this.prevY = y;
     this.friction = 2.0;
     this.heading = -Math.PI / 2; // Start facing up
+    this.prevHeading = this.heading;
     this.turnSpeed = 3.0; // Radians per second
     this.turnVelocity = 0;
     this.turnFriction = 3.0; // Higher than movement friction — turning should feel snappier
