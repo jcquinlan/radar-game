@@ -14,14 +14,21 @@ export interface Resource extends Entity {
   energyValue: number;
 }
 
+export type EnemySubtype = 'scout' | 'brute' | 'ranged';
+
 export interface Enemy extends Entity {
   type: 'enemy';
+  subtype: EnemySubtype;
   health: number;
   maxHealth: number;
   damage: number;
   speed: number;
   chaseRange: number;
   energyDrop: number;
+  /** Ranged enemies: time between shots */
+  fireRate: number;
+  lastFireTime: number;
+  projectileSpeed: number;
 }
 
 export type AllySubtype = 'healer' | 'shield' | 'beacon';
@@ -40,6 +47,16 @@ export interface Ally extends Entity {
   beaconRange: number;
 }
 
+export interface Projectile {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  damage: number;
+  active: boolean;
+  lifetime: number;
+}
+
 export type GameEntity = Resource | Enemy | Ally;
 
 export function createResource(x: number, y: number): Resource {
@@ -53,20 +70,31 @@ export function createResource(x: number, y: number): Resource {
   };
 }
 
-export function createEnemy(x: number, y: number): Enemy {
-  const health = 20 + Math.floor(Math.random() * 30);
+export function createEnemy(x: number, y: number, subtype?: EnemySubtype): Enemy {
+  const st = subtype ?? (['scout', 'scout', 'brute', 'ranged'][Math.floor(Math.random() * 4)] as EnemySubtype);
+
+  const stats = {
+    scout: { health: 15, damage: 3, speed: 90, chaseRange: 200, energyDrop: 5, fireRate: 0, projectileSpeed: 0 },
+    brute: { health: 80, damage: 12, speed: 25, chaseRange: 180, energyDrop: 25, fireRate: 0, projectileSpeed: 0 },
+    ranged: { health: 30, damage: 0, speed: 30, chaseRange: 300, energyDrop: 15, fireRate: 2.5, projectileSpeed: 120 },
+  }[st];
+
   return {
     x,
     y,
     type: 'enemy',
+    subtype: st,
     active: true,
     sweptThisRotation: false,
-    health,
-    maxHealth: health,
-    damage: 5 + Math.floor(Math.random() * 5),
-    speed: 40 + Math.random() * 40,
-    chaseRange: 250,
-    energyDrop: 10 + Math.floor(Math.random() * 15),
+    health: stats.health,
+    maxHealth: stats.health,
+    damage: stats.damage,
+    speed: stats.speed,
+    chaseRange: stats.chaseRange,
+    energyDrop: stats.energyDrop,
+    fireRate: stats.fireRate,
+    projectileSpeed: stats.projectileSpeed,
+    lastFireTime: -Infinity,
   };
 }
 

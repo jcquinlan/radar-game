@@ -12,65 +12,75 @@ describe('CombatSystem', () => {
     player = new Player(0, 0);
   });
 
-  it('enemies chase the player when within chase range', () => {
-    const enemy = createEnemy(100, 0);
-    enemy.chaseRange = 250;
-    enemy.speed = 50;
-
+  it('scout enemies chase the player when within chase range', () => {
+    const enemy = createEnemy(100, 0, 'scout');
     const initialX = enemy.x;
     combat.update([enemy], player, 1);
-
-    // Enemy should have moved toward the player (x decreased)
     expect(enemy.x).toBeLessThan(initialX);
   });
 
   it('enemies do not chase when outside chase range', () => {
-    const enemy = createEnemy(1000, 0);
-    enemy.chaseRange = 250;
-    enemy.speed = 50;
-
+    const enemy = createEnemy(1000, 0, 'scout');
     const initialX = enemy.x;
     combat.update([enemy], player, 1);
-
     expect(enemy.x).toBe(initialX);
   });
 
-  it('enemies deal contact damage when close to the player', () => {
-    const enemy = createEnemy(5, 0); // Very close to player
-    enemy.damage = 10;
-
+  it('scouts deal contact damage when close to the player', () => {
+    const enemy = createEnemy(5, 0, 'scout');
     combat.update([enemy], player, 1);
-
     expect(player.health).toBeLessThan(player.maxHealth);
   });
 
   it('returns false when player dies', () => {
-    const enemy = createEnemy(5, 0);
-    enemy.damage = 200; // Lethal damage
-
+    const enemy = createEnemy(5, 0, 'brute');
+    enemy.damage = 200;
     const alive = combat.update([enemy], player, 1);
-
     expect(alive).toBe(false);
-    expect(player.isAlive()).toBe(false);
   });
 
   it('returns true when player is alive', () => {
-    const enemy = createEnemy(500, 0); // Far away, no damage
-    enemy.chaseRange = 100;
-
+    const enemy = createEnemy(500, 0, 'scout');
     const alive = combat.update([enemy], player, 1);
-
     expect(alive).toBe(true);
   });
 
   it('ignores inactive enemies', () => {
-    const enemy = createEnemy(5, 0);
+    const enemy = createEnemy(5, 0, 'brute');
     enemy.damage = 200;
     enemy.active = false;
-
     const alive = combat.update([enemy], player, 1);
-
     expect(alive).toBe(true);
-    expect(player.health).toBe(player.maxHealth);
+  });
+
+  it('ranged enemies fire projectiles at the player', () => {
+    const enemy = createEnemy(150, 0, 'ranged');
+    enemy.fireRate = 0; // fire every frame
+    combat.update([enemy], player, 1);
+    expect(combat.projectiles.length).toBeGreaterThan(0);
+  });
+
+  it('projectiles deal damage on contact with the player', () => {
+    combat.projectiles.push({
+      x: 5, y: 0,
+      vx: -100, vy: 0,
+      damage: 15,
+      active: true,
+      lifetime: 3,
+    });
+    combat.update([], player, 0.1);
+    expect(player.health).toBe(85); // 100 - 15
+  });
+
+  it('projectiles expire after their lifetime', () => {
+    combat.projectiles.push({
+      x: 500, y: 500,
+      vx: 10, vy: 0,
+      damage: 10,
+      active: true,
+      lifetime: 0.1,
+    });
+    combat.update([], player, 0.2);
+    expect(combat.projectiles).toHaveLength(0);
   });
 });

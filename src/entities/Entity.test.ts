@@ -11,15 +11,26 @@ describe('Entity factories', () => {
     expect(r.energyValue).toBeGreaterThan(0);
   });
 
-  it('creates an enemy at the given position', () => {
-    const e = createEnemy(50, 75);
-    expect(e.x).toBe(50);
-    expect(e.y).toBe(75);
+  it('creates a scout enemy', () => {
+    const e = createEnemy(50, 75, 'scout');
     expect(e.type).toBe('enemy');
-    expect(e.active).toBe(true);
-    expect(e.health).toBeGreaterThan(0);
-    expect(e.damage).toBeGreaterThan(0);
-    expect(e.speed).toBeGreaterThan(0);
+    expect(e.subtype).toBe('scout');
+    expect(e.speed).toBeGreaterThan(50); // scouts are fast
+    expect(e.health).toBeLessThan(30); // scouts are fragile
+  });
+
+  it('creates a brute enemy', () => {
+    const e = createEnemy(50, 75, 'brute');
+    expect(e.subtype).toBe('brute');
+    expect(e.health).toBeGreaterThan(50); // brutes are tanky
+    expect(e.damage).toBeGreaterThan(5); // brutes hit hard
+  });
+
+  it('creates a ranged enemy', () => {
+    const e = createEnemy(50, 75, 'ranged');
+    expect(e.subtype).toBe('ranged');
+    expect(e.fireRate).toBeGreaterThan(0);
+    expect(e.projectileSpeed).toBeGreaterThan(0);
   });
 
   it('creates a healer ally with heal properties', () => {

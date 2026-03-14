@@ -1,4 +1,4 @@
-import { GameEntity, Ally } from '../entities/Entity';
+import { GameEntity, Ally, Enemy } from '../entities/Entity';
 
 const BLIP_COLORS = {
   resource: '#00ff41',
@@ -65,9 +65,18 @@ export class BlipRenderer {
 
       let currentSize = size;
 
-      // Enemy pulsing effect
+      // Enemy subtype sizes and effects
       if (entity.type === 'enemy') {
-        currentSize = size + Math.sin(this.time * 4) * 1.5;
+        const enemy = entity as Enemy;
+        if (enemy.subtype === 'scout') {
+          currentSize = 3 + Math.sin(this.time * 6) * 1;
+        } else if (enemy.subtype === 'brute') {
+          currentSize = 7 + Math.sin(this.time * 2) * 2;
+        } else {
+          // ranged: steady medium with a different color tint
+          currentSize = 4;
+          color = '#ff8841';
+        }
       }
 
       // Ally gentle pulsing aura

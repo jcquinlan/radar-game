@@ -149,6 +149,21 @@ const loop = new GameLoop({
       resolutionLevel
     );
     sweepEffects.render(ctx, cx, cy);
+
+    // Render projectiles
+    for (const p of combatSystem.projectiles) {
+      const px = cx + (p.x - player.x);
+      const py = cy + (p.y - player.y);
+      ctx.save();
+      ctx.shadowColor = '#ff4141';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(px, py, 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#ff6641';
+      ctx.fill();
+      ctx.restore();
+    }
+
     ctx.restore();
 
     // HUD
