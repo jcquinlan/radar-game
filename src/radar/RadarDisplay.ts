@@ -30,6 +30,9 @@ export class RadarDisplay {
   private trailAngles: number[] = [];
   private readonly trailLength = 60;
 
+  /** When false, Canvas 2D scanlines are skipped (e.g., when WebGL CRT shader is active) */
+  scanlineEnabled = true;
+
   constructor(config: Partial<RadarConfig> = {}) {
     this.config = { ...DEFAULT_RADAR_CONFIG, ...config };
   }
@@ -141,7 +144,9 @@ export class RadarDisplay {
     ctx.restore();
 
     // Scanline overlay (outside clip for full effect)
-    this.renderScanlines(ctx, centerX, centerY, radius);
+    if (this.scanlineEnabled) {
+      this.renderScanlines(ctx, centerX, centerY, radius);
+    }
   }
 
   private renderScanlines(

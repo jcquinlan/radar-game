@@ -20,9 +20,17 @@ import { AbilitySystem } from './systems/AbilitySystem';
 import { AbilityEffects } from './radar/AbilityEffects';
 import { AbilityBar } from './ui/AbilityBar';
 import { KeyRemapScreen } from './ui/KeyRemapScreen';
+import { ShaderPipeline } from './rendering/ShaderPipeline';
+import { CRTEffect } from './rendering/effects/CRTEffect';
 
 const canvas = createCanvas('game-canvas');
 const ctx = canvas.getContext('2d')!;
+
+// Shader pipeline (persists across game restarts)
+const shaderPipeline = ShaderPipeline.create(canvas);
+if (shaderPipeline) {
+  shaderPipeline.addEffect(new CRTEffect());
+}
 
 let radar: RadarDisplay;
 let blipRenderer: BlipRenderer;
@@ -85,6 +93,9 @@ function init() {
   });
   keyRemapScreen.load(abilitySystem.abilities);
 
+  // Disable Canvas 2D scanlines when shader pipeline is active
+  radar.scanlineEnabled = !shaderPipeline || !shaderPipeline.enabled;
+
   input.attach();
   keyRemapScreen.attach(canvas, abilitySystem.abilities);
   upgradePanel.attach(canvas, upgradeSystem, player);
@@ -103,6 +114,10 @@ window.addEventListener('keydown', (e) => {
   }
   if ((e.key === 'k' || e.key === 'K') && !gameOver) {
     keyRemapScreen.toggle();
+  }
+  if (e.key === '`' && shaderPipeline) {
+    shaderPipeline.setEnabled(!shaderPipeline.enabled);
+    radar.scanlineEnabled = !shaderPipeline.enabled;
   }
 
   // Ability keybinds (dynamic from ability.keybind)
@@ -415,6 +430,11 @@ const loop = new GameLoop({
 
     // Key remap screen (on top of everything)
     keyRemapScreen.render(ctx, abilitySystem.abilities, canvas.width, canvas.height);
+
+    // Post-processing shader pass (reads the completed 2D canvas as a texture)
+    if (shaderPipeline) {
+      shaderPipeline.render(performance.now() / 1000);
+    }
   },
 });
 
