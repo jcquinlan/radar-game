@@ -105,4 +105,117 @@ describe('AbilitySystem', () => {
       expect(texts[0].color).toBe('#ff4141');
     });
   });
+
+  describe('heal over time', () => {
+    it('heals 5 HP per second over 4 seconds', () => {
+      const { system, player } = buildAbilitySystem();
+      player.health = 50;
+      system.activate('heal_over_time', [], () => {});
+
+      // Simulate 4 seconds of healing
+      system.update(4, [], () => {});
+      expect(player.health).toBe(70); // 50 + 5*4 = 70
+    });
+
+    it('does not exceed maxHealth', () => {
+      const { system, player } = buildAbilitySystem();
+      player.health = 95;
+      system.activate('heal_over_time', [], () => {});
+
+      system.update(4, [], () => {});
+      expect(player.health).toBe(100); // Capped at max
+    });
+
+    it('has 15 second cooldown', () => {
+      const { system } = buildAbilitySystem();
+      const ability = system.getAbility('heal_over_time')!;
+      expect(ability.cooldown).toBe(15);
+    });
+
+    it('effect ends after 4 seconds', () => {
+      const { system, player } = buildAbilitySystem();
+      player.health = 50;
+      system.activate('heal_over_time', [], () => {});
+
+      system.update(4, [], () => {}); // Duration expires
+      system.update(2, [], () => {}); // Extra time — should not heal more
+
+      expect(player.health).toBe(70); // Only healed during 4s window
+    });
+  });
+
+  describe('helper drone', () => {
+    it('spawns a drone at the player position', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 100;
+      player.y = 200;
+      system.activate('helper_drone', [], () => {});
+
+      expect(system.drones.length).toBe(1);
+      expect(system.drones[0].x).toBe(100);
+      expect(system.drones[0].y).toBe(200);
+    });
+
+    it('drone chases nearest enemy within 300px', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      const enemy = createEnemy(100, 0, 'scout');
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('helper_drone', entities, () => {});
+      const droneStartX = system.drones[0].x;
+
+      system.update(1, entities, () => {});
+
+      // Drone should have moved toward enemy
+      expect(system.drones[0].x).toBeGreaterThan(droneStartX);
+    });
+
+    it('drone deals contact damage to enemies', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      const enemy = createEnemy(5, 0, 'brute'); // Very close
+      enemy.health = 80;
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('helper_drone', entities, () => {});
+      system.update(1, entities, () => {}); // 1 second of 5 dmg/s = 5 damage
+
+      expect(enemy.health).toBeLessThan(80);
+    });
+
+    it('drone despawns after 10 seconds', () => {
+      const { system } = buildAbilitySystem();
+      system.activate('helper_drone', [], () => {});
+      expect(system.drones.length).toBe(1);
+
+      system.update(11, [], () => {}); // Past lifetime
+      expect(system.drones.length).toBe(0);
+    });
+
+    it('has 20 second cooldown', () => {
+      const { system } = buildAbilitySystem();
+      const ability = system.getAbility('helper_drone')!;
+      expect(ability.cooldown).toBe(20);
+    });
+
+    it('drone kills enemies and awards score', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      const enemy = createEnemy(5, 0, 'scout');
+      enemy.health = 1; // Almost dead
+      enemy.energyDrop = 5;
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('helper_drone', entities, () => {});
+      system.update(1, entities, () => {});
+
+      expect(enemy.active).toBe(false);
+      expect(player.kills).toBe(1);
+      expect(player.score).toBe(50);
+    });
+  });
 });
