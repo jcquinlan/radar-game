@@ -49,6 +49,11 @@ let prevHealth: number;
 let lastSweepAngle: number;
 let damageFlash: number;
 
+// Smooth camera that trails behind the player
+let cameraX: number;
+let cameraY: number;
+const CAMERA_SMOOTHING = 8; // Higher = snappier follow. At 8, ~90% caught up in ~0.3s
+
 function init() {
   radar = new RadarDisplay();
   blipRenderer = new BlipRenderer();
@@ -69,6 +74,8 @@ function init() {
   prevHealth = player.health;
   lastSweepAngle = 0;
   damageFlash = 0;
+  cameraX = player.x;
+  cameraY = player.y;
 
   upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
     resolutionLevel = lvl;
@@ -144,6 +151,11 @@ const loop = new GameLoop({
   update(dt) {
     if (gameOver) return;
 
+    // Snapshot previous state for render interpolation
+    player.prevX = cameraX;
+    player.prevY = cameraY;
+    player.prevHeading = player.heading;
+
     // Tank-style movement: A/D turn, W/S thrust along heading
     const { turn, thrust } = input.getTankInput();
     const oldX = player.x;
@@ -164,6 +176,11 @@ const loop = new GameLoop({
     player.vy *= decay;
     player.x += player.vx * dt;
     player.y += player.vy * dt;
+
+    // Smooth camera follow — exponential lerp toward player position
+    const cameraLerp = 1 - Math.exp(-CAMERA_SMOOTHING * dt);
+    cameraX += (player.x - cameraX) * cameraLerp;
+    cameraY += (player.y - cameraY) * cameraLerp;
 
     // Track stats
     const moveDx = player.x - oldX;
@@ -295,7 +312,17 @@ const loop = new GameLoop({
     // Periodic cleanup
     world.cleanup(player.x, player.y);
   },
-  render() {
+  render(alpha) {
+    // Interpolated camera state for smooth rendering between physics ticks
+    const renderX = player.prevX + (cameraX - player.prevX) * alpha;
+    const renderY = player.prevY + (cameraY - player.prevY) * alpha;
+
+    // Interpolate heading, handling wraparound
+    let headingDiff = player.heading - player.prevHeading;
+    if (headingDiff > Math.PI) headingDiff -= Math.PI * 2;
+    if (headingDiff < -Math.PI) headingDiff += Math.PI * 2;
+    const renderHeading = player.prevHeading + headingDiff * alpha;
+
     const cx = canvas.width / 2 + screenShake.offsetX;
     const cy = canvas.height / 2 + screenShake.offsetY;
 
@@ -313,7 +340,7 @@ const loop = new GameLoop({
 
     // Rotate world around center by negative heading (world rotates opposite to player turn)
     ctx.translate(cx, cy);
-    ctx.rotate(-player.heading - Math.PI / 2); // Offset so heading=0 (up) maps to screen-up
+    ctx.rotate(-renderHeading - Math.PI / 2); // Offset so heading=0 (up) maps to screen-up
     ctx.translate(-cx, -cy);
 
     ambientParticles.render(ctx, cx, cy, radar.getRadius());
@@ -322,8 +349,8 @@ const loop = new GameLoop({
     blipRenderer.renderBlips(
       ctx,
       world.entities,
-      player.x,
-      player.y,
+      renderX,
+      renderY,
       cx,
       cy,
       radar.getRadius(),
@@ -332,12 +359,12 @@ const loop = new GameLoop({
     sweepEffects.render(ctx, cx, cy);
 
     // Ability visual effects
-    abilityEffects.render(ctx, cx, cy, player.x, player.y, player.survivalTime);
+    abilityEffects.render(ctx, cx, cy, renderX, renderY, player.survivalTime);
 
     // Render projectiles
     for (const p of combatSystem.projectiles) {
-      const px = cx + (p.x - player.x);
-      const py = cy + (p.y - player.y);
+      const px = cx + (p.x - renderX);
+      const py = cy + (p.y - renderY);
       ctx.save();
       ctx.shadowColor = '#ff4141';
       ctx.shadowBlur = 6;
@@ -350,8 +377,8 @@ const loop = new GameLoop({
 
     // Render drones
     for (const drone of abilitySystem.drones) {
-      const droneX = cx + (drone.x - player.x);
-      const droneY = cy + (drone.y - player.y);
+      const droneX = cx + (drone.x - renderX);
+      const droneY = cy + (drone.y - renderY);
       ctx.save();
       ctx.shadowColor = '#00ffff';
       ctx.shadowBlur = 8;
@@ -363,7 +390,7 @@ const loop = new GameLoop({
     }
 
     // Floating text
-    floatingText.render(ctx, player.x, player.y, cx, cy);
+    floatingText.render(ctx, renderX, renderY, cx, cy);
 
     ctx.restore();
 

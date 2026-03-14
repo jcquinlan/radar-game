@@ -3,7 +3,7 @@ const MAX_DELTA = 250; // Cap to prevent spiral of death
 
 export interface GameLoopCallbacks {
   update(dt: number): void;
-  render(): void;
+  render(alpha: number): void;
 }
 
 export class GameLoop {
@@ -57,7 +57,11 @@ export class GameLoop {
       this.accumulator -= FIXED_TIMESTEP;
     }
 
-    this.callbacks.render();
+    // Alpha is the fraction of a timestep remaining in the accumulator.
+    // Render uses it to interpolate between the previous and current
+    // physics state, eliminating visual stutter between fixed updates.
+    const alpha = this.accumulator / FIXED_TIMESTEP;
+    this.callbacks.render(alpha);
 
     this.rafId = requestAnimationFrame((t) => this.tick(t));
   }
