@@ -20,6 +20,8 @@ export class Player {
   friction: number;
   heading: number;
   turnSpeed: number;
+  turnVelocity: number;
+  turnFriction: number;
 
   // Shield buff
   shieldActive: boolean;
@@ -41,6 +43,8 @@ export class Player {
     this.friction = 2.0;
     this.heading = -Math.PI / 2; // Start facing up
     this.turnSpeed = 3.0; // Radians per second
+    this.turnVelocity = 0;
+    this.turnFriction = 3.0; // Higher than movement friction — turning should feel snappier
     this.maxHealth = 100;
     this.health = this.maxHealth;
     this.energy = 0;

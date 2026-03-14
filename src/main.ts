@@ -130,8 +130,11 @@ const loop = new GameLoop({
     const oldX = player.x;
     const oldY = player.y;
 
-    // Turn
-    player.heading += turn * player.turnSpeed * dt;
+    // Turn with inertia
+    const turnAccel = player.turnSpeed * player.turnFriction;
+    player.turnVelocity += turn * turnAccel * dt;
+    player.turnVelocity *= Math.exp(-player.turnFriction * dt);
+    player.heading += player.turnVelocity * dt;
 
     // Accelerate along heading direction
     const playerAccel = player.speed * player.friction;
