@@ -27,9 +27,35 @@ export interface POIType {
 // Helpers
 // ---------------------------------------------------------------------------
 
+const ALL_SUBTYPES: EnemySubtype[] = ['scout', 'brute', 'ranged'];
+
 /** Pick a random enemy subtype */
 function randomSubtype(): EnemySubtype {
-  return (['scout', 'brute', 'ranged'] as const)[Math.floor(Math.random() * 3)];
+  return ALL_SUBTYPES[Math.floor(Math.random() * ALL_SUBTYPES.length)];
+}
+
+/**
+ * Assign subtypes for a pack of `count` enemies.
+ * Packs of 3+ get at least 2 distinct subtypes (primary + secondary).
+ * Packs of 1-2 use a single subtype.
+ */
+function packSubtypes(count: number): EnemySubtype[] {
+  const primary = randomSubtype();
+  if (count <= 2) {
+    return Array(count).fill(primary);
+  }
+  // Pick a secondary that differs from primary
+  let secondary: EnemySubtype;
+  do {
+    secondary = randomSubtype();
+  } while (secondary === primary);
+
+  // First enemy gets secondary, rest get primary — guarantees at least 2 types
+  const subtypes: EnemySubtype[] = [secondary];
+  for (let i = 1; i < count; i++) {
+    subtypes.push(primary);
+  }
+  return subtypes;
 }
 
 /** Scatter N points around a center within a radius */
@@ -103,11 +129,12 @@ const resourceCache: POIType = {
       entities.push(createResource(pt.x, pt.y));
     }
 
-    // 2-3 same-subtype enemy guards
+    // 2-3 enemy guards (mixed subtypes if 3+)
     const guardCount = randInt(2, 3);
-    const subtype = randomSubtype();
-    for (const pt of scatterAround(cx, cy, guardCount, 70)) {
-      const enemy = createEnemy(pt.x, pt.y, subtype);
+    const guardTypes = packSubtypes(guardCount);
+    const guardPositions = scatterAround(cx, cy, guardCount, 70);
+    for (let i = 0; i < guardCount; i++) {
+      const enemy = createEnemy(guardPositions[i].x, guardPositions[i].y, guardTypes[i]);
       scaleEnemy(enemy, difficulty);
       entities.push(enemy);
     }
@@ -144,11 +171,12 @@ const enemyCamp: POIType = {
   spawn(cx, cy, difficulty) {
     const entities: GameEntity[] = [];
 
-    // 3-5 same-subtype enemies in tight formation
+    // 3-5 enemies in tight formation (mixed subtypes)
     const enemyCount = randInt(3, 5);
-    const subtype = randomSubtype();
-    for (const pt of scatterAround(cx, cy, enemyCount, 60)) {
-      const enemy = createEnemy(pt.x, pt.y, subtype);
+    const subtypes = packSubtypes(enemyCount);
+    const positions = scatterAround(cx, cy, enemyCount, 60);
+    for (let i = 0; i < enemyCount; i++) {
+      const enemy = createEnemy(positions[i].x, positions[i].y, subtypes[i]);
       scaleEnemy(enemy, difficulty);
       entities.push(enemy);
     }

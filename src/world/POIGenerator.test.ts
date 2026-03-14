@@ -39,14 +39,35 @@ describe('resource_cache POI', () => {
     }
   });
 
-  it('enemy guards in a resource cache share the same subtype', () => {
+  it('packs of 3 guards have at least 2 subtypes', () => {
     const cache = POI_TYPES.find((p) => p.id === 'resource_cache')!;
-    for (let i = 0; i < 20; i++) {
+    // Run enough trials to get a pack of 3
+    let foundMixed = false;
+    for (let i = 0; i < 50; i++) {
       const entities = cache.spawn(1000, 1000, 1.5);
       const enemies = entities.filter((e) => e.type === 'enemy') as Enemy[];
-      const subtypes = new Set(enemies.map((e) => e.subtype));
-      expect(subtypes.size).toBe(1);
+      if (enemies.length === 3) {
+        const subtypes = new Set(enemies.map((e) => e.subtype));
+        expect(subtypes.size).toBeGreaterThanOrEqual(2);
+        foundMixed = true;
+      }
     }
+    expect(foundMixed).toBe(true);
+  });
+
+  it('packs of 2 guards use a single subtype', () => {
+    const cache = POI_TYPES.find((p) => p.id === 'resource_cache')!;
+    let foundPairPack = false;
+    for (let i = 0; i < 50; i++) {
+      const entities = cache.spawn(1000, 1000, 1.5);
+      const enemies = entities.filter((e) => e.type === 'enemy') as Enemy[];
+      if (enemies.length === 2) {
+        const subtypes = new Set(enemies.map((e) => e.subtype));
+        expect(subtypes.size).toBe(1);
+        foundPairPack = true;
+      }
+    }
+    expect(foundPairPack).toBe(true);
   });
 
   it('resources are clustered near the POI center', () => {
@@ -106,13 +127,14 @@ describe('enemy_camp POI', () => {
     }
   });
 
-  it('all enemies in a camp share the same subtype', () => {
+  it('enemies in a camp have at least 2 subtypes', () => {
     const camp = POI_TYPES.find((p) => p.id === 'enemy_camp')!;
+    // enemy_camp always spawns 3-5, so always mixed
     for (let i = 0; i < 20; i++) {
       const entities = camp.spawn(2000, 2000, 2);
       const enemies = entities.filter((e) => e.type === 'enemy') as Enemy[];
       const subtypes = new Set(enemies.map((e) => e.subtype));
-      expect(subtypes.size).toBe(1);
+      expect(subtypes.size).toBeGreaterThanOrEqual(2);
     }
   });
 
@@ -127,17 +149,15 @@ describe('enemy_camp POI', () => {
   });
 });
 
-describe('themed packs', () => {
-  it('resource_cache guards are all the same subtype across many spawns', () => {
-    const cache = POI_TYPES.find((p) => p.id === 'resource_cache')!;
-    // Each individual spawn should have uniform subtypes (though different spawns may differ)
+describe('pack composition', () => {
+  it('packs of 3+ always contain at least 2 distinct subtypes', () => {
+    const camp = POI_TYPES.find((p) => p.id === 'enemy_camp')!;
     for (let i = 0; i < 30; i++) {
-      const entities = cache.spawn(0, 0, 1);
+      const entities = camp.spawn(0, 0, 1);
       const enemies = entities.filter((e) => e.type === 'enemy') as Enemy[];
-      if (enemies.length > 1) {
-        const subtype = enemies[0].subtype;
-        expect(enemies.every((e) => e.subtype === subtype)).toBe(true);
-      }
+      // enemy_camp always has 3-5
+      const subtypes = new Set(enemies.map((e) => e.subtype));
+      expect(subtypes.size).toBeGreaterThanOrEqual(2);
     }
   });
 });
