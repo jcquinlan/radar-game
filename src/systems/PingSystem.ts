@@ -162,19 +162,14 @@ export class PingSystem {
         return this.damageEnemy(entity as Enemy, player);
       case 'ally':
         return this.healFromAlly(entity as Ally, player);
+      case 'salvage':
+        return null; // Salvage is picked up by proximity, not ping
     }
   }
 
-  /** Optional callback invoked when a resource is collected instead of deactivating it */
-  onCollectResource: ((resource: Resource) => void) | null = null;
-
   private collectResource(resource: Resource, player: Player): PingEvent {
     player.addEnergy(resource.energyValue);
-    if (this.onCollectResource) {
-      this.onCollectResource(resource);
-    } else {
-      resource.active = false;
-    }
+    resource.active = false;
     return { entity: resource, type: 'collect', value: resource.energyValue };
   }
 

@@ -103,9 +103,6 @@ function init() {
   // Disable Canvas 2D scanlines when shader pipeline is active
   radar.scanlineEnabled = !shaderPipeline || !shaderPipeline.enabled;
 
-  // Route collected resources into tow rope system instead of deactivating
-  pingSystem.onCollectResource = (resource) => towRopeSystem.collect(resource, player);
-
   input.attach();
   keyRemapScreen.attach(canvas, abilitySystem.abilities);
   upgradePanel.attach(canvas, upgradeSystem, player);
@@ -283,7 +280,6 @@ const loop = new GameLoop({
       for (const entity of world.entities) {
         if (!entity.active || entity.type !== 'resource') continue;
         const resource = entity as Resource;
-        if (resource.towedByPlayer) continue; // Already towed
         const mdx = entity.x - player.x;
         const mdy = entity.y - player.y;
         if (mdx * mdx + mdy * mdy < player.magnetRange * player.magnetRange) {
@@ -291,9 +287,15 @@ const loop = new GameLoop({
           player.totalEnergyCollected += resource.energyValue;
           player.score += resource.energyValue;
           floatingText.add(`+${resource.energyValue}E`, resource.x, resource.y, '#00ff41');
-          towRopeSystem.collect(resource, player);
+          resource.active = false;
         }
       }
+    }
+
+    // Salvage proximity pickup — player must fly close to attach
+    const pickedUp = towRopeSystem.checkPickups(world.entities, player);
+    for (const salvage of pickedUp) {
+      floatingText.add('SALVAGE!', salvage.x, salvage.y, '#ffaa00');
     }
 
     // Update tow rope physics
@@ -407,62 +409,48 @@ const loop = new GameLoop({
     // Motion trails (rendered behind blips)
     motionTrail.render(ctx, player.x, player.y, cx, cy);
 
-    // Tow ropes and towed item blips
+    // Tow ropes and towed salvage blips (hub-and-spoke: all anchored to player)
     const towedItems = towRopeSystem.getTowedItems();
     if (towedItems.length > 0) {
       ctx.save();
-      for (let i = 0; i < towedItems.length; i++) {
-        const item = towedItems[i];
-        const res = item.resource;
-        const itemSX = cx + (res.x - player.x);
-        const itemSY = cy + (res.y - player.y);
-
-        // Anchor: player for first, previous item for rest
-        let anchorSX: number, anchorSY: number;
-        let anchorVx: number, anchorVy: number;
-        if (i === 0) {
-          anchorSX = cx;
-          anchorSY = cy;
-          anchorVx = player.vx;
-          anchorVy = player.vy;
-        } else {
-          const prev = towedItems[i - 1].resource;
-          anchorSX = cx + (prev.x - player.x);
-          anchorSY = cy + (prev.y - player.y);
-          anchorVx = towedItems[i - 1].vx;
-          anchorVy = towedItems[i - 1].vy;
-        }
+      for (const item of towedItems) {
+        const sal = item.salvage;
+        const itemSX = cx + (sal.x - player.x);
+        const itemSY = cy + (sal.y - player.y);
 
         // Fade-out alpha
         const alpha = item.fadeOut !== null ? Math.max(0, item.fadeOut / 0.3) : 1;
         ctx.globalAlpha = alpha;
 
         // Bezier rope: control point offset perpendicular to line by velocity delta
-        const midX = (anchorSX + itemSX) / 2;
-        const midY = (anchorSY + itemSY) / 2;
-        const dvx = anchorVx - item.vx;
-        const dvy = anchorVy - item.vy;
-        // Perpendicular offset (rotate velocity delta 90 degrees)
+        const midX = (cx + itemSX) / 2;
+        const midY = (cy + itemSY) / 2;
+        const dvx = player.vx - item.vx;
+        const dvy = player.vy - item.vy;
         const cpX = midX + (-dvy) * 0.3;
         const cpY = midY + dvx * 0.3;
 
-        // Draw rope
+        // Draw rope (amber)
         ctx.beginPath();
-        ctx.moveTo(anchorSX, anchorSY);
+        ctx.moveTo(cx, cy);
         ctx.quadraticCurveTo(cpX, cpY, itemSX, itemSY);
-        ctx.strokeStyle = `rgba(0, 255, 65, ${0.6 * alpha})`;
+        ctx.strokeStyle = `rgba(255, 170, 0, ${0.5 * alpha})`;
         ctx.lineWidth = 1.5;
-        ctx.shadowColor = '#00ff41';
+        ctx.shadowColor = '#ffaa00';
         ctx.shadowBlur = 4;
         ctx.stroke();
 
-        // Draw towed item blip
+        // Draw towed salvage blip (diamond shape, amber/gold)
+        ctx.save();
+        ctx.translate(itemSX, itemSY);
+        ctx.rotate(Math.PI / 4);
         ctx.beginPath();
-        ctx.arc(itemSX, itemSY, 3, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(0, 255, 65, ${alpha})`;
-        ctx.shadowColor = '#00ff41';
-        ctx.shadowBlur = 6;
+        ctx.rect(-3, -3, 6, 6);
+        ctx.fillStyle = `rgba(255, 170, 0, ${alpha})`;
+        ctx.shadowColor = '#ffaa00';
+        ctx.shadowBlur = 8;
         ctx.fill();
+        ctx.restore();
       }
       ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;

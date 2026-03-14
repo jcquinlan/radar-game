@@ -1,44 +1,40 @@
-import { Resource } from '../entities/Entity';
+import { Salvage } from '../entities/Entity';
 import { Player } from '../entities/Player';
 
 // Tuning constants — exported for tests and future adjustment
 export const SPRING_K = 1.5;
 export const SPRING_DAMPING = 0.5;
-export const SPRING_REST_LENGTH = 35;
 export const TOW_FRICTION = 1.5;
 export const REPULSION_RADIUS = 20;
 export const REPULSION_FORCE = 80;
 export const MAX_TOWED = 8;
 export const FADE_OUT_DURATION = 0.3;
+/** How close the player must be to pick up salvage (px) */
+export const PICKUP_RADIUS = 25;
 
 export interface TowedItem {
-  resource: Resource;
+  salvage: Salvage;
   vx: number;
   vy: number;
-  chainIndex: number;
   fadeOut: number | null; // remaining fade time, or null if not fading
 }
 
 export class TowRopeSystem {
   private items: TowedItem[] = [];
 
-  collect(resource: Resource, player: Player): void {
+  collect(salvage: Salvage): void {
     // If already towed, ignore
-    if (resource.towedByPlayer) return;
+    if (salvage.towedByPlayer) return;
 
-    // Mark resource as towed
-    resource.towedByPlayer = true;
-    resource.towVx = 0;
-    resource.towVy = 0;
-
-    const chainIndex = this.items.length;
-    resource.towChainIndex = chainIndex;
+    // Mark as towed
+    salvage.towedByPlayer = true;
+    salvage.towVx = 0;
+    salvage.towVy = 0;
 
     const item: TowedItem = {
-      resource,
+      salvage,
       vx: 0,
       vy: 0,
-      chainIndex,
       fadeOut: null,
     };
 
@@ -53,45 +49,41 @@ export class TowRopeSystem {
     }
   }
 
-  update(player: Player, dt: number): void {
-    // Apply spring forces along the chain
-    for (let i = 0; i < this.items.length; i++) {
-      const item = this.items[i];
-      const res = item.resource;
-
-      // Determine anchor position (player for first, previous item for rest)
-      let anchorX: number;
-      let anchorY: number;
-      if (i === 0) {
-        anchorX = player.x;
-        anchorY = player.y;
-      } else {
-        anchorX = this.items[i - 1].resource.x;
-        anchorY = this.items[i - 1].resource.y;
+  /** Check all salvage entities for proximity pickup */
+  checkPickups(entities: readonly { type: string; active: boolean; x: number; y: number }[], player: Player): Salvage[] {
+    const collected: Salvage[] = [];
+    for (const entity of entities) {
+      if (!entity.active || entity.type !== 'salvage') continue;
+      const salvage = entity as Salvage;
+      if (salvage.towedByPlayer) continue;
+      const dx = salvage.x - player.x;
+      const dy = salvage.y - player.y;
+      if (dx * dx + dy * dy < PICKUP_RADIUS * PICKUP_RADIUS) {
+        this.collect(salvage);
+        collected.push(salvage);
       }
+    }
+    return collected;
+  }
 
-      // Spring force (Hooke's law)
-      const dx = anchorX - res.x;
-      const dy = anchorY - res.y;
+  update(player: Player, dt: number): void {
+    // Hub-and-spoke: every item is anchored to the player directly
+    for (const item of this.items) {
+      const sal = item.salvage;
+
+      // Spring force toward player (Hooke's law with per-item rope length)
+      const dx = player.x - sal.x;
+      const dy = player.y - sal.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (dist > 0) {
-        const stretch = dist - SPRING_REST_LENGTH;
+        const stretch = dist - sal.ropeLength;
         const fx = (dx / dist) * SPRING_K * stretch;
         const fy = (dy / dist) * SPRING_K * stretch;
 
-        // Damping force (relative velocity toward anchor)
-        let anchorVx = 0;
-        let anchorVy = 0;
-        if (i === 0) {
-          anchorVx = player.vx;
-          anchorVy = player.vy;
-        } else {
-          anchorVx = this.items[i - 1].vx;
-          anchorVy = this.items[i - 1].vy;
-        }
-        const relVx = anchorVx - item.vx;
-        const relVy = anchorVy - item.vy;
+        // Damping force (relative velocity toward player)
+        const relVx = player.vx - item.vx;
+        const relVy = player.vy - item.vy;
         const dampX = relVx * SPRING_DAMPING;
         const dampY = relVy * SPRING_DAMPING;
 
@@ -100,13 +92,13 @@ export class TowRopeSystem {
       }
     }
 
-    // Inter-item repulsion
+    // Inter-item repulsion (keeps items from bunching)
     for (let i = 0; i < this.items.length; i++) {
       for (let j = i + 1; j < this.items.length; j++) {
         const a = this.items[i];
         const b = this.items[j];
-        const dx = b.resource.x - a.resource.x;
-        const dy = b.resource.y - a.resource.y;
+        const dx = b.salvage.x - a.salvage.x;
+        const dy = b.salvage.y - a.salvage.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist > 0 && dist < REPULSION_RADIUS) {
@@ -126,12 +118,12 @@ export class TowRopeSystem {
     for (const item of this.items) {
       item.vx *= frictionDecay;
       item.vy *= frictionDecay;
-      item.resource.x += item.vx * dt;
-      item.resource.y += item.vy * dt;
+      item.salvage.x += item.vx * dt;
+      item.salvage.y += item.vy * dt;
 
-      // Sync back to resource tow fields
-      item.resource.towVx = item.vx;
-      item.resource.towVy = item.vy;
+      // Sync back to salvage fields
+      item.salvage.towVx = item.vx;
+      item.salvage.towVy = item.vy;
     }
 
     // Process fade-outs
@@ -140,24 +132,18 @@ export class TowRopeSystem {
       if (item.fadeOut !== null) {
         item.fadeOut -= dt;
         if (item.fadeOut <= 0) {
-          item.resource.towedByPlayer = false;
-          item.resource.active = false;
+          item.salvage.towedByPlayer = false;
+          item.salvage.active = false;
           this.items.splice(i, 1);
         }
       }
-    }
-
-    // Re-index chain
-    for (let i = 0; i < this.items.length; i++) {
-      this.items[i].chainIndex = i;
-      this.items[i].resource.towChainIndex = i;
     }
   }
 
   clear(): void {
     for (const item of this.items) {
-      item.resource.towedByPlayer = false;
-      item.resource.active = false;
+      item.salvage.towedByPlayer = false;
+      item.salvage.active = false;
     }
     this.items.length = 0;
   }
