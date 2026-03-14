@@ -6,30 +6,51 @@ import { SweepEffects } from './radar/SweepEffects';
 import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
 import { SweepSystem } from './systems/SweepSystem';
+import { CombatSystem } from './systems/CombatSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
+import { GameOverScreen } from './ui/GameOverScreen';
 
 const canvas = createCanvas('game-canvas');
 const ctx = canvas.getContext('2d')!;
 
-const radar = new RadarDisplay();
-const blipRenderer = new BlipRenderer();
-const sweepEffects = new SweepEffects();
-const player = new Player();
-const input = new InputSystem();
-const sweepSystem = new SweepSystem();
-const world = new World();
-const hud = new HUD();
+let radar: RadarDisplay;
+let blipRenderer: BlipRenderer;
+let sweepEffects: SweepEffects;
+let player: Player;
+let input: InputSystem;
+let sweepSystem: SweepSystem;
+let combatSystem: CombatSystem;
+let world: World;
+let hud: HUD;
+let gameOverScreen: GameOverScreen;
+let resolutionLevel: number;
+let gameOver: boolean;
 
-input.attach();
+function init() {
+  radar = new RadarDisplay();
+  blipRenderer = new BlipRenderer();
+  sweepEffects = new SweepEffects();
+  player = new Player();
+  input = new InputSystem();
+  sweepSystem = new SweepSystem();
+  combatSystem = new CombatSystem();
+  world = new World();
+  hud = new HUD();
+  gameOverScreen = new GameOverScreen();
+  resolutionLevel = 0;
+  gameOver = false;
 
-// Initial entity spawning
-world.updateSpawning(player.x, player.y);
+  input.attach();
+  world.updateSpawning(player.x, player.y);
+}
 
-let resolutionLevel = 0;
+init();
 
 const loop = new GameLoop({
   update(dt) {
+    if (gameOver) return;
+
     // Player movement
     const { dx, dy } = input.getMovementVector();
     player.x += dx * player.speed * dt;
@@ -54,6 +75,16 @@ const loop = new GameLoop({
     // Visual effects from sweep interactions
     sweepEffects.addEvents(events, player.x, player.y);
     sweepEffects.update(dt);
+
+    // Combat
+    const alive = combatSystem.update(world.entities, player, dt);
+    if (!alive) {
+      gameOver = true;
+      gameOverScreen.show(canvas, () => {
+        input.detach();
+        init();
+      });
+    }
 
     // Periodic cleanup
     world.cleanup(player.x, player.y);
@@ -88,6 +119,9 @@ const loop = new GameLoop({
 
     // HUD
     hud.render(ctx, player, canvas.width);
+
+    // Game over overlay
+    gameOverScreen.render(ctx, canvas.width, canvas.height);
   },
 });
 
