@@ -165,9 +165,16 @@ export class PingSystem {
     }
   }
 
+  /** Optional callback invoked when a resource is collected instead of deactivating it */
+  onCollectResource: ((resource: Resource) => void) | null = null;
+
   private collectResource(resource: Resource, player: Player): PingEvent {
     player.addEnergy(resource.energyValue);
-    resource.active = false;
+    if (this.onCollectResource) {
+      this.onCollectResource(resource);
+    } else {
+      resource.active = false;
+    }
     return { entity: resource, type: 'collect', value: resource.energyValue };
   }
 

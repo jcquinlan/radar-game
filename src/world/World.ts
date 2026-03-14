@@ -134,6 +134,8 @@ export class World {
   /** Remove inactive entities that are far from the player */
   cleanup(playerX: number, playerY: number, maxDist: number = 2000): void {
     this.entities = this.entities.filter((e) => {
+      // Keep towed resources regardless of distance
+      if (e.type === 'resource' && (e as import('../entities/Entity').Resource).towedByPlayer) return true;
       if (!e.active) return false;
       const dx = e.x - playerX;
       const dy = e.y - playerY;

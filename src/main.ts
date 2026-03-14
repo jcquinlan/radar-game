@@ -22,6 +22,7 @@ import { AbilityBar } from './ui/AbilityBar';
 import { KeyRemapScreen } from './ui/KeyRemapScreen';
 import { PauseMenu } from './ui/PauseMenu';
 import { MotionTrail } from './radar/MotionTrail';
+import { TowRopeSystem } from './systems/TowRopeSystem';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
 import { CRTEffect } from './rendering/effects/CRTEffect';
 
@@ -56,6 +57,7 @@ let abilityEffects: AbilityEffects;
 let abilityBar: AbilityBar;
 let keyRemapScreen: KeyRemapScreen;
 let motionTrail: MotionTrail;
+let towRopeSystem: TowRopeSystem;
 let resolutionLevel: number;
 let gameOver: boolean;
 let prevHealth: number;
@@ -88,6 +90,7 @@ function init() {
   abilityEffects = new AbilityEffects();
   abilityBar = new AbilityBar();
   motionTrail = new MotionTrail();
+  towRopeSystem = new TowRopeSystem();
   keyRemapScreen = new KeyRemapScreen();
   keyRemapScreen.addExtraBinding({
     id: 'upgrades',
@@ -99,6 +102,9 @@ function init() {
 
   // Disable Canvas 2D scanlines when shader pipeline is active
   radar.scanlineEnabled = !shaderPipeline || !shaderPipeline.enabled;
+
+  // Route collected resources into tow rope system instead of deactivating
+  pingSystem.onCollectResource = (resource) => towRopeSystem.collect(resource, player);
 
   input.attach();
   keyRemapScreen.attach(canvas, abilitySystem.abilities);
@@ -276,18 +282,22 @@ const loop = new GameLoop({
     if (player.magnetRange > 0) {
       for (const entity of world.entities) {
         if (!entity.active || entity.type !== 'resource') continue;
+        const resource = entity as Resource;
+        if (resource.towedByPlayer) continue; // Already towed
         const mdx = entity.x - player.x;
         const mdy = entity.y - player.y;
         if (mdx * mdx + mdy * mdy < player.magnetRange * player.magnetRange) {
-          const resource = entity as Resource;
           player.addEnergy(resource.energyValue);
           player.totalEnergyCollected += resource.energyValue;
           player.score += resource.energyValue;
           floatingText.add(`+${resource.energyValue}E`, resource.x, resource.y, '#00ff41');
-          resource.active = false;
+          towRopeSystem.collect(resource, player);
         }
       }
     }
+
+    // Update tow rope physics
+    towRopeSystem.update(player, dt);
 
     // Shield buff countdown
     player.updateShield(dt);
@@ -359,6 +369,7 @@ const loop = new GameLoop({
 
     if (!alive) {
       gameOver = true;
+      towRopeSystem.clear();
       gameOverScreen.show(canvas, player, () => {
         input.detach();
         upgradePanel.detach(canvas);
