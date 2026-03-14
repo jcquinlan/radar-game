@@ -1,27 +1,15 @@
 import {
   GameEntity,
-  Enemy,
   Salvage,
-  createResource,
   createEnemy,
-  createAlly,
   createSalvage,
+  EnemySubtype,
 } from '../entities/Entity';
+import { selectPOI, spawnResourceVein, scaleEnemy } from './POIGenerator';
 
 const CHUNK_SIZE = 400;
-const BASE_RESOURCES_PER_CHUNK = 3;
-const BASE_ENEMIES_PER_CHUNK = 2;
-const ALLIES_PER_CHUNK = 0.6;
 /** Probability of a salvage item spawning in any given chunk */
 const SALVAGE_CHANCE_PER_CHUNK = 0.15;
-
-/** Radius (in pixels) around a pack center within which pack members scatter */
-const PACK_SCATTER_RADIUS = 80;
-/** Fraction of enemies that spawn in packs vs. fully random */
-const PACK_FRACTION = 0.6;
-/** Min/max enemies per pack */
-const PACK_SIZE_MIN = 2;
-const PACK_SIZE_MAX = 4;
 
 /** Returns a difficulty multiplier based on distance from origin */
 function getDifficultyMultiplier(x: number, y: number): number {
@@ -39,6 +27,9 @@ export function getThreatLevel(x: number, y: number): { level: number; label: st
   if (mult < 3.2) return { level: 4, label: 'EXTREME', color: '#ff4141' };
   return { level: 5, label: 'CRITICAL', color: '#ff00ff' };
 }
+
+/** Chance of a solo enemy in non-POI chunks (per chunk) */
+const AMBIENT_SOLO_ENEMY_CHANCE = 0.3;
 
 export class World {
   entities: GameEntity[] = [];
@@ -61,66 +52,19 @@ export class World {
         const chunkCenterY = chunkY + CHUNK_SIZE / 2;
         const difficulty = getDifficultyMultiplier(chunkCenterX, chunkCenterY);
 
-        // Resources (slightly more at higher difficulty to compensate)
-        const resourceCount = Math.floor(BASE_RESOURCES_PER_CHUNK + difficulty * 0.5);
-        for (let i = 0; i < resourceCount; i++) {
-          this.entities.push(
-            createResource(
-              chunkX + Math.random() * CHUNK_SIZE,
-              chunkY + Math.random() * CHUNK_SIZE
-            )
-          );
-        }
-
-        // Enemies (more at higher difficulty)
-        // Skip enemy spawning in the inner 3x3 chunks around the player so
-        // nothing starts within aggro range (max chase range is 300px)
+        // Safe zone: no enemies in the inner 3x3 chunks around the player
         const isNearPlayer = Math.abs(dx) <= 1 && Math.abs(dy) <= 1;
-        const enemyCount = isNearPlayer ? 0 : Math.floor(BASE_ENEMIES_PER_CHUNK * difficulty);
 
-        // Split enemies between packs and solo stragglers
-        const packEnemyBudget = Math.floor(enemyCount * PACK_FRACTION);
-        const soloEnemyCount = enemyCount - packEnemyBudget;
+        // Try to place a POI in this chunk
+        const poi = isNearPlayer ? null : selectPOI(chunkCenterX, chunkCenterY);
 
-        // Spawn packs: pick a cluster center, scatter members around it
-        let packBudgetRemaining = packEnemyBudget;
-        while (packBudgetRemaining > 0) {
-          const packSize = Math.min(
-            packBudgetRemaining,
-            PACK_SIZE_MIN + Math.floor(Math.random() * (PACK_SIZE_MAX - PACK_SIZE_MIN + 1))
-          );
-          // Pack center — random point within the chunk, with padding so members stay in-bounds
-          const centerX = chunkX + PACK_SCATTER_RADIUS + Math.random() * (CHUNK_SIZE - PACK_SCATTER_RADIUS * 2);
-          const centerY = chunkY + PACK_SCATTER_RADIUS + Math.random() * (CHUNK_SIZE - PACK_SCATTER_RADIUS * 2);
-
-          for (let i = 0; i < packSize; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const dist = Math.random() * PACK_SCATTER_RADIUS;
-            const enemy = createEnemy(centerX + Math.cos(angle) * dist, centerY + Math.sin(angle) * dist);
-            this.scaleEnemy(enemy, difficulty);
-            this.entities.push(enemy);
-          }
-          packBudgetRemaining -= packSize;
-        }
-
-        // Spawn solo stragglers randomly across the chunk
-        for (let i = 0; i < soloEnemyCount; i++) {
-          const enemy = createEnemy(
-            chunkX + Math.random() * CHUNK_SIZE,
-            chunkY + Math.random() * CHUNK_SIZE
-          );
-          this.scaleEnemy(enemy, difficulty);
-          this.entities.push(enemy);
-        }
-
-        // Allies
-        if (Math.random() < ALLIES_PER_CHUNK) {
-          this.entities.push(
-            createAlly(
-              chunkX + Math.random() * CHUNK_SIZE,
-              chunkY + Math.random() * CHUNK_SIZE
-            )
-          );
+        if (poi) {
+          // POI chunk — use structured spawning
+          const poiEntities = poi.spawn(chunkCenterX, chunkCenterY, difficulty);
+          this.entities.push(...poiEntities);
+        } else {
+          // Non-POI chunk — ambient resources as veins + occasional solo enemies
+          this.spawnAmbient(chunkX, chunkY, difficulty, isNearPlayer);
         }
 
         // Salvage (rare towable items)
@@ -136,13 +80,34 @@ export class World {
     }
   }
 
-  private scaleEnemy(enemy: Enemy, difficulty: number): void {
-    const scale = difficulty;
-    enemy.health = Math.floor(enemy.health * scale);
-    enemy.maxHealth = enemy.health;
-    enemy.damage = Math.floor(enemy.damage * scale);
-    enemy.energyDrop = Math.floor(enemy.energyDrop * scale);
-    enemy.speed = Math.floor(enemy.speed * (1 + (scale - 1) * 0.3)); // Speed scales less aggressively
+  /** Spawn ambient resources (as veins) and occasional solo enemies in non-POI chunks */
+  private spawnAmbient(
+    chunkX: number,
+    chunkY: number,
+    difficulty: number,
+    isNearPlayer: boolean
+  ): void {
+    // 1-2 resource veins per chunk
+    const veinCount = 1 + (Math.random() < 0.4 ? 1 : 0);
+    for (let v = 0; v < veinCount; v++) {
+      const veinCenterX = chunkX + 60 + Math.random() * (CHUNK_SIZE - 120);
+      const veinCenterY = chunkY + 60 + Math.random() * (CHUNK_SIZE - 120);
+      const vein = spawnResourceVein(veinCenterX, veinCenterY);
+      this.entities.push(...vein);
+    }
+
+    // Occasional solo enemy (not in safe zone)
+    if (!isNearPlayer && Math.random() < AMBIENT_SOLO_ENEMY_CHANCE) {
+      const subtypes: EnemySubtype[] = ['scout', 'brute', 'ranged'];
+      const subtype = subtypes[Math.floor(Math.random() * subtypes.length)];
+      const enemy = createEnemy(
+        chunkX + Math.random() * CHUNK_SIZE,
+        chunkY + Math.random() * CHUNK_SIZE,
+        subtype
+      );
+      scaleEnemy(enemy, difficulty);
+      this.entities.push(enemy);
+    }
   }
 
   /** Remove inactive entities that are far from the player */

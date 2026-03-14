@@ -67,6 +67,41 @@ describe('World', () => {
       expect(avgFarHealth).toBeGreaterThan(avgNearHealth);
     }
   });
+
+  it('does not spawn enemies in the inner 3x3 safe zone', () => {
+    // Run multiple times since spawning is probabilistic
+    for (let trial = 0; trial < 10; trial++) {
+      const world = new World();
+      world.updateSpawning(0, 0);
+
+      // Inner 3x3 chunks: chunk coords (-1,-1) to (1,1) → world coords (-400,-400) to (800,800)
+      const safeMinX = -1 * 400;
+      const safeMaxX = 2 * 400;
+      const safeMinY = -1 * 400;
+      const safeMaxY = 2 * 400;
+
+      const enemiesInSafeZone = world.entities.filter(
+        (e) =>
+          e.type === 'enemy' &&
+          e.x >= safeMinX && e.x <= safeMaxX &&
+          e.y >= safeMinY && e.y <= safeMaxY
+      );
+      expect(enemiesInSafeZone).toHaveLength(0);
+    }
+  });
+
+  it('spawns a mix of entity types across many chunks', () => {
+    const world = new World();
+    // Spawn far from origin to get POIs with enemies
+    world.updateSpawning(3000, 3000);
+
+    const resources = world.entities.filter((e) => e.type === 'resource');
+    const enemies = world.entities.filter((e) => e.type === 'enemy');
+
+    // Should have both resources and enemies in the world
+    expect(resources.length).toBeGreaterThan(0);
+    expect(enemies.length).toBeGreaterThan(0);
+  });
 });
 
 describe('getThreatLevel', () => {

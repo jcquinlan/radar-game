@@ -51,6 +51,16 @@ export class AbilityEffects {
     });
   }
 
+  triggerMissileLaunch(worldX: number, worldY: number): void {
+    this.spawnFlashes.push({
+      x: worldX,
+      y: worldY,
+      remaining: SPAWN_FLASH_DURATION,
+      maxDuration: SPAWN_FLASH_DURATION,
+      color: '#ff8800',
+    });
+  }
+
   update(dt: number): void {
     for (let i = this.blastRings.length - 1; i >= 0; i--) {
       this.blastRings[i].remaining -= dt;
