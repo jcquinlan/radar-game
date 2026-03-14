@@ -8,7 +8,7 @@ import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
 import { SweepSystem } from './systems/SweepSystem';
 import { CombatSystem } from './systems/CombatSystem';
-import { Ally, Resource } from './entities/Entity';
+import { Ally, Enemy, Resource } from './entities/Entity';
 import { UpgradeSystem } from './systems/UpgradeSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
@@ -21,6 +21,7 @@ import { AbilityEffects } from './radar/AbilityEffects';
 import { AbilityBar } from './ui/AbilityBar';
 import { KeyRemapScreen } from './ui/KeyRemapScreen';
 import { PauseMenu } from './ui/PauseMenu';
+import { MotionTrail } from './radar/MotionTrail';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
 import { CRTEffect } from './rendering/effects/CRTEffect';
 
@@ -54,6 +55,7 @@ let abilitySystem: AbilitySystem;
 let abilityEffects: AbilityEffects;
 let abilityBar: AbilityBar;
 let keyRemapScreen: KeyRemapScreen;
+let motionTrail: MotionTrail;
 let resolutionLevel: number;
 let gameOver: boolean;
 let prevHealth: number;
@@ -87,6 +89,7 @@ function init() {
   abilitySystem = new AbilitySystem(player);
   abilityEffects = new AbilityEffects();
   abilityBar = new AbilityBar();
+  motionTrail = new MotionTrail();
   keyRemapScreen = new KeyRemapScreen();
   keyRemapScreen.addExtraBinding({
     id: 'upgrades',
@@ -321,6 +324,32 @@ const loop = new GameLoop({
     // Combat
     const alive = combatSystem.update(world.entities, player, dt);
 
+    // Motion trails — track fast-moving entities
+    motionTrail.track('player', player.x, player.y, player.vx, player.vy, '#00ff41', dt);
+    const activeTrailIds = new Set(['player']);
+    for (let i = 0; i < world.entities.length; i++) {
+      const entity = world.entities[i];
+      if (!entity.active || entity.type !== 'enemy') continue;
+      const enemy = entity as Enemy;
+      const eid = `e${i}`;
+      motionTrail.track(eid, enemy.x, enemy.y, enemy.vx, enemy.vy, '#ff4141', dt);
+      activeTrailIds.add(eid);
+    }
+    for (let i = 0; i < combatSystem.projectiles.length; i++) {
+      const p = combatSystem.projectiles[i];
+      if (!p.active) continue;
+      const pid = `p${i}`;
+      motionTrail.track(pid, p.x, p.y, p.vx, p.vy, '#ff6641', dt);
+      activeTrailIds.add(pid);
+    }
+    for (let i = 0; i < abilitySystem.drones.length; i++) {
+      const drone = abilitySystem.drones[i];
+      const did = `d${i}`;
+      motionTrail.track(did, drone.x, drone.y, drone.vx, drone.vy, '#00ffff', dt);
+      activeTrailIds.add(did);
+    }
+    motionTrail.prune(activeTrailIds);
+
     // Screen shake + damage flash on damage
     if (player.health < prevHealth) {
       const dmgTaken = prevHealth - player.health;
@@ -375,6 +404,9 @@ const loop = new GameLoop({
     ctx.translate(-cx, -cy);
 
     ambientParticles.render(ctx, cx, cy, radar.getRadius());
+
+    // Motion trails (rendered behind blips)
+    motionTrail.render(ctx, player.x, player.y, cx, cy);
 
     // Entity blips (positions are rotated by the canvas transform)
     blipRenderer.renderBlips(
