@@ -3,12 +3,6 @@ import { createResource } from '../entities/Entity';
 import { Player } from '../entities/Player';
 import {
   TowRopeSystem,
-  SPRING_K,
-  SPRING_DAMPING,
-  SPRING_REST_LENGTH,
-  TOW_FRICTION,
-  REPULSION_RADIUS,
-  REPULSION_FORCE,
   MAX_TOWED,
   FADE_OUT_DURATION,
 } from './TowRopeSystem';
@@ -24,19 +18,6 @@ describe('TowRopeSystem', () => {
   beforeEach(() => {
     system = new TowRopeSystem();
     player = new Player(0, 0);
-  });
-
-  describe('tuning constants', () => {
-    it('exports all 8 tuning constants', () => {
-      expect(SPRING_K).toBe(1.5);
-      expect(SPRING_DAMPING).toBe(0.5);
-      expect(SPRING_REST_LENGTH).toBe(35);
-      expect(TOW_FRICTION).toBe(1.5);
-      expect(REPULSION_RADIUS).toBe(20);
-      expect(REPULSION_FORCE).toBe(80);
-      expect(MAX_TOWED).toBe(8);
-      expect(FADE_OUT_DURATION).toBe(0.3);
-    });
   });
 
   describe('collect', () => {

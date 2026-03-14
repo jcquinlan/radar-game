@@ -157,6 +157,7 @@ export class TowRopeSystem {
   clear(): void {
     for (const item of this.items) {
       item.resource.towedByPlayer = false;
+      item.resource.active = false;
     }
     this.items.length = 0;
   }
