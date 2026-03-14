@@ -85,7 +85,7 @@ describe('AbilitySystem', () => {
     it('has 8 second cooldown', () => {
       const { system } = buildAbilitySystem();
       const ability = system.getAbility('damage_blast')!;
-      expect(ability.cooldown).toBe(8);
+      expect(ability.cooldown).toBe(6);
     });
 
     it('generates floating text events for damaged enemies', () => {
@@ -129,7 +129,7 @@ describe('AbilitySystem', () => {
     it('has 15 second cooldown', () => {
       const { system } = buildAbilitySystem();
       const ability = system.getAbility('heal_over_time')!;
-      expect(ability.cooldown).toBe(15);
+      expect(ability.cooldown).toBe(10);
     });
 
     it('effect ends after 4 seconds', () => {
@@ -198,7 +198,7 @@ describe('AbilitySystem', () => {
     it('has 20 second cooldown', () => {
       const { system } = buildAbilitySystem();
       const ability = system.getAbility('helper_drone')!;
-      expect(ability.cooldown).toBe(20);
+      expect(ability.cooldown).toBe(15);
     });
 
     it('drone kills enemies and awards score', () => {

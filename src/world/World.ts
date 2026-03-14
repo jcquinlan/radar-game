@@ -8,7 +8,7 @@ import {
 
 const CHUNK_SIZE = 400;
 const BASE_RESOURCES_PER_CHUNK = 3;
-const BASE_ENEMIES_PER_CHUNK = 1;
+const BASE_ENEMIES_PER_CHUNK = 2;
 const ALLIES_PER_CHUNK = 0.6;
 
 /** Returns a difficulty multiplier based on distance from origin */

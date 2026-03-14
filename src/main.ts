@@ -43,6 +43,7 @@ let resolutionLevel: number;
 let gameOver: boolean;
 let prevHealth: number;
 let lastSweepAngle: number;
+let damageFlash: number;
 
 function init() {
   radar = new RadarDisplay();
@@ -63,6 +64,7 @@ function init() {
   gameOver = false;
   prevHealth = player.health;
   lastSweepAngle = 0;
+  damageFlash = 0;
 
   upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
     resolutionLevel = lvl;
@@ -217,13 +219,17 @@ const loop = new GameLoop({
     // Combat
     const alive = combatSystem.update(world.entities, player, dt);
 
-    // Screen shake on damage
+    // Screen shake + damage flash on damage
     if (player.health < prevHealth) {
       const dmgTaken = prevHealth - player.health;
       screenShake.trigger(Math.min(dmgTaken * 0.8, 12));
+      damageFlash = Math.min(0.5, dmgTaken * 0.03 + 0.1);
     }
     prevHealth = player.health;
     screenShake.update(dt);
+    if (damageFlash > 0) {
+      damageFlash = Math.max(0, damageFlash - dt * 2);
+    }
 
     if (!alive) {
       gameOver = true;
@@ -309,6 +315,26 @@ const loop = new GameLoop({
     floatingText.render(ctx, player.x, player.y, cx, cy);
 
     ctx.restore();
+
+    // Damage flash vignette — red overlay that fades when player takes damage
+    if (damageFlash > 0) {
+      ctx.save();
+      const gradient = ctx.createRadialGradient(cx, cy, radar.getRadius() * 0.5, cx, cy, radar.getRadius());
+      gradient.addColorStop(0, 'rgba(255, 0, 0, 0)');
+      gradient.addColorStop(1, `rgba(255, 0, 0, ${damageFlash})`);
+      ctx.beginPath();
+      ctx.arc(cx, cy, radar.getRadius(), 0, Math.PI * 2);
+      ctx.fillStyle = gradient;
+      ctx.fill();
+
+      // Red border flash
+      ctx.beginPath();
+      ctx.arc(cx, cy, radar.getRadius(), 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255, 65, 65, ${damageFlash * 1.5})`;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // HUD
     hud.render(ctx, player, canvas.width, abilitySystem.abilities);

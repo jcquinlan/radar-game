@@ -35,7 +35,7 @@ export class UpgradeSystem {
         maxLevel: 5,
         cost: (lvl) => 30 + lvl * 40,
         apply: (lvl) => {
-          radar.setRadius(280 + lvl * 40);
+          radar.setRadius(340 + lvl * 40);
         },
       },
       {

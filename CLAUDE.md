@@ -126,9 +126,9 @@ src/
 
 | ID | Key | Cooldown | Effect |
 |----|-----|----------|--------|
-| damage_blast | 1 | 8s | AoE 20 damage to all enemies within 200px |
-| heal_over_time | 2 | 15s | Heals 5 HP/sec for 4 seconds (20 HP total) |
-| helper_drone | 3 | 20s | Spawns a drone that chases enemies, deals 5 dmg/s contact, lasts 10s |
+| damage_blast | 1 | 6s | AoE 20 damage to all enemies within 200px |
+| heal_over_time | 2 | 10s | Heals 5 HP/sec for 4 seconds (20 HP total) |
+| helper_drone | 3 | 15s | Spawns a drone that chases enemies, deals 5 dmg/s contact, lasts 10s |
 
 **Damage formula:** `effective = max(0, rawDamage - armor) * (1 - shieldReduction)`
 

@@ -14,7 +14,7 @@ export interface RadarConfig {
 }
 
 export const DEFAULT_RADAR_CONFIG: RadarConfig = {
-  radius: 280,
+  radius: 340,
   sweepSpeed: Math.PI * 0.25, // ~8 seconds per full rotation
   ringCount: 4,
   color: '#00ff41',
