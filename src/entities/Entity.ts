@@ -5,8 +5,10 @@ export interface Entity {
   y: number;
   type: EntityType;
   active: boolean;
-  /** Whether this entity was already interacted with during the current sweep rotation */
-  sweptThisRotation: boolean;
+  /** Whether this entity is currently visible on the radar (enemies start invisible) */
+  visible: boolean;
+  /** Whether this entity was already interacted with during the current ping wave */
+  pingedThisWave: boolean;
 }
 
 export interface Resource extends Entity {
@@ -33,8 +35,6 @@ export interface Enemy extends Entity {
   vx: number;
   vy: number;
   friction: number;
-  /** Whether this enemy is currently visible from a recent ping/sweep */
-  pingVisible: boolean;
   /** Ghost marker position (last-known location when ping wore off) */
   ghostX: number | null;
   ghostY: number | null;
@@ -78,7 +78,8 @@ export function createResource(x: number, y: number): Resource {
     y,
     type: 'resource',
     active: true,
-    sweptThisRotation: false,
+    visible: true,
+    pingedThisWave: false,
     energyValue: 5 + Math.floor(Math.random() * 10),
   };
 }
@@ -98,7 +99,8 @@ export function createEnemy(x: number, y: number, subtype?: EnemySubtype): Enemy
     type: 'enemy',
     subtype: st,
     active: true,
-    sweptThisRotation: false,
+    visible: false,
+    pingedThisWave: false,
     health: stats.health,
     maxHealth: stats.health,
     damage: stats.damage,
@@ -111,7 +113,6 @@ export function createEnemy(x: number, y: number, subtype?: EnemySubtype): Enemy
     vx: 0,
     vy: 0,
     friction: stats.friction,
-    pingVisible: false,
     ghostX: null,
     ghostY: null,
     wanderAngle: Math.random() * Math.PI * 2,
@@ -127,7 +128,8 @@ export function createAlly(x: number, y: number, subtype?: AllySubtype): Ally {
     type: 'ally',
     subtype: st,
     active: true,
-    sweptThisRotation: false,
+    visible: true,
+    pingedThisWave: false,
     healAmount: st === 'healer' ? 8 + Math.floor(Math.random() * 8) : 0,
     cooldown: st === 'healer' ? 3 : st === 'shield' ? 8 : 0,
     lastHealTime: -Infinity,

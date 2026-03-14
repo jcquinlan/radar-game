@@ -1,5 +1,6 @@
 import { Player } from '../entities/Player';
 import { RadarDisplay } from '../radar/RadarDisplay';
+import { PingSystem, DEFAULT_PING_CONFIG } from './PingSystem';
 
 export interface Upgrade {
   id: string;
@@ -14,34 +15,45 @@ export interface Upgrade {
 export class UpgradeSystem {
   upgrades: Upgrade[];
 
-  constructor(player: Player, radar: RadarDisplay, onResolutionChange: (level: number) => void) {
+  constructor(
+    player: Player,
+    radar: RadarDisplay,
+    onResolutionChange: (level: number) => void,
+    pingSystem?: PingSystem
+  ) {
     this.upgrades = [
       {
         id: 'sweep_speed',
-        name: 'Sweep Speed',
-        description: 'Faster radar sweep rotation',
+        name: 'Ping Frequency',
+        description: 'Shorter cooldown between pings',
         level: 0,
         maxLevel: 5,
         cost: (lvl) => 20 + lvl * 30,
         apply: (lvl) => {
-          radar.setSweepSpeed(Math.PI * 0.25 * (1 + lvl * 0.6));
+          if (pingSystem) {
+            pingSystem.setCooldown(DEFAULT_PING_CONFIG.cooldown * (1 - lvl * 0.12));
+          }
         },
       },
       {
         id: 'sweep_range',
-        name: 'Sweep Range',
+        name: 'Ping Range',
         description: 'Larger radar detection radius',
         level: 0,
         maxLevel: 5,
         cost: (lvl) => 30 + lvl * 40,
         apply: (lvl) => {
-          radar.setRadius(340 + lvl * 40);
+          const newRadius = 340 + lvl * 40;
+          radar.setRadius(newRadius);
+          if (pingSystem) {
+            pingSystem.setMaxRadius(newRadius);
+          }
         },
       },
       {
         id: 'sweep_damage',
-        name: 'Sweep Damage',
-        description: 'More damage to enemies on sweep',
+        name: 'Ping Damage',
+        description: 'More damage to enemies on ping',
         level: 0,
         maxLevel: 5,
         cost: (lvl) => 25 + lvl * 35,

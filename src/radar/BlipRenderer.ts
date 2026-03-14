@@ -33,23 +33,21 @@ export class BlipRenderer {
     radarCenterX: number,
     radarCenterY: number,
     radarRadius: number,
-    resolutionLevel: number
+    resolutionLevel: number,
+    worldRotation?: number
   ): void {
     for (const entity of entities) {
       if (!entity.active) continue;
 
-      // Enemies use ping visibility — only render if recently swept
+      // Enemies: render ghost marker if invisible but has last-known position
       if (entity.type === 'enemy') {
         const enemy = entity as Enemy;
-
-        // Render ghost marker at last-known position if ping has worn off
-        if (!enemy.pingVisible && enemy.ghostX !== null && enemy.ghostY !== null) {
+        if (!enemy.visible && enemy.ghostX !== null && enemy.ghostY !== null) {
           this.renderGhostBlip(ctx, enemy, playerX, playerY, radarCenterX, radarCenterY, radarRadius);
         }
-
-        // Skip rendering the live blip if not ping-visible
-        if (!enemy.pingVisible) continue;
       }
+
+      if (!entity.visible) continue;
 
       // Convert world position to radar position
       const relX = entity.x - playerX;
@@ -121,6 +119,13 @@ export class BlipRenderer {
 
       // Resolution upgrade: show type-specific labels at level 2+
       if (resolutionLevel >= 2) {
+        ctx.save();
+        // Counter-rotate labels so they stay upright
+        if (worldRotation) {
+          ctx.translate(screenX, screenY);
+          ctx.rotate(-worldRotation);
+          ctx.translate(-screenX, -screenY);
+        }
         ctx.font = '10px monospace';
         ctx.fillStyle = color;
         ctx.shadowBlur = 3;
@@ -134,6 +139,7 @@ export class BlipRenderer {
           label = ally.subtype === 'healer' ? '+' : ally.subtype === 'shield' ? 'S' : 'B';
         }
         ctx.fillText(label, screenX + size + 2, screenY + 3);
+        ctx.restore();
       }
 
       ctx.restore();

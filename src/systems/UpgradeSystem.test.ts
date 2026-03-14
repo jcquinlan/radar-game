@@ -1,21 +1,24 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { UpgradeSystem } from './UpgradeSystem';
 import { Player } from '../entities/Player';
 import { RadarDisplay } from '../radar/RadarDisplay';
+import { PingSystem, DEFAULT_PING_CONFIG } from './PingSystem';
 
 describe('UpgradeSystem', () => {
   let player: Player;
   let radar: RadarDisplay;
+  let pingSystem: PingSystem;
   let upgrades: UpgradeSystem;
   let resolutionLevel: number;
 
   beforeEach(() => {
     player = new Player();
     radar = new RadarDisplay();
+    pingSystem = new PingSystem();
     resolutionLevel = 0;
     upgrades = new UpgradeSystem(player, radar, (lvl) => {
       resolutionLevel = lvl;
-    });
+    }, pingSystem);
   });
 
   it('initializes with 7 upgrades at level 0', () => {
@@ -48,14 +51,13 @@ describe('UpgradeSystem', () => {
 
     const upgrade = upgrades.getUpgrade('sweep_speed')!;
     expect(upgrade.level).toBe(0);
-    expect(player.energy).toBe(1); // unchanged
+    expect(player.energy).toBe(1);
   });
 
   it('cannot purchase beyond max level', () => {
     player.addEnergy(10000);
     const upgrade = upgrades.getUpgrade('sweep_speed')!;
 
-    // Buy to max
     for (let i = 0; i < upgrade.maxLevel; i++) {
       upgrades.purchase('sweep_speed', player);
     }
@@ -65,21 +67,22 @@ describe('UpgradeSystem', () => {
     expect(result).toBe(false);
   });
 
-  it('sweep speed upgrade increases radar sweep speed', () => {
-    const initialSpeed = radar.getConfig().sweepSpeed;
+  it('ping frequency upgrade reduces ping cooldown', () => {
+    const initialCooldown = pingSystem.getConfig().cooldown;
     player.addEnergy(100);
     upgrades.purchase('sweep_speed', player);
-    expect(radar.getConfig().sweepSpeed).toBeGreaterThan(initialSpeed);
+    expect(pingSystem.getConfig().cooldown).toBeLessThan(initialCooldown);
   });
 
-  it('sweep range upgrade increases radar radius', () => {
+  it('ping range upgrade increases radar radius and ping max radius', () => {
     const initialRadius = radar.getRadius();
     player.addEnergy(100);
     upgrades.purchase('sweep_range', player);
     expect(radar.getRadius()).toBeGreaterThan(initialRadius);
+    expect(pingSystem.getConfig().maxRadius).toBe(radar.getRadius());
   });
 
-  it('sweep damage upgrade increases player sweep damage', () => {
+  it('ping damage upgrade increases player sweep damage', () => {
     const initialDamage = player.sweepDamage;
     player.addEnergy(100);
     upgrades.purchase('sweep_damage', player);
