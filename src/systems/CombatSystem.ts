@@ -23,19 +23,18 @@ export class CombatSystem {
       // Chase the player if within range (scouts and brutes)
       // Stop at standoff distance instead of stacking on top of the player
       const standoffDist = enemy.subtype === 'brute' ? 20 : 25;
+      const accel = enemy.speed * 10;
       if (enemy.subtype !== 'ranged' && dist < enemy.chaseRange && dist > standoffDist) {
-        const moveX = (dx / dist) * enemy.speed * dt;
-        const moveY = (dy / dist) * enemy.speed * dt;
-        enemy.x += moveX;
-        enemy.y += moveY;
+        enemy.vx += (dx / dist) * accel * dt;
+        enemy.vy += (dy / dist) * accel * dt;
       }
 
       // Ranged enemies: maintain distance and fire
       if (enemy.subtype === 'ranged' && dist < enemy.chaseRange) {
         // Back away if too close
         if (dist < 100 && dist > 0) {
-          enemy.x -= (dx / dist) * enemy.speed * dt;
-          enemy.y -= (dy / dist) * enemy.speed * dt;
+          enemy.vx -= (dx / dist) * accel * dt;
+          enemy.vy -= (dy / dist) * accel * dt;
         }
 
         // Fire projectile
@@ -53,8 +52,26 @@ export class CombatSystem {
         }
       }
 
+      // Apply friction and velocity to position
+      enemy.vx *= Math.pow(1e-4, dt / (1 / enemy.friction));
+      enemy.vy *= Math.pow(1e-4, dt / (1 / enemy.friction));
+      // Clamp to max speed
+      const enemySpeedSq = enemy.vx * enemy.vx + enemy.vy * enemy.vy;
+      const maxEnemySpeed = enemy.speed * 1.2;
+      if (enemySpeedSq > maxEnemySpeed * maxEnemySpeed) {
+        const scale = maxEnemySpeed / Math.sqrt(enemySpeedSq);
+        enemy.vx *= scale;
+        enemy.vy *= scale;
+      }
+      enemy.x += enemy.vx * dt;
+      enemy.y += enemy.vy * dt;
+
       // Contact damage (scouts and brutes only) — range matches standoff distance
-      if (enemy.subtype !== 'ranged' && dist < 30) {
+      // Recalculate distance after movement
+      const postDx = player.x - enemy.x;
+      const postDy = player.y - enemy.y;
+      const postDist = Math.sqrt(postDx * postDx + postDy * postDy);
+      if (enemy.subtype !== 'ranged' && postDist < 30) {
         player.takeDamage(enemy.damage * dt);
       }
     }

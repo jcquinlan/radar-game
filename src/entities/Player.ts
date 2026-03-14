@@ -7,6 +7,8 @@ export interface PlayerStats {
 export class Player {
   x: number;
   y: number;
+  vx: number;
+  vy: number;
   health: number;
   maxHealth: number;
   energy: number;
@@ -15,6 +17,7 @@ export class Player {
   sweepDamage: number;
   armor: number;
   magnetRange: number;
+  friction: number;
 
   // Shield buff
   shieldActive: boolean;
@@ -31,6 +34,9 @@ export class Player {
   constructor(x = 0, y = 0) {
     this.x = x;
     this.y = y;
+    this.vx = 0;
+    this.vy = 0;
+    this.friction = 5.0;
     this.maxHealth = 100;
     this.health = this.maxHealth;
     this.energy = 0;

@@ -114,12 +114,25 @@ const loop = new GameLoop({
   update(dt) {
     if (gameOver) return;
 
-    // Player movement
+    // Player movement (acceleration + friction for inertia)
     const { dx, dy } = input.getMovementVector();
     const oldX = player.x;
     const oldY = player.y;
-    player.x += dx * player.speed * dt;
-    player.y += dy * player.speed * dt;
+    const accel = player.speed * 12;
+    player.vx += dx * accel * dt;
+    player.vy += dy * accel * dt;
+    player.vx *= Math.pow(1e-4, dt / (1 / player.friction));
+    player.vy *= Math.pow(1e-4, dt / (1 / player.friction));
+    // Clamp to max speed
+    const playerSpeedSq = player.vx * player.vx + player.vy * player.vy;
+    const maxSpeed = player.speed * 1.2;
+    if (playerSpeedSq > maxSpeed * maxSpeed) {
+      const scale = maxSpeed / Math.sqrt(playerSpeedSq);
+      player.vx *= scale;
+      player.vy *= scale;
+    }
+    player.x += player.vx * dt;
+    player.y += player.vy * dt;
 
     // Track stats
     const moveDx = player.x - oldX;

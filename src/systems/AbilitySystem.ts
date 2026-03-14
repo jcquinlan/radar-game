@@ -18,10 +18,13 @@ export interface Ability {
 export interface Drone {
   x: number;
   y: number;
+  vx: number;
+  vy: number;
   speed: number;
   damage: number;
   lifetime: number;
   active: boolean;
+  friction: number;
 }
 
 export class AbilitySystem {
@@ -157,10 +160,13 @@ export class AbilitySystem {
     this.drones.push({
       x: this.player.x,
       y: this.player.y,
+      vx: 0,
+      vy: 0,
       speed: 120,
       damage: 5,
       lifetime: 10,
       active: true,
+      friction: 3.0,
     });
   }
 
@@ -194,14 +200,15 @@ export class AbilitySystem {
         }
       }
 
-      // Chase nearest enemy
+      // Chase nearest enemy with inertia
       if (nearest) {
         const dx = nearest.x - drone.x;
         const dy = nearest.y - drone.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist > 0) {
-          drone.x += (dx / dist) * drone.speed * dt;
-          drone.y += (dy / dist) * drone.speed * dt;
+          const droneAccel = drone.speed * 10;
+          drone.vx += (dx / dist) * droneAccel * dt;
+          drone.vy += (dy / dist) * droneAccel * dt;
         }
 
         // Contact damage
@@ -217,6 +224,19 @@ export class AbilitySystem {
           }
         }
       }
+
+      // Apply friction and velocity
+      drone.vx *= Math.pow(1e-4, dt / (1 / drone.friction));
+      drone.vy *= Math.pow(1e-4, dt / (1 / drone.friction));
+      const droneSpeedSq = drone.vx * drone.vx + drone.vy * drone.vy;
+      const maxDroneSpeed = drone.speed * 1.2;
+      if (droneSpeedSq > maxDroneSpeed * maxDroneSpeed) {
+        const scale = maxDroneSpeed / Math.sqrt(droneSpeedSq);
+        drone.vx *= scale;
+        drone.vy *= scale;
+      }
+      drone.x += drone.vx * dt;
+      drone.y += drone.vy * dt;
     }
 
     // Clean up dead drones
