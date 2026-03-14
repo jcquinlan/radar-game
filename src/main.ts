@@ -2,8 +2,10 @@ import { createCanvas } from './canvas';
 import { GameLoop } from './engine/GameLoop';
 import { RadarDisplay } from './radar/RadarDisplay';
 import { BlipRenderer } from './radar/BlipRenderer';
+import { SweepEffects } from './radar/SweepEffects';
 import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
+import { SweepSystem } from './systems/SweepSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
 
@@ -12,8 +14,10 @@ const ctx = canvas.getContext('2d')!;
 
 const radar = new RadarDisplay();
 const blipRenderer = new BlipRenderer();
+const sweepEffects = new SweepEffects();
 const player = new Player();
 const input = new InputSystem();
+const sweepSystem = new SweepSystem();
 const world = new World();
 const hud = new HUD();
 
@@ -37,6 +41,22 @@ const loop = new GameLoop({
     // Radar sweep
     radar.update(dt);
     blipRenderer.update(dt);
+
+    // Sweep interactions
+    const events = sweepSystem.update(
+      radar.getSweepAngle(),
+      world.entities,
+      player,
+      radar.getRadius(),
+      dt
+    );
+
+    // Visual effects from sweep interactions
+    sweepEffects.addEvents(events, player.x, player.y);
+    sweepEffects.update(dt);
+
+    // Periodic cleanup
+    world.cleanup(player.x, player.y);
   },
   render() {
     const cx = canvas.width / 2;
@@ -63,6 +83,7 @@ const loop = new GameLoop({
       radar.getRadius(),
       resolutionLevel
     );
+    sweepEffects.render(ctx, cx, cy);
     ctx.restore();
 
     // HUD

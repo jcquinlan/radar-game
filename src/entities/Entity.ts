@@ -69,6 +69,6 @@ export function createAlly(x: number, y: number): Ally {
     sweptThisRotation: false,
     healAmount: 5 + Math.floor(Math.random() * 10),
     cooldown: 3, // seconds between heals
-    lastHealTime: 0,
+    lastHealTime: -Infinity,
   };
 }
