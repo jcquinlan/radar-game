@@ -71,8 +71,16 @@ const loop = new GameLoop({
 
     // Player movement
     const { dx, dy } = input.getMovementVector();
+    const oldX = player.x;
+    const oldY = player.y;
     player.x += dx * player.speed * dt;
     player.y += dy * player.speed * dt;
+
+    // Track stats
+    const moveDx = player.x - oldX;
+    const moveDy = player.y - oldY;
+    player.distanceTraveled += Math.sqrt(moveDx * moveDx + moveDy * moveDy);
+    player.survivalTime += dt;
 
     // Spawn entities in new areas
     world.updateSpawning(player.x, player.y);

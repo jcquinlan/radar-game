@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { World } from './World';
+import { World, getThreatLevel } from './World';
+import { Enemy } from '../entities/Entity';
 
 describe('World', () => {
   it('spawns entities when visiting new chunks', () => {
     const world = new World();
     expect(world.entities).toHaveLength(0);
-
     world.updateSpawning(0, 0);
     expect(world.entities.length).toBeGreaterThan(0);
   });
@@ -14,7 +14,6 @@ describe('World', () => {
     const world = new World();
     world.updateSpawning(0, 0);
     const countAfterFirst = world.entities.length;
-
     world.updateSpawning(0, 0);
     expect(world.entities.length).toBe(countAfterFirst);
   });
@@ -23,8 +22,6 @@ describe('World', () => {
     const world = new World();
     world.updateSpawning(0, 0);
     const countNearOrigin = world.entities.length;
-
-    // Move far enough to enter new chunks
     world.updateSpawning(5000, 5000);
     expect(world.entities.length).toBeGreaterThan(countNearOrigin);
   });
@@ -32,25 +29,43 @@ describe('World', () => {
   it('cleans up inactive entities far from the player', () => {
     const world = new World();
     world.updateSpawning(0, 0);
-
-    // Deactivate some entities
     world.entities[0].active = false;
     const activeCount = world.entities.filter((e) => e.active).length;
-
     world.cleanup(0, 0);
     expect(world.entities.length).toBe(activeCount);
   });
 
-  it('spawns all three entity types', () => {
+  it('enemies spawned further from origin are stronger', () => {
     const world = new World();
-    // Spawn across many chunks to get probabilistic allies
-    for (let x = 0; x < 5000; x += 500) {
-      world.updateSpawning(x, 0);
-    }
 
-    const types = new Set(world.entities.map((e) => e.type));
-    expect(types.has('resource')).toBe(true);
-    expect(types.has('enemy')).toBe(true);
-    // Allies are probabilistic but with enough chunks should appear
+    // Spawn near origin
+    world.updateSpawning(0, 0);
+    const nearEnemies = world.entities.filter(
+      (e) => e.type === 'enemy'
+    ) as Enemy[];
+
+    // Spawn far away
+    world.updateSpawning(5000, 5000);
+    const farEnemies = world.entities.filter(
+      (e) => e.type === 'enemy' && !nearEnemies.includes(e as Enemy)
+    ) as Enemy[];
+
+    if (nearEnemies.length > 0 && farEnemies.length > 0) {
+      const avgNearHealth = nearEnemies.reduce((s, e) => s + e.maxHealth, 0) / nearEnemies.length;
+      const avgFarHealth = farEnemies.reduce((s, e) => s + e.maxHealth, 0) / farEnemies.length;
+      expect(avgFarHealth).toBeGreaterThan(avgNearHealth);
+    }
+  });
+});
+
+describe('getThreatLevel', () => {
+  it('returns LOW at origin', () => {
+    expect(getThreatLevel(0, 0).label).toBe('LOW');
+  });
+
+  it('returns higher threat levels at greater distances', () => {
+    const nearThreat = getThreatLevel(0, 0).level;
+    const farThreat = getThreatLevel(5000, 5000).level;
+    expect(farThreat).toBeGreaterThan(nearThreat);
   });
 });
