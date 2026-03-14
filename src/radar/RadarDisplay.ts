@@ -50,20 +50,9 @@ export class RadarDisplay {
   }
 
   render(ctx: CanvasRenderingContext2D, centerX: number, centerY: number): void {
-    const { radius, color, bgColor } = this.config;
+    const { radius, color } = this.config;
 
-    ctx.save();
-
-    // Clip to circle
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-    ctx.clip();
-
-    // Background
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2);
-
-    // Ping ring (expanding circle with fade)
+    // Ping ring (expanding circle with fade) — rendered without clip, can extend beyond radar
     if (this.pingState && this.pingState.active && this.pingState.radius > 0) {
       const pingRadius = Math.min(this.pingState.radius, radius);
       const alpha = this.pingState.alpha;
@@ -99,12 +88,15 @@ export class RadarDisplay {
       }
     }
 
-    // Outer ring (border)
+    // Outer ring (border) — subtle visual indicator of ping range
+    ctx.save();
+    ctx.globalAlpha = 0.35;
     ctx.beginPath();
     ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.stroke();
+    ctx.restore();
 
     // Center dot
     ctx.beginPath();
@@ -112,28 +104,24 @@ export class RadarDisplay {
     ctx.fillStyle = color;
     ctx.fill();
 
-    ctx.restore();
-
-    // Scanline overlay (outside clip for full effect)
+    // Scanline overlay across full screen
     if (this.scanlineEnabled) {
-      this.renderScanlines(ctx, centerX, centerY, radius);
+      this.renderScanlines(ctx, centerX, centerY);
     }
   }
 
   private renderScanlines(
     ctx: CanvasRenderingContext2D,
-    centerX: number,
-    centerY: number,
-    radius: number
+    _centerX: number,
+    _centerY: number,
   ): void {
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-    ctx.clip();
+    const w = ctx.canvas.width;
+    const h = ctx.canvas.height;
 
+    ctx.save();
     ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
-    for (let y = centerY - radius; y < centerY + radius; y += 3) {
-      ctx.fillRect(centerX - radius, y, radius * 2, 1);
+    for (let y = 0; y < h; y += 3) {
+      ctx.fillRect(0, y, w, 1);
     }
     ctx.restore();
   }
