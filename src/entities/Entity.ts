@@ -14,6 +14,13 @@ export interface Entity {
 export interface Resource extends Entity {
   type: 'resource';
   energyValue: number;
+  /** Whether this resource is being towed behind the player */
+  towedByPlayer?: boolean;
+  /** Tow physics velocity */
+  towVx?: number;
+  towVy?: number;
+  /** Position in the tow chain (0 = closest to player) */
+  towChainIndex?: number;
 }
 
 export type EnemySubtype = 'scout' | 'brute' | 'ranged';
