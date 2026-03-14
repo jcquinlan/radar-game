@@ -172,7 +172,7 @@ const loop = new GameLoop({
     // Spawn entities in new areas
     world.updateSpawning(player.x, player.y);
 
-    // Radar + blip updates
+    // Blip + particle updates
     blipRenderer.update(dt);
     ambientParticles.update(dt);
 
