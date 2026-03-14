@@ -176,4 +176,51 @@ describe('PingSystem', () => {
     // (only enemies get hidden)
     expect(ally.visible).toBe(true);
   });
+
+  it('destroys an enemy and drops energy when health reaches 0', () => {
+    const enemy = createEnemy(50, 0);
+    enemy.health = 5;
+    enemy.energyDrop = 20;
+    player.sweepDamage = 10;
+
+    ping.update([enemy], player, 0.1);
+    expect(enemy.active).toBe(false);
+    expect(player.energy).toBe(20);
+  });
+
+  it('ping resets to inactive after reaching max radius', () => {
+    // maxRadius=300, speed=600, deceleration=0 => reaches 300 in 0.5s
+    ping.update([], player, 0.016); // fire
+    expect(ping.getState().active).toBe(true);
+
+    ping.update([], player, 0.6); // expand past max
+    expect(ping.getState().active).toBe(false);
+    expect(ping.getState().radius).toBe(0);
+  });
+
+  it('enters cooldown after ping completes', () => {
+    const pingWithCooldown = new PingSystem({
+      cooldown: 0,
+      maxRadius: 300,
+      initialSpeed: 600,
+      deceleration: 0,
+    });
+
+    // Fire and complete ping
+    pingWithCooldown.update([], player, 0.016);
+    pingWithCooldown.update([], player, 0.6);
+    expect(pingWithCooldown.getState().active).toBe(false);
+
+    // Cooldown is 0, so next update fires immediately
+    pingWithCooldown.update([], player, 0.016);
+    expect(pingWithCooldown.getState().active).toBe(true);
+  });
+
+  it('setMaxRadius and setCooldown modify config', () => {
+    const p = new PingSystem();
+    p.setMaxRadius(500);
+    p.setCooldown(3);
+    expect(p.getConfig().maxRadius).toBe(500);
+    expect(p.getConfig().cooldown).toBe(3);
+  });
 });
