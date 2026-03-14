@@ -138,6 +138,88 @@ describe('CombatSystem', () => {
     expect(enemy.wanderTimer).toBeGreaterThan(1);
   });
 
+  describe('dash ram damage', () => {
+    it('damages enemy instead of player on contact while dashing', () => {
+      const enemy = createEnemy(5, 0, 'scout');
+      enemy.health = 50;
+      const initialHealth = player.health;
+
+      combat.update([enemy], player, 1, true, 15);
+
+      expect(player.health).toBe(initialHealth);
+      expect(enemy.health).toBe(35); // 50 - 15 flat
+    });
+
+    it('only hits each enemy once per dash', () => {
+      const enemy = createEnemy(5, 0, 'scout');
+      enemy.health = 50;
+
+      // Multiple frames while dashing — should only deal damage once
+      combat.update([enemy], player, 0.016, true, 15);
+      combat.update([enemy], player, 0.016, true, 15);
+      combat.update([enemy], player, 0.016, true, 15);
+
+      expect(enemy.health).toBe(35); // hit only once
+    });
+
+    it('resets hit tracking for a new dash', () => {
+      const enemy = createEnemy(5, 0, 'scout');
+      enemy.health = 50;
+
+      // First dash
+      combat.update([enemy], player, 0.016, true, 15);
+      expect(enemy.health).toBe(35);
+
+      // Dash ends
+      combat.update([enemy], player, 0.016, false);
+
+      // Second dash — should hit again
+      combat.update([enemy], player, 0.016, true, 15);
+      expect(enemy.health).toBe(20);
+    });
+
+    it('kills enemy and awards score when dashing into them', () => {
+      const enemy = createEnemy(5, 0, 'scout');
+      enemy.health = 5;
+      enemy.energyDrop = 10;
+
+      combat.update([enemy], player, 1, true, 15);
+
+      expect(enemy.active).toBe(false);
+      expect(player.kills).toBe(1);
+      expect(player.score).toBe(50);
+      expect(player.energy).toBe(10);
+    });
+
+    it('dash damages all enemy subtypes including ranged on contact', () => {
+      const ranged = createEnemy(5, 0, 'ranged');
+      ranged.health = 50;
+
+      combat.update([ranged], player, 1, true, 15);
+
+      expect(ranged.health).toBe(35);
+    });
+
+    it('knocks enemy back in player movement direction on ram hit', () => {
+      const enemy = createEnemy(5, 0, 'scout');
+      enemy.health = 50;
+      enemy.vx = 0;
+      enemy.vy = 0;
+      player.vx = 100;
+      player.vy = 0;
+
+      combat.update([enemy], player, 0.016, true, 15);
+
+      expect(enemy.vx).toBeGreaterThan(0); // pushed in player's direction
+    });
+
+    it('normal contact damage applies when not dashing', () => {
+      const enemy = createEnemy(5, 0, 'scout');
+      combat.update([enemy], player, 1, false);
+      expect(player.health).toBeLessThan(player.maxHealth);
+    });
+  });
+
   it('enemies immediately chase when player enters range', () => {
     // Start outside chase range, wandering
     const enemy = createEnemy(300, 0, 'scout');

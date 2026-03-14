@@ -344,7 +344,10 @@ const loop = new GameLoop({
     abilityEffects.update(dt);
 
     // Combat
-    const alive = combatSystem.update(world.entities, player, dt);
+    const alive = combatSystem.update(
+      world.entities, player, dt, abilitySystem.isDashing(), 15,
+      (text, x, y, color) => floatingText.add(text, x, y, color),
+    );
 
     // Motion trails — track fast-moving entities
     motionTrail.track('player', player.x, player.y, player.vx, player.vy, '#00ff41', dt);
