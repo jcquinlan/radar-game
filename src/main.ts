@@ -3,6 +3,7 @@ import { GameLoop } from './engine/GameLoop';
 import { RadarDisplay } from './radar/RadarDisplay';
 import { BlipRenderer } from './radar/BlipRenderer';
 import { SweepEffects } from './radar/SweepEffects';
+import { AmbientParticles } from './radar/AmbientParticles';
 import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
 import { SweepSystem } from './systems/SweepSystem';
@@ -13,6 +14,8 @@ import { World } from './world/World';
 import { HUD } from './ui/HUD';
 import { UpgradePanel } from './ui/UpgradePanel';
 import { GameOverScreen } from './ui/GameOverScreen';
+import { FloatingText } from './ui/FloatingText';
+import { ScreenShake } from './ui/ScreenShake';
 
 const canvas = createCanvas('game-canvas');
 const ctx = canvas.getContext('2d')!;
@@ -20,6 +23,7 @@ const ctx = canvas.getContext('2d')!;
 let radar: RadarDisplay;
 let blipRenderer: BlipRenderer;
 let sweepEffects: SweepEffects;
+let ambientParticles: AmbientParticles;
 let player: Player;
 let input: InputSystem;
 let sweepSystem: SweepSystem;
@@ -29,13 +33,18 @@ let world: World;
 let hud: HUD;
 let upgradePanel: UpgradePanel;
 let gameOverScreen: GameOverScreen;
+let floatingText: FloatingText;
+let screenShake: ScreenShake;
 let resolutionLevel: number;
 let gameOver: boolean;
+let prevHealth: number;
+let lastSweepAngle: number;
 
 function init() {
   radar = new RadarDisplay();
   blipRenderer = new BlipRenderer();
   sweepEffects = new SweepEffects();
+  ambientParticles = new AmbientParticles();
   player = new Player();
   input = new InputSystem();
   sweepSystem = new SweepSystem();
@@ -44,8 +53,12 @@ function init() {
   hud = new HUD();
   upgradePanel = new UpgradePanel();
   gameOverScreen = new GameOverScreen();
+  floatingText = new FloatingText();
+  screenShake = new ScreenShake();
   resolutionLevel = 0;
   gameOver = false;
+  prevHealth = player.health;
+  lastSweepAngle = 0;
 
   upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
     resolutionLevel = lvl;
@@ -88,6 +101,7 @@ const loop = new GameLoop({
     // Radar sweep
     radar.update(dt);
     blipRenderer.update(dt);
+    ambientParticles.update(dt);
 
     // Sweep interactions
     const events = sweepSystem.update(
@@ -98,22 +112,33 @@ const loop = new GameLoop({
       dt
     );
 
-    // Track score from sweep events
+    // Track score and floating text from sweep events
     for (const event of events) {
       if (event.type === 'collect') {
         player.totalEnergyCollected += event.value;
         player.score += event.value;
+        floatingText.add(`+${event.value}E`, event.entity.x, event.entity.y, '#00ff41');
       }
-      if (event.type === 'damage' && !event.entity.active) {
-        // Enemy killed
-        player.kills++;
-        player.score += 50;
+      if (event.type === 'damage') {
+        floatingText.add(`-${event.value}`, event.entity.x, event.entity.y, '#ff4141');
+        if (!event.entity.active) {
+          player.kills++;
+          player.score += 50;
+          floatingText.add('+50', event.entity.x, event.entity.y - 15, '#ffaa00');
+        }
+      }
+      if (event.type === 'heal') {
+        floatingText.add(`+${event.value}HP`, player.x, player.y - 20, '#4488ff');
+      }
+      if (event.type === 'shield') {
+        floatingText.add('SHIELD!', player.x, player.y - 20, '#00ffff');
       }
     }
 
     // Visual effects from sweep interactions
     sweepEffects.addEvents(events, player.x, player.y);
     sweepEffects.update(dt);
+    floatingText.update(dt);
 
     // Energy magnet: auto-collect nearby resources
     if (player.magnetRange > 0) {
@@ -126,6 +151,7 @@ const loop = new GameLoop({
           player.addEnergy(resource.energyValue);
           player.totalEnergyCollected += resource.energyValue;
           player.score += resource.energyValue;
+          floatingText.add(`+${resource.energyValue}E`, resource.x, resource.y, '#00ff41');
           resource.active = false;
         }
       }
@@ -139,15 +165,24 @@ const loop = new GameLoop({
       if (!entity.active || entity.type !== 'ally') continue;
       const ally = entity as Ally;
       if (ally.subtype !== 'beacon') continue;
-      const dx = ally.x - player.x;
-      const dy = ally.y - player.y;
-      if (dx * dx + dy * dy < ally.beaconRange * ally.beaconRange) {
+      const bdx = ally.x - player.x;
+      const bdy = ally.y - player.y;
+      if (bdx * bdx + bdy * bdy < ally.beaconRange * ally.beaconRange) {
         player.addEnergy(ally.energyPerSecond * dt);
       }
     }
 
     // Combat
     const alive = combatSystem.update(world.entities, player, dt);
+
+    // Screen shake on damage
+    if (player.health < prevHealth) {
+      const dmgTaken = prevHealth - player.health;
+      screenShake.trigger(Math.min(dmgTaken * 0.8, 12));
+    }
+    prevHealth = player.health;
+    screenShake.update(dt);
+
     if (!alive) {
       gameOver = true;
       gameOverScreen.show(canvas, () => {
@@ -157,12 +192,19 @@ const loop = new GameLoop({
       });
     }
 
+    // Detect sweep rotation completion for ping flash
+    const currentAngle = radar.getSweepAngle();
+    if (lastSweepAngle > currentAngle + Math.PI) {
+      // Full rotation completed — ping flash handled in render
+    }
+    lastSweepAngle = currentAngle;
+
     // Periodic cleanup
     world.cleanup(player.x, player.y);
   },
   render() {
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
+    const cx = canvas.width / 2 + screenShake.offsetX;
+    const cy = canvas.height / 2 + screenShake.offsetY;
 
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -170,11 +212,14 @@ const loop = new GameLoop({
     // Radar
     radar.render(ctx, cx, cy);
 
-    // Entity blips (clipped to radar circle)
+    // Ambient particles (clipped to radar)
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, radar.getRadius(), 0, Math.PI * 2);
     ctx.clip();
+    ambientParticles.render(ctx, cx, cy, radar.getRadius());
+
+    // Entity blips
     blipRenderer.renderBlips(
       ctx,
       world.entities,
@@ -200,6 +245,9 @@ const loop = new GameLoop({
       ctx.fill();
       ctx.restore();
     }
+
+    // Floating text
+    floatingText.render(ctx, player.x, player.y, cx, cy);
 
     ctx.restore();
 
