@@ -18,6 +18,7 @@ import { FloatingText } from './ui/FloatingText';
 import { ScreenShake } from './ui/ScreenShake';
 import { AbilitySystem } from './systems/AbilitySystem';
 import { AbilityEffects } from './radar/AbilityEffects';
+import { KeyRemapScreen } from './ui/KeyRemapScreen';
 
 const canvas = createCanvas('game-canvas');
 const ctx = canvas.getContext('2d')!;
@@ -39,6 +40,7 @@ let floatingText: FloatingText;
 let screenShake: ScreenShake;
 let abilitySystem: AbilitySystem;
 let abilityEffects: AbilityEffects;
+let keyRemapScreen: KeyRemapScreen;
 let resolutionLevel: number;
 let gameOver: boolean;
 let prevHealth: number;
@@ -71,47 +73,55 @@ function init() {
   });
   abilitySystem = new AbilitySystem(player);
   abilityEffects = new AbilityEffects();
+  keyRemapScreen = new KeyRemapScreen();
 
   input.attach();
+  keyRemapScreen.attach(canvas, abilitySystem.abilities);
   upgradePanel.attach(canvas, upgradeSystem, player);
   world.updateSpawning(player.x, player.y);
 }
 
-// Toggle upgrade panel with E key (registered once, outside init)
+// Toggle panels (registered once, outside init)
 window.addEventListener('keydown', (e) => {
-  if ((e.key === 'e' || e.key === 'E') && !gameOver) {
+  // Key remap screen captures keys when listening — skip other handlers
+  if (keyRemapScreen && keyRemapScreen.isListening()) return;
+
+  if ((e.key === 'e' || e.key === 'E') && !gameOver && !keyRemapScreen.isVisible()) {
     upgradePanel.toggle();
   }
-  // Ability keybinds
-  if (e.key === '1' && !gameOver) {
-    const addText = (text: string, x: number, y: number, color: string) =>
-      floatingText.add(text, x, y, color);
-    if (abilitySystem.activate('damage_blast', world.entities, addText)) {
-      abilityEffects.triggerBlast();
-      screenShake.trigger(4);
-    }
+  if ((e.key === 'k' || e.key === 'K') && !gameOver) {
+    keyRemapScreen.toggle();
   }
-  if (e.key === '2' && !gameOver) {
-    const addText = (text: string, x: number, y: number, color: string) =>
-      floatingText.add(text, x, y, color);
-    if (abilitySystem.activate('heal_over_time', world.entities, addText)) {
-      floatingText.add('REGEN!', player.x, player.y - 25, '#00ff41');
-    }
-  }
-  if (e.key === '3' && !gameOver) {
-    const addText = (text: string, x: number, y: number, color: string) =>
-      floatingText.add(text, x, y, color);
-    if (abilitySystem.activate('helper_drone', world.entities, addText)) {
-      abilityEffects.triggerDroneSpawn(player.x, player.y);
-      floatingText.add('DRONE!', player.x, player.y - 25, '#00ffff');
-    }
-  }
-  if (e.key === '4' && !gameOver) {
-    const addText = (text: string, x: number, y: number, color: string) =>
-      floatingText.add(text, x, y, color);
-    if (abilitySystem.activate('dash', world.entities, addText)) {
-      floatingText.add('DASH!', player.x, player.y - 25, '#ffff00');
-      screenShake.trigger(2);
+
+  // Ability keybinds (dynamic from ability.keybind)
+  if (gameOver || keyRemapScreen.isVisible()) return;
+
+  const addText = (text: string, x: number, y: number, color: string) =>
+    floatingText.add(text, x, y, color);
+
+  for (const ability of abilitySystem.abilities) {
+    if (e.key === ability.keybind) {
+      if (ability.id === 'damage_blast') {
+        if (abilitySystem.activate('damage_blast', world.entities, addText)) {
+          abilityEffects.triggerBlast();
+          screenShake.trigger(4);
+        }
+      } else if (ability.id === 'heal_over_time') {
+        if (abilitySystem.activate('heal_over_time', world.entities, addText)) {
+          floatingText.add('REGEN!', player.x, player.y - 25, '#00ff41');
+        }
+      } else if (ability.id === 'helper_drone') {
+        if (abilitySystem.activate('helper_drone', world.entities, addText)) {
+          abilityEffects.triggerDroneSpawn(player.x, player.y);
+          floatingText.add('DRONE!', player.x, player.y - 25, '#00ffff');
+        }
+      } else if (ability.id === 'dash') {
+        if (abilitySystem.activate('dash', world.entities, addText)) {
+          floatingText.add('DASH!', player.x, player.y - 25, '#ffff00');
+          screenShake.trigger(2);
+        }
+      }
+      break;
     }
   }
 });
@@ -250,6 +260,7 @@ const loop = new GameLoop({
       gameOverScreen.show(canvas, player, () => {
         input.detach();
         upgradePanel.detach(canvas);
+        keyRemapScreen.detach(canvas);
         init();
       });
     }
@@ -358,6 +369,9 @@ const loop = new GameLoop({
 
     // Game over overlay
     gameOverScreen.render(ctx, canvas.width, canvas.height);
+
+    // Key remap screen (on top of everything)
+    keyRemapScreen.render(ctx, abilitySystem.abilities, canvas.width, canvas.height);
   },
 });
 
