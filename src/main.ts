@@ -17,6 +17,7 @@ import { GameOverScreen } from './ui/GameOverScreen';
 import { FloatingText } from './ui/FloatingText';
 import { ScreenShake } from './ui/ScreenShake';
 import { AbilitySystem } from './systems/AbilitySystem';
+import { AbilityEffects } from './radar/AbilityEffects';
 
 const canvas = createCanvas('game-canvas');
 const ctx = canvas.getContext('2d')!;
@@ -37,6 +38,7 @@ let gameOverScreen: GameOverScreen;
 let floatingText: FloatingText;
 let screenShake: ScreenShake;
 let abilitySystem: AbilitySystem;
+let abilityEffects: AbilityEffects;
 let resolutionLevel: number;
 let gameOver: boolean;
 let prevHealth: number;
@@ -66,6 +68,7 @@ function init() {
     resolutionLevel = lvl;
   });
   abilitySystem = new AbilitySystem(player);
+  abilityEffects = new AbilityEffects();
 
   input.attach();
   upgradePanel.attach(canvas, upgradeSystem, player);
@@ -81,17 +84,25 @@ window.addEventListener('keydown', (e) => {
   if (e.key === '1' && !gameOver) {
     const addText = (text: string, x: number, y: number, color: string) =>
       floatingText.add(text, x, y, color);
-    abilitySystem.activate('damage_blast', world.entities, addText);
+    if (abilitySystem.activate('damage_blast', world.entities, addText)) {
+      abilityEffects.triggerBlast();
+      screenShake.trigger(4);
+    }
   }
   if (e.key === '2' && !gameOver) {
     const addText = (text: string, x: number, y: number, color: string) =>
       floatingText.add(text, x, y, color);
-    abilitySystem.activate('heal_over_time', world.entities, addText);
+    if (abilitySystem.activate('heal_over_time', world.entities, addText)) {
+      floatingText.add('REGEN!', player.x, player.y - 25, '#00ff41');
+    }
   }
   if (e.key === '3' && !gameOver) {
     const addText = (text: string, x: number, y: number, color: string) =>
       floatingText.add(text, x, y, color);
-    abilitySystem.activate('helper_drone', world.entities, addText);
+    if (abilitySystem.activate('helper_drone', world.entities, addText)) {
+      abilityEffects.triggerDroneSpawn(player.x, player.y);
+      floatingText.add('DRONE!', player.x, player.y - 25, '#00ffff');
+    }
   }
 });
 
@@ -196,6 +207,13 @@ const loop = new GameLoop({
       floatingText.add(text, x, y, color);
     abilitySystem.update(dt, world.entities, addText);
 
+    // Ability visual effects
+    const hotAbility = abilitySystem.getAbility('heal_over_time');
+    if (hotAbility) {
+      abilityEffects.setRegenActive(hotAbility.active, hotAbility.durationRemaining);
+    }
+    abilityEffects.update(dt);
+
     // Combat
     const alive = combatSystem.update(world.entities, player, dt);
 
@@ -255,6 +273,9 @@ const loop = new GameLoop({
       resolutionLevel
     );
     sweepEffects.render(ctx, cx, cy);
+
+    // Ability visual effects
+    abilityEffects.render(ctx, cx, cy, player.x, player.y, player.survivalTime);
 
     // Render projectiles
     for (const p of combatSystem.projectiles) {
