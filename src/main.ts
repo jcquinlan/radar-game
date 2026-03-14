@@ -370,14 +370,11 @@ const loop = new GameLoop({
       motionTrail.track(did, drone.x, drone.y, drone.vx, drone.vy, '#00ffff', dt);
       activeTrailIds.add(did);
     }
-    const missiles = (abilitySystem as any).missiles as Array<{x: number; y: number; vx: number; vy: number}> | undefined;
-    if (missiles) {
-      for (let i = 0; i < missiles.length; i++) {
-        const missile = missiles[i];
-        const mid = `m${i}`;
-        motionTrail.track(mid, missile.x, missile.y, missile.vx, missile.vy, '#ff8800', dt);
-        activeTrailIds.add(mid);
-      }
+    for (let i = 0; i < abilitySystem.missiles.length; i++) {
+      const missile = abilitySystem.missiles[i];
+      const mid = `m${i}`;
+      motionTrail.track(mid, missile.x, missile.y, missile.vx, missile.vy, '#ff8800', dt);
+      activeTrailIds.add(mid);
     }
     motionTrail.prune(activeTrailIds);
 
@@ -563,8 +560,7 @@ const loop = new GameLoop({
     }
 
     // Render missiles
-    const renderMissiles = (abilitySystem as any).missiles as Array<{x: number; y: number}> | undefined;
-    for (const missile of renderMissiles ?? []) {
+    for (const missile of abilitySystem.missiles) {
       const mx = cx + (missile.x - player.x);
       const my = cy + (missile.y - player.y);
       ctx.save();

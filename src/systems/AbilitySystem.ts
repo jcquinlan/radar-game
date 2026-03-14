@@ -27,9 +27,18 @@ export interface Drone {
   friction: number;
 }
 
+export interface Missile {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  active: boolean;
+}
+
 export class AbilitySystem {
   abilities: Ability[];
   drones: Drone[] = [];
+  missiles: Missile[] = [];
   private player: Player;
 
   constructor(player: Player) {
