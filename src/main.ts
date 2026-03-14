@@ -290,7 +290,7 @@ const loop = new GameLoop({
     ctx.restore();
 
     // HUD
-    hud.render(ctx, player, canvas.width);
+    hud.render(ctx, player, canvas.width, abilitySystem.abilities);
 
     // Upgrade panel
     upgradePanel.render(ctx, upgradeSystem, player, canvas.width, canvas.height);

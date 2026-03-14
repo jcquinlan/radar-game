@@ -1,8 +1,14 @@
 import { Player } from '../entities/Player';
 import { getThreatLevel } from '../world/World';
+import type { Ability } from '../systems/AbilitySystem';
 
 export class HUD {
-  render(ctx: CanvasRenderingContext2D, player: Player, canvasWidth: number): void {
+  render(
+    ctx: CanvasRenderingContext2D,
+    player: Player,
+    canvasWidth: number,
+    abilities?: Ability[],
+  ): void {
     const padding = 20;
     const barWidth = 200;
     const barHeight = 16;
@@ -72,6 +78,41 @@ export class HUD {
       canvasWidth - padding,
       y + 50
     );
+
+    // Ability cooldown bars
+    if (abilities) {
+      const abilityBarWidth = 120;
+      const abilityBarHeight = 12;
+      const abilityY = y + barHeight + 100;
+
+      ctx.textAlign = 'left';
+      ctx.font = '10px monospace';
+
+      for (let i = 0; i < abilities.length; i++) {
+        const ability = abilities[i];
+        const ay = abilityY + i * (abilityBarHeight + 6);
+        const ready = ability.cooldownRemaining <= 0;
+        const fill = ready ? 1 : 1 - ability.cooldownRemaining / ability.cooldown;
+        const color = ready ? '#00ff41' : '#335533';
+
+        this.renderBar(
+          ctx,
+          padding,
+          ay,
+          abilityBarWidth,
+          abilityBarHeight,
+          fill,
+          color,
+          `[${ability.keybind}] ${ability.name}${ready ? '' : ` ${Math.ceil(ability.cooldownRemaining)}s`}`
+        );
+
+        // Show active indicator for duration abilities
+        if (ability.active && ability.durationRemaining > 0) {
+          ctx.fillStyle = '#00ffff';
+          ctx.fillText('ACTIVE', padding + abilityBarWidth + 6, ay + abilityBarHeight - 2);
+        }
+      }
+    }
 
     ctx.restore();
   }
