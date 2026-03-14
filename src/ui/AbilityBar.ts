@@ -5,6 +5,7 @@ const ICON_COLORS: Record<string, string> = {
   heal_over_time: '#00ff41',
   helper_drone: '#00ffff',
   dash: '#ffff00',
+  homing_missile: '#ff8800',
 };
 
 export class AbilityBar {
