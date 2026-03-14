@@ -1,9 +1,9 @@
 /** Minimum speed (px/s) for an entity to leave a trail */
 const SPEED_THRESHOLD = 40;
 /** Maximum trail points stored per entity */
-const MAX_TRAIL_LENGTH = 8;
+const MAX_TRAIL_LENGTH = 12;
 /** Seconds between recording trail points */
-const SAMPLE_INTERVAL = 0.03;
+const SAMPLE_INTERVAL = 0.025;
 
 interface TrailPoint {
   x: number;
@@ -75,16 +75,22 @@ export class MotionTrail {
       if (pts.length < 2) continue;
 
       for (let i = 0; i < pts.length; i++) {
-        const alpha = ((i + 1) / pts.length) * 0.35;
+        const t = (i + 1) / pts.length;
+        const alpha = t * 0.55;
         const sx = centerX + (pts[i].x - playerX);
         const sy = centerY + (pts[i].y - playerY);
-        const radius = 1.5 * ((i + 1) / pts.length);
+        const radius = 2.5 * t;
 
         ctx.globalAlpha = alpha;
+        if (t > 0.7) {
+          ctx.shadowColor = entry.color;
+          ctx.shadowBlur = 4;
+        }
         ctx.beginPath();
         ctx.arc(sx, sy, radius, 0, Math.PI * 2);
         ctx.fillStyle = entry.color;
         ctx.fill();
+        ctx.shadowBlur = 0;
       }
     }
     ctx.globalAlpha = 1;
