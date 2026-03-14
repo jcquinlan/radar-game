@@ -47,7 +47,7 @@ export class RadarDisplay {
   }
 
   render(ctx: CanvasRenderingContext2D, centerX: number, centerY: number): void {
-    const { radius, ringCount, color, dimColor, bgColor } = this.config;
+    const { radius, color, bgColor } = this.config;
 
     ctx.save();
 
@@ -59,26 +59,6 @@ export class RadarDisplay {
     // Background
     ctx.fillStyle = bgColor;
     ctx.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2);
-
-    // Range rings
-    for (let i = 1; i <= ringCount; i++) {
-      const r = (radius / ringCount) * i;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, r, 0, Math.PI * 2);
-      ctx.strokeStyle = dimColor;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
-
-    // Cross-hair grid lines
-    ctx.beginPath();
-    ctx.moveTo(centerX - radius, centerY);
-    ctx.lineTo(centerX + radius, centerY);
-    ctx.moveTo(centerX, centerY - radius);
-    ctx.lineTo(centerX, centerY + radius);
-    ctx.strokeStyle = dimColor;
-    ctx.lineWidth = 1;
-    ctx.stroke();
 
     // Ping ring (expanding circle with fade)
     if (this.pingState && this.pingState.active && this.pingState.radius > 0) {
