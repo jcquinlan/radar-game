@@ -49,6 +49,11 @@ let prevHealth: number;
 let lastSweepAngle: number;
 let damageFlash: number;
 
+// Smooth camera that trails behind the player
+let cameraX: number;
+let cameraY: number;
+const CAMERA_SMOOTHING = 8; // Higher = snappier follow. At 8, ~90% caught up in ~0.3s
+
 function init() {
   radar = new RadarDisplay();
   blipRenderer = new BlipRenderer();
@@ -69,6 +74,8 @@ function init() {
   prevHealth = player.health;
   lastSweepAngle = 0;
   damageFlash = 0;
+  cameraX = player.x;
+  cameraY = player.y;
 
   upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
     resolutionLevel = lvl;
@@ -144,9 +151,9 @@ const loop = new GameLoop({
   update(dt) {
     if (gameOver) return;
 
-    // Snapshot previous position for render interpolation
-    player.prevX = player.x;
-    player.prevY = player.y;
+    // Snapshot previous state for render interpolation
+    player.prevX = cameraX;
+    player.prevY = cameraY;
     player.prevHeading = player.heading;
 
     // Tank-style movement: A/D turn, W/S thrust along heading
@@ -169,6 +176,11 @@ const loop = new GameLoop({
     player.vy *= decay;
     player.x += player.vx * dt;
     player.y += player.vy * dt;
+
+    // Smooth camera follow — exponential lerp toward player position
+    const cameraLerp = 1 - Math.exp(-CAMERA_SMOOTHING * dt);
+    cameraX += (player.x - cameraX) * cameraLerp;
+    cameraY += (player.y - cameraY) * cameraLerp;
 
     // Track stats
     const moveDx = player.x - oldX;
@@ -301,9 +313,9 @@ const loop = new GameLoop({
     world.cleanup(player.x, player.y);
   },
   render(alpha) {
-    // Interpolated player state for smooth rendering between physics ticks
-    const renderX = player.prevX + (player.x - player.prevX) * alpha;
-    const renderY = player.prevY + (player.y - player.prevY) * alpha;
+    // Interpolated camera state for smooth rendering between physics ticks
+    const renderX = player.prevX + (cameraX - player.prevX) * alpha;
+    const renderY = player.prevY + (cameraY - player.prevY) * alpha;
 
     // Interpolate heading, handling wraparound
     let headingDiff = player.heading - player.prevHeading;
