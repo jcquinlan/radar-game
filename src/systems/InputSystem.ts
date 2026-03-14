@@ -40,6 +40,19 @@ export class InputSystem {
     return { dx, dy };
   }
 
+  /** Tank controls: returns turn (-1 left, +1 right) and thrust (-1 back, +1 forward) */
+  getTankInput(): { turn: number; thrust: number } {
+    let turn = 0;
+    let thrust = 0;
+
+    if (this.isDown('a') || this.isDown('arrowleft')) turn -= 1;
+    if (this.isDown('d') || this.isDown('arrowright')) turn += 1;
+    if (this.isDown('w') || this.isDown('arrowup')) thrust += 1;
+    if (this.isDown('s') || this.isDown('arrowdown')) thrust -= 1;
+
+    return { turn, thrust };
+  }
+
   private onKeyDown(e: KeyboardEvent): void {
     this.keys.add(e.key.toLowerCase());
   }

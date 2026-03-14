@@ -18,6 +18,8 @@ export class Player {
   armor: number;
   magnetRange: number;
   friction: number;
+  heading: number;
+  turnSpeed: number;
 
   // Shield buff
   shieldActive: boolean;
@@ -37,6 +39,8 @@ export class Player {
     this.vx = 0;
     this.vy = 0;
     this.friction = 2.0;
+    this.heading = -Math.PI / 2; // Start facing up
+    this.turnSpeed = 3.0; // Radians per second
     this.maxHealth = 100;
     this.health = this.maxHealth;
     this.energy = 0;

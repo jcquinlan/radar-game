@@ -18,6 +18,7 @@ import { FloatingText } from './ui/FloatingText';
 import { ScreenShake } from './ui/ScreenShake';
 import { AbilitySystem } from './systems/AbilitySystem';
 import { AbilityEffects } from './radar/AbilityEffects';
+import { AbilityBar } from './ui/AbilityBar';
 
 const canvas = createCanvas('game-canvas');
 const ctx = canvas.getContext('2d')!;
@@ -39,6 +40,7 @@ let floatingText: FloatingText;
 let screenShake: ScreenShake;
 let abilitySystem: AbilitySystem;
 let abilityEffects: AbilityEffects;
+let abilityBar: AbilityBar;
 let resolutionLevel: number;
 let gameOver: boolean;
 let prevHealth: number;
@@ -71,6 +73,7 @@ function init() {
   });
   abilitySystem = new AbilitySystem(player);
   abilityEffects = new AbilityEffects();
+  abilityBar = new AbilityBar();
 
   input.attach();
   upgradePanel.attach(canvas, upgradeSystem, player);
@@ -122,13 +125,18 @@ const loop = new GameLoop({
   update(dt) {
     if (gameOver) return;
 
-    // Player movement (acceleration + exponential friction for inertia)
-    const { dx, dy } = input.getMovementVector();
+    // Tank-style movement: A/D turn, W/S thrust along heading
+    const { turn, thrust } = input.getTankInput();
     const oldX = player.x;
     const oldY = player.y;
+
+    // Turn
+    player.heading += turn * player.turnSpeed * dt;
+
+    // Accelerate along heading direction
     const playerAccel = player.speed * player.friction;
-    player.vx += dx * playerAccel * dt;
-    player.vy += dy * playerAccel * dt;
+    player.vx += Math.cos(player.heading) * thrust * playerAccel * dt;
+    player.vy += Math.sin(player.heading) * thrust * playerAccel * dt;
     const decay = Math.exp(-player.friction * dt);
     player.vx *= decay;
     player.vy *= decay;
@@ -271,17 +279,23 @@ const loop = new GameLoop({
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Radar
+    // Radar (drawn without rotation — rings/crosshair are fixed)
     radar.render(ctx, cx, cy);
 
-    // Ambient particles (clipped to radar)
+    // Rotated world layer — everything inside the radar rotates with player heading
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, radar.getRadius(), 0, Math.PI * 2);
     ctx.clip();
+
+    // Rotate world around center by negative heading (world rotates opposite to player turn)
+    ctx.translate(cx, cy);
+    ctx.rotate(-player.heading - Math.PI / 2); // Offset so heading=0 (up) maps to screen-up
+    ctx.translate(-cx, -cy);
+
     ambientParticles.render(ctx, cx, cy, radar.getRadius());
 
-    // Entity blips
+    // Entity blips (positions are rotated by the canvas transform)
     blipRenderer.renderBlips(
       ctx,
       world.entities,
@@ -330,6 +344,20 @@ const loop = new GameLoop({
 
     ctx.restore();
 
+    // Player heading indicator (fixed to screen, always points up)
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.fillStyle = '#00ff41';
+    ctx.shadowColor = '#00ff41';
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.moveTo(0, -8);
+    ctx.lineTo(-5, 5);
+    ctx.lineTo(5, 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
     // Damage flash vignette — red overlay that fades when player takes damage
     if (damageFlash > 0) {
       ctx.save();
@@ -351,7 +379,10 @@ const loop = new GameLoop({
     }
 
     // HUD
-    hud.render(ctx, player, canvas.width, abilitySystem.abilities);
+    hud.render(ctx, player, canvas.width);
+
+    // Ability bar (bottom center)
+    abilityBar.render(ctx, abilitySystem.abilities, canvas.width, canvas.height);
 
     // Upgrade panel
     upgradePanel.render(ctx, upgradeSystem, player, canvas.width, canvas.height);
