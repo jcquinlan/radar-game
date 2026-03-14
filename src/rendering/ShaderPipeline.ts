@@ -90,7 +90,8 @@ export class ShaderPipeline {
     if (!gl) return null;
 
     // Insert WebGL canvas on top of the source canvas
-    sourceCanvas.parentNode?.insertBefore(glCanvas, sourceCanvas.nextSibling);
+    if (!sourceCanvas.parentNode) return null;
+    sourceCanvas.parentNode.insertBefore(glCanvas, sourceCanvas.nextSibling);
 
     return new ShaderPipeline(gl, glCanvas, sourceCanvas);
   }
