@@ -90,6 +90,42 @@ describe('SweepSystem', () => {
     expect(player.energy).toBe(0);
   });
 
+  it('detects entities at the correct screen-space angle when player has rotated', () => {
+    // Player facing right (heading = 0) instead of default up (heading = -PI/2)
+    player.heading = 0;
+
+    // Place entity directly above the player in world space (world angle = -PI/2)
+    // With heading=0, the render transform is rotate(-0 - PI/2) = rotate(-PI/2)
+    // So world angle -PI/2 maps to screen angle: -PI/2 - 0 - PI/2 = -PI = PI (normalized)
+    // The sweep should detect this entity when it passes PI, not when it passes -PI/2
+    const resource = createResource(0, -100); // directly above in world = angle -PI/2
+
+    // Sweep from just before PI to just after PI (screen space)
+    // First call sets lastSweepAngle
+    sweep.update(Math.PI - 0.05, [], player, 300, 0.016);
+    const events = sweep.update(Math.PI + 0.05, [resource], player, 300, 0.016);
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('collect');
+  });
+
+  it('does not detect entity at world-space angle when player has rotated', () => {
+    // Player facing right (heading = 0)
+    player.heading = 0;
+
+    // Entity to the right (world angle = 0)
+    // Screen angle = 0 - 0 - PI/2 = -PI/2 = 3PI/2 (normalized)
+    const resource = createResource(100, 0);
+
+    // Sweep near world angle 0 but NOT near screen angle 3PI/2
+    // This should NOT detect the entity (would have been detected with the old bug)
+    sweep.update(0, [], player, 300, 0.016);
+    const events = sweep.update(0.1, [resource], player, 300, 0.016);
+
+    // With the fix, entity at screen angle ~4.71 is NOT between sweep 0 and 0.1
+    expect(events).toHaveLength(0);
+  });
+
   it('respects ally heal cooldown', () => {
     player.takeDamage(50);
     const ally = createAlly(100, 0, 'healer');

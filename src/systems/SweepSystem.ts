@@ -45,8 +45,11 @@ export class SweepSystem {
       // Skip if out of radar range
       if (dist > radarRadius) continue;
 
-      let entityAngle = Math.atan2(relY, relX);
-      if (entityAngle < 0) entityAngle += Math.PI * 2;
+      // Compute entity angle in screen space to match the visual sweep line.
+      // The render applies ctx.rotate(-player.heading - PI/2) to entities,
+      // so screen angle = world angle - heading - PI/2.
+      let entityAngle = Math.atan2(relY, relX) - player.heading - Math.PI / 2;
+      entityAngle = ((entityAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
 
       // Check if sweep line passed over this entity
       if (this.isAngleBetween(entityAngle, this.lastSweepAngle, sweepAngle)) {
