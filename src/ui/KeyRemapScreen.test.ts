@@ -12,6 +12,8 @@ function buildAbility(overrides: Partial<Ability> = {}): Ability {
     duration: 0,
     durationRemaining: 0,
     active: false,
+    maxCharges: 1,
+    charges: 1,
     ...overrides,
   };
 }

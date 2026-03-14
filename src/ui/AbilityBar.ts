@@ -26,7 +26,7 @@ export class AbilityBar {
     for (let i = 0; i < abilities.length; i++) {
       const ability = abilities[i];
       const x = startX + i * (boxSize + gap);
-      const ready = ability.cooldownRemaining <= 0;
+      const ready = ability.charges > 0;
       const isActive = ability.active && ability.durationRemaining > 0;
       const cooldownFill = ready ? 1 : 1 - ability.cooldownRemaining / ability.cooldown;
       const color = ICON_COLORS[ability.id] || '#00ff41';
@@ -68,6 +68,21 @@ export class AbilityBar {
       ctx.font = '9px monospace';
       ctx.fillStyle = '#557755';
       ctx.fillText(ability.name, x + boxSize / 2, y + 44);
+
+      // Charge indicators (for multi-charge abilities)
+      if (ability.maxCharges > 1) {
+        const dotY = y + 50;
+        const dotSpacing = 10;
+        const dotsWidth = (ability.maxCharges - 1) * dotSpacing;
+        const dotStartX = x + boxSize / 2 - dotsWidth / 2;
+        for (let c = 0; c < ability.maxCharges; c++) {
+          const dotX = dotStartX + c * dotSpacing;
+          ctx.beginPath();
+          ctx.arc(dotX, dotY, 3, 0, Math.PI * 2);
+          ctx.fillStyle = c < ability.charges ? color : '#333333';
+          ctx.fill();
+        }
+      }
 
       // Status text
       if (!ready && !isActive) {
