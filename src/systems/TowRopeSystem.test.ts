@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createSalvage } from '../entities/Entity';
+import { createSalvage, createDropoff } from '../entities/Entity';
 import { Player } from '../entities/Player';
 import {
   TowRopeSystem,
@@ -207,6 +207,58 @@ describe('TowRopeSystem', () => {
       const remaining = system.getTowedItems()[0].fadeOut!;
       expect(remaining).toBeLessThan(FADE_OUT_DURATION);
       expect(remaining).toBeGreaterThan(0);
+    });
+  });
+
+  describe('checkDropoffs', () => {
+    it('deposits salvage when it enters a dropoff zone', () => {
+      const dropoff = createDropoff(100, 0);
+      const salvage = buildSalvage(100, 0); // Right on top of the dropoff
+      system.collect(salvage);
+
+      const deposited = system.checkDropoffs([dropoff]);
+
+      expect(deposited).toHaveLength(1);
+      expect(deposited[0].salvage).toBe(salvage);
+      expect(deposited[0].dropoff).toBe(dropoff);
+      expect(system.getTowedItems()).toHaveLength(0);
+      expect(salvage.towedByPlayer).toBe(false);
+      expect(salvage.active).toBe(false);
+    });
+
+    it('does not deposit salvage outside the dropoff radius', () => {
+      const dropoff = createDropoff(0, 0);
+      const salvage = buildSalvage(200, 0); // Far from dropoff (radius is 60)
+      system.collect(salvage);
+
+      const deposited = system.checkDropoffs([dropoff]);
+
+      expect(deposited).toHaveLength(0);
+      expect(system.getTowedItems()).toHaveLength(1);
+    });
+
+    it('ignores fading salvage', () => {
+      const dropoff = createDropoff(100, 0);
+      const salvage = buildSalvage(100, 0);
+      system.collect(salvage);
+      system.getTowedItems()[0].fadeOut = 0.2; // Already fading
+
+      const deposited = system.checkDropoffs([dropoff]);
+
+      expect(deposited).toHaveLength(0);
+    });
+
+    it('deposits multiple salvage items in a single dropoff', () => {
+      const dropoff = createDropoff(100, 0);
+      const s1 = buildSalvage(95, 0);
+      const s2 = buildSalvage(105, 0);
+      system.collect(s1);
+      system.collect(s2);
+
+      const deposited = system.checkDropoffs([dropoff]);
+
+      expect(deposited).toHaveLength(2);
+      expect(system.getTowedItems()).toHaveLength(0);
     });
   });
 

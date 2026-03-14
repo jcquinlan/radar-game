@@ -5,6 +5,7 @@ const BLIP_COLORS: Record<string, string> = {
   enemy: '#ff4141',
   ally: '#4488ff',
   salvage: '#ffaa00',
+  dropoff: '#ffdd00',
 };
 
 const ALLY_SUBTYPE_COLORS = {
@@ -18,6 +19,7 @@ const BLIP_SIZES: Record<string, number> = {
   enemy: 5,
   ally: 4,
   salvage: 5,
+  dropoff: 6,
 };
 
 export class BlipRenderer {
@@ -112,6 +114,12 @@ export class BlipRenderer {
           ctx.stroke();
           ctx.globalAlpha = 1;
         }
+      }
+
+      // Dropoffs are rendered in full by main.ts — skip blip
+      if (entity.type === 'dropoff') {
+        ctx.restore();
+        continue;
       }
 
       // Salvage: pulsing diamond with aura (skip if already towed — rendered by tow rope system)

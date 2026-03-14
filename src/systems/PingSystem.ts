@@ -163,7 +163,8 @@ export class PingSystem {
       case 'ally':
         return this.healFromAlly(entity as Ally, player);
       case 'salvage':
-        return null; // Salvage is picked up by proximity, not ping
+      case 'dropoff':
+        return null; // These are not interacted with by ping
     }
   }
 

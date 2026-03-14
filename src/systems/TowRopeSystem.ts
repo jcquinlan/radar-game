@@ -1,4 +1,4 @@
-import { Salvage } from '../entities/Entity';
+import { Salvage, Dropoff } from '../entities/Entity';
 import { Player } from '../entities/Player';
 
 // Tuning constants — exported for tests and future adjustment
@@ -146,6 +146,33 @@ export class TowRopeSystem {
       item.salvage.active = false;
     }
     this.items.length = 0;
+  }
+
+  /** Check if any towed salvage has entered a dropoff zone. Returns deposited items with their dropoff. */
+  checkDropoffs(entities: readonly { type: string; active: boolean; x: number; y: number }[]): Array<{ salvage: Salvage; dropoff: Dropoff }> {
+    const deposited: Array<{ salvage: Salvage; dropoff: Dropoff }> = [];
+
+    for (const entity of entities) {
+      if (!entity.active || entity.type !== 'dropoff') continue;
+      const dropoff = entity as Dropoff;
+
+      for (let i = this.items.length - 1; i >= 0; i--) {
+        const item = this.items[i];
+        if (item.fadeOut !== null) continue; // Already fading
+
+        const dx = item.salvage.x - dropoff.x;
+        const dy = item.salvage.y - dropoff.y;
+        if (dx * dx + dy * dy < dropoff.radius * dropoff.radius) {
+          // Salvage entered the dropoff zone — deposit it
+          deposited.push({ salvage: item.salvage, dropoff });
+          item.salvage.towedByPlayer = false;
+          item.salvage.active = false;
+          this.items.splice(i, 1);
+        }
+      }
+    }
+
+    return deposited;
   }
 
   getTowedItems(): TowedItem[] {

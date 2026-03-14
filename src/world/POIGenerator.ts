@@ -6,6 +6,7 @@ import {
   createResource,
   createEnemy,
   createAlly,
+  createDropoff,
 } from '../entities/Entity';
 
 // ---------------------------------------------------------------------------
@@ -190,6 +191,26 @@ const enemyCamp: POIType = {
   },
 };
 
+const salvageDropoff: POIType = {
+  id: 'salvage_dropoff',
+  baseWeight: 1.5,
+  corridorBoost: false,
+  spawn(cx, cy) {
+    const entities: GameEntity[] = [];
+
+    // Dropoff point at center
+    entities.push(createDropoff(cx, cy));
+
+    // A few resources nearby as a lure
+    const resourceCount = randInt(2, 3);
+    for (const pt of ringAround(cx, cy, resourceCount, 90)) {
+      entities.push(createResource(pt.x, pt.y));
+    }
+
+    return entities;
+  },
+};
+
 const emptyZone: POIType = {
   id: 'empty_zone',
   baseWeight: 3,
@@ -207,6 +228,7 @@ export const POI_TYPES: POIType[] = [
   resourceCache,
   allyOutpost,
   enemyCamp,
+  salvageDropoff,
   emptyZone,
 ];
 

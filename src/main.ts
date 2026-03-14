@@ -8,7 +8,7 @@ import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
 import { PingSystem } from './systems/PingSystem';
 import { CombatSystem } from './systems/CombatSystem';
-import { Ally, Enemy, Resource } from './entities/Entity';
+import { Ally, Enemy, Resource, Dropoff } from './entities/Entity';
 import { UpgradeSystem } from './systems/UpgradeSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
@@ -307,6 +307,15 @@ const loop = new GameLoop({
     // Update tow rope physics
     towRopeSystem.update(player, dt);
 
+    // Check if towed salvage entered a dropoff zone
+    const deposited = towRopeSystem.checkDropoffs(world.entities);
+    for (const { salvage, dropoff } of deposited) {
+      player.addEnergy(dropoff.rewardPerItem);
+      player.score += dropoff.rewardPerItem;
+      floatingText.add(`+${dropoff.rewardPerItem}E`, salvage.x, salvage.y, '#ffdd00');
+      screenShake.trigger(2);
+    }
+
     // Shield buff countdown
     player.updateShield(dt);
 
@@ -361,11 +370,14 @@ const loop = new GameLoop({
       motionTrail.track(did, drone.x, drone.y, drone.vx, drone.vy, '#00ffff', dt);
       activeTrailIds.add(did);
     }
-    for (let i = 0; i < abilitySystem.missiles.length; i++) {
-      const missile = abilitySystem.missiles[i];
-      const mid = `m${i}`;
-      motionTrail.track(mid, missile.x, missile.y, missile.vx, missile.vy, '#ff8800', dt);
-      activeTrailIds.add(mid);
+    const missiles = (abilitySystem as any).missiles as Array<{x: number; y: number; vx: number; vy: number}> | undefined;
+    if (missiles) {
+      for (let i = 0; i < missiles.length; i++) {
+        const missile = missiles[i];
+        const mid = `m${i}`;
+        motionTrail.track(mid, missile.x, missile.y, missile.vx, missile.vy, '#ff8800', dt);
+        activeTrailIds.add(mid);
+      }
     }
     motionTrail.prune(activeTrailIds);
 
@@ -420,6 +432,41 @@ const loop = new GameLoop({
 
     // Motion trails (rendered behind blips)
     motionTrail.render(ctx, player.x, player.y, cx, cy);
+
+    // Dropoff zones — pulsing ring markers
+    for (const entity of world.entities) {
+      if (!entity.active || entity.type !== 'dropoff') continue;
+      const dropoff = entity as Dropoff;
+      const dsx = cx + (dropoff.x - player.x);
+      const dsy = cy + (dropoff.y - player.y);
+      const pulse = 1 + Math.sin(player.survivalTime * 2) * 0.08;
+
+      ctx.save();
+      // Outer ring
+      ctx.beginPath();
+      ctx.arc(dsx, dsy, dropoff.radius * pulse, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 221, 0, 0.3)';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = '#ffdd00';
+      ctx.shadowBlur = 8;
+      ctx.stroke();
+
+      // Inner glow fill
+      ctx.beginPath();
+      ctx.arc(dsx, dsy, dropoff.radius * pulse, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 221, 0, 0.04)';
+      ctx.fill();
+
+      // Center diamond marker
+      ctx.translate(dsx, dsy);
+      ctx.rotate(Math.PI / 4);
+      ctx.beginPath();
+      ctx.rect(-5, -5, 10, 10);
+      ctx.strokeStyle = 'rgba(255, 221, 0, 0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // Tow ropes and towed salvage blips (hub-and-spoke: all anchored to player)
     const towedItems = towRopeSystem.getTowedItems();
@@ -516,7 +563,8 @@ const loop = new GameLoop({
     }
 
     // Render missiles
-    for (const missile of abilitySystem.missiles) {
+    const renderMissiles = (abilitySystem as any).missiles as Array<{x: number; y: number}> | undefined;
+    for (const missile of renderMissiles ?? []) {
       const mx = cx + (missile.x - player.x);
       const my = cy + (missile.y - player.y);
       ctx.save();

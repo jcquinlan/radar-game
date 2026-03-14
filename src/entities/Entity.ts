@@ -1,4 +1,4 @@
-export type EntityType = 'resource' | 'enemy' | 'ally' | 'salvage';
+export type EntityType = 'resource' | 'enemy' | 'ally' | 'salvage' | 'dropoff';
 
 export interface Entity {
   x: number;
@@ -71,6 +71,14 @@ export interface Salvage extends Entity {
   ropeLength: number;
 }
 
+export interface Dropoff extends Entity {
+  type: 'dropoff';
+  /** Radius of the dropoff zone — salvage entering this area is deposited */
+  radius: number;
+  /** Energy reward per salvage item deposited */
+  rewardPerItem: number;
+}
+
 export interface Projectile {
   x: number;
   y: number;
@@ -81,7 +89,7 @@ export interface Projectile {
   lifetime: number;
 }
 
-export type GameEntity = Resource | Enemy | Ally | Salvage;
+export type GameEntity = Resource | Enemy | Ally | Salvage | Dropoff;
 
 export function createResource(x: number, y: number): Resource {
   return {
@@ -167,5 +175,18 @@ export function createSalvage(x: number, y: number): Salvage {
     towVx: 0,
     towVy: 0,
     ropeLength: SALVAGE_ROPE_MIN + Math.random() * (SALVAGE_ROPE_MAX - SALVAGE_ROPE_MIN),
+  };
+}
+
+export function createDropoff(x: number, y: number): Dropoff {
+  return {
+    x,
+    y,
+    type: 'dropoff',
+    active: true,
+    visible: true,
+    pingedThisWave: false,
+    radius: 60,
+    rewardPerItem: 50,
   };
 }
