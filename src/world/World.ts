@@ -11,6 +11,14 @@ const BASE_RESOURCES_PER_CHUNK = 3;
 const BASE_ENEMIES_PER_CHUNK = 2;
 const ALLIES_PER_CHUNK = 0.6;
 
+/** Radius (in pixels) around a pack center within which pack members scatter */
+const PACK_SCATTER_RADIUS = 80;
+/** Fraction of enemies that spawn in packs vs. fully random */
+const PACK_FRACTION = 0.6;
+/** Min/max enemies per pack */
+const PACK_SIZE_MIN = 2;
+const PACK_SIZE_MAX = 4;
+
 /** Returns a difficulty multiplier based on distance from origin */
 function getDifficultyMultiplier(x: number, y: number): number {
   const dist = Math.sqrt(x * x + y * y);
@@ -61,13 +69,42 @@ export class World {
         }
 
         // Enemies (more at higher difficulty)
-        const enemyCount = Math.floor(BASE_ENEMIES_PER_CHUNK * difficulty);
-        for (let i = 0; i < enemyCount; i++) {
+        // Skip enemy spawning in the inner 3x3 chunks around the player so
+        // nothing starts within aggro range (max chase range is 300px)
+        const isNearPlayer = Math.abs(dx) <= 1 && Math.abs(dy) <= 1;
+        const enemyCount = isNearPlayer ? 0 : Math.floor(BASE_ENEMIES_PER_CHUNK * difficulty);
+
+        // Split enemies between packs and solo stragglers
+        const packEnemyBudget = Math.floor(enemyCount * PACK_FRACTION);
+        const soloEnemyCount = enemyCount - packEnemyBudget;
+
+        // Spawn packs: pick a cluster center, scatter members around it
+        let packBudgetRemaining = packEnemyBudget;
+        while (packBudgetRemaining > 0) {
+          const packSize = Math.min(
+            packBudgetRemaining,
+            PACK_SIZE_MIN + Math.floor(Math.random() * (PACK_SIZE_MAX - PACK_SIZE_MIN + 1))
+          );
+          // Pack center — random point within the chunk, with padding so members stay in-bounds
+          const centerX = chunkX + PACK_SCATTER_RADIUS + Math.random() * (CHUNK_SIZE - PACK_SCATTER_RADIUS * 2);
+          const centerY = chunkY + PACK_SCATTER_RADIUS + Math.random() * (CHUNK_SIZE - PACK_SCATTER_RADIUS * 2);
+
+          for (let i = 0; i < packSize; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = Math.random() * PACK_SCATTER_RADIUS;
+            const enemy = createEnemy(centerX + Math.cos(angle) * dist, centerY + Math.sin(angle) * dist);
+            this.scaleEnemy(enemy, difficulty);
+            this.entities.push(enemy);
+          }
+          packBudgetRemaining -= packSize;
+        }
+
+        // Spawn solo stragglers randomly across the chunk
+        for (let i = 0; i < soloEnemyCount; i++) {
           const enemy = createEnemy(
             chunkX + Math.random() * CHUNK_SIZE,
             chunkY + Math.random() * CHUNK_SIZE
           );
-          // Scale enemy stats by difficulty
           this.scaleEnemy(enemy, difficulty);
           this.entities.push(enemy);
         }
