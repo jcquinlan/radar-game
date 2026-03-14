@@ -1,0 +1,95 @@
+import { Player } from '../entities/Player';
+import { RadarDisplay } from '../radar/RadarDisplay';
+
+export interface Upgrade {
+  id: string;
+  name: string;
+  description: string;
+  level: number;
+  maxLevel: number;
+  cost: (level: number) => number;
+  apply: (level: number) => void;
+}
+
+export class UpgradeSystem {
+  upgrades: Upgrade[];
+
+  constructor(player: Player, radar: RadarDisplay, onResolutionChange: (level: number) => void) {
+    this.upgrades = [
+      {
+        id: 'sweep_speed',
+        name: 'Sweep Speed',
+        description: 'Faster radar sweep rotation',
+        level: 0,
+        maxLevel: 5,
+        cost: (lvl) => 20 + lvl * 30,
+        apply: (lvl) => {
+          radar.setSweepSpeed(Math.PI * (1 + lvl * 0.5));
+        },
+      },
+      {
+        id: 'sweep_range',
+        name: 'Sweep Range',
+        description: 'Larger radar detection radius',
+        level: 0,
+        maxLevel: 5,
+        cost: (lvl) => 30 + lvl * 40,
+        apply: (lvl) => {
+          radar.setRadius(280 + lvl * 40);
+        },
+      },
+      {
+        id: 'sweep_damage',
+        name: 'Sweep Damage',
+        description: 'More damage to enemies on sweep',
+        level: 0,
+        maxLevel: 5,
+        cost: (lvl) => 25 + lvl * 35,
+        apply: (lvl) => {
+          player.sweepDamage = 10 + lvl * 8;
+        },
+      },
+      {
+        id: 'radar_resolution',
+        name: 'Radar Resolution',
+        description: 'Show entity type details on blips',
+        level: 0,
+        maxLevel: 3,
+        cost: (lvl) => 50 + lvl * 50,
+        apply: (lvl) => {
+          onResolutionChange(lvl);
+        },
+      },
+    ];
+  }
+
+  getUpgrade(id: string): Upgrade | undefined {
+    return this.upgrades.find((u) => u.id === id);
+  }
+
+  canPurchase(id: string, energy: number): boolean {
+    const upgrade = this.getUpgrade(id);
+    if (!upgrade) return false;
+    if (upgrade.level >= upgrade.maxLevel) return false;
+    return energy >= upgrade.cost(upgrade.level);
+  }
+
+  purchase(id: string, player: Player): boolean {
+    const upgrade = this.getUpgrade(id);
+    if (!upgrade) return false;
+    if (upgrade.level >= upgrade.maxLevel) return false;
+
+    const cost = upgrade.cost(upgrade.level);
+    if (!player.spendEnergy(cost)) return false;
+
+    upgrade.level++;
+    upgrade.apply(upgrade.level);
+    return true;
+  }
+
+  getNextCost(id: string): number | null {
+    const upgrade = this.getUpgrade(id);
+    if (!upgrade || upgrade.level >= upgrade.maxLevel) return null;
+    return upgrade.cost(upgrade.level);
+  }
+}

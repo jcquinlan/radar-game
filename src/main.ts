@@ -7,8 +7,10 @@ import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
 import { SweepSystem } from './systems/SweepSystem';
 import { CombatSystem } from './systems/CombatSystem';
+import { UpgradeSystem } from './systems/UpgradeSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
+import { UpgradePanel } from './ui/UpgradePanel';
 import { GameOverScreen } from './ui/GameOverScreen';
 
 const canvas = createCanvas('game-canvas');
@@ -21,8 +23,10 @@ let player: Player;
 let input: InputSystem;
 let sweepSystem: SweepSystem;
 let combatSystem: CombatSystem;
+let upgradeSystem: UpgradeSystem;
 let world: World;
 let hud: HUD;
+let upgradePanel: UpgradePanel;
 let gameOverScreen: GameOverScreen;
 let resolutionLevel: number;
 let gameOver: boolean;
@@ -37,12 +41,25 @@ function init() {
   combatSystem = new CombatSystem();
   world = new World();
   hud = new HUD();
+  upgradePanel = new UpgradePanel();
   gameOverScreen = new GameOverScreen();
   resolutionLevel = 0;
   gameOver = false;
 
+  upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
+    resolutionLevel = lvl;
+  });
+
   input.attach();
+  upgradePanel.attach(canvas, upgradeSystem, player);
   world.updateSpawning(player.x, player.y);
+
+  // Toggle upgrade panel with E key
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'e' || e.key === 'E') {
+      upgradePanel.toggle();
+    }
+  });
 }
 
 init();
@@ -82,6 +99,7 @@ const loop = new GameLoop({
       gameOver = true;
       gameOverScreen.show(canvas, () => {
         input.detach();
+        upgradePanel.detach(canvas);
         init();
       });
     }
@@ -119,6 +137,9 @@ const loop = new GameLoop({
 
     // HUD
     hud.render(ctx, player, canvas.width);
+
+    // Upgrade panel
+    upgradePanel.render(ctx, upgradeSystem, player, canvas.width, canvas.height);
 
     // Game over overlay
     gameOverScreen.render(ctx, canvas.width, canvas.height);
