@@ -90,6 +90,66 @@ describe('SweepSystem', () => {
     expect(player.energy).toBe(0);
   });
 
+  it('sets pingVisible on enemy when sweep crosses it', () => {
+    const enemy = createEnemy(100, 0, 'scout');
+    expect(enemy.pingVisible).toBe(false);
+
+    sweep.update(0.1, [enemy], player, 300, 0.016);
+    expect(enemy.pingVisible).toBe(true);
+  });
+
+  it('creates ghost marker when sweep rotation resets', () => {
+    // Place enemy at angle PI (behind player) so it's NOT in the wrap arc near 0
+    const enemy = createEnemy(-100, 0, 'scout'); // angle = PI
+
+    // Sweep past PI to hit the enemy
+    sweep.update(Math.PI + 0.1, [enemy], player, 300, 0.016);
+    expect(enemy.pingVisible).toBe(true);
+
+    // Advance sweep to near 2*PI
+    sweep.update(Math.PI * 2 - 0.01, [enemy], player, 300, 0.016);
+
+    // Wrap around — enemy at angle PI is NOT in wrap arc [~6.27, 0.05]
+    sweep.update(0.05, [enemy], player, 300, 0.016);
+
+    // Ghost should be created at enemy's position, pingVisible should be false
+    expect(enemy.pingVisible).toBe(false);
+    expect(enemy.ghostX).toBe(enemy.x);
+    expect(enemy.ghostY).toBe(enemy.y);
+  });
+
+  it('clears ghost marker when enemy is re-swept', () => {
+    // Place enemy at angle PI
+    const enemy = createEnemy(-100, 0, 'scout');
+
+    // Sweep to hit enemy, then trigger rotation reset to create ghost
+    sweep.update(Math.PI + 0.1, [enemy], player, 300, 0.016);
+    sweep.update(Math.PI * 2 - 0.01, [enemy], player, 300, 0.016);
+    sweep.update(0.05, [enemy], player, 300, 0.016);
+    expect(enemy.ghostX).not.toBeNull();
+
+    // Re-sweep the enemy by sweeping past PI again
+    sweep.update(Math.PI + 0.1, [enemy], player, 300, 0.016);
+
+    expect(enemy.pingVisible).toBe(true);
+    expect(enemy.ghostX).toBeNull();
+    expect(enemy.ghostY).toBeNull();
+  });
+
+  it('does not create ghost for enemies that were never pinged', () => {
+    // Enemy exists but is outside radar range — never swept
+    const enemy = createEnemy(500, 0, 'scout');
+    expect(enemy.pingVisible).toBe(false);
+
+    // Full sweep rotation with enemy out of range
+    sweep.update(Math.PI * 2 - 0.01, [enemy], player, 300, 0.016);
+    sweep.update(0.05, [enemy], player, 300, 0.016);
+
+    // No ghost created since enemy was never visible
+    expect(enemy.ghostX).toBeNull();
+    expect(enemy.ghostY).toBeNull();
+  });
+
   it('respects ally heal cooldown', () => {
     player.takeDamage(50);
     const ally = createAlly(100, 0, 'healer');

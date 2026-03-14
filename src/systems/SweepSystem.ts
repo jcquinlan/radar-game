@@ -27,9 +27,21 @@ export class SweepSystem {
     this.gameTime += dt;
 
     // Detect when sweep completes a full rotation to reset sweptThisRotation flags
+    // Track which enemies were visible before the reset so we can create ghosts
+    // AFTER sweep processing (avoids ghost-then-immediate-re-sweep on the wrap frame)
+    let previouslyVisibleEnemies: Enemy[] | null = null;
+
     if (this.lastSweepAngle > sweepAngle + Math.PI) {
       // Wrapped around 2*PI -> 0
+      previouslyVisibleEnemies = [];
       for (const entity of entities) {
+        if (entity.type === 'enemy') {
+          const enemy = entity as Enemy;
+          if (enemy.pingVisible) {
+            previouslyVisibleEnemies.push(enemy);
+            enemy.pingVisible = false;
+          }
+        }
         entity.sweptThisRotation = false;
       }
     }
@@ -51,9 +63,28 @@ export class SweepSystem {
       // Check if sweep line passed over this entity
       if (this.isAngleBetween(entityAngle, this.lastSweepAngle, sweepAngle)) {
         entity.sweptThisRotation = true;
+
+        // Mark enemy as ping-visible and clear any ghost marker
+        if (entity.type === 'enemy') {
+          const enemy = entity as Enemy;
+          enemy.pingVisible = true;
+          enemy.ghostX = null;
+          enemy.ghostY = null;
+        }
+
         const event = this.processInteraction(entity, player);
         if (event) {
           this.events.push(event);
+        }
+      }
+    }
+
+    // Create ghosts for enemies that lost visibility and weren't re-swept this frame
+    if (previouslyVisibleEnemies) {
+      for (const enemy of previouslyVisibleEnemies) {
+        if (!enemy.pingVisible) {
+          enemy.ghostX = enemy.x;
+          enemy.ghostY = enemy.y;
         }
       }
     }

@@ -60,4 +60,14 @@ describe('Entity factories', () => {
     const a = createAlly(300, 400);
     expect(['healer', 'shield', 'beacon']).toContain(a.subtype);
   });
+
+  it('creates enemies with ghost marker and wander fields initialized', () => {
+    const e = createEnemy(50, 75, 'scout');
+    expect(e.pingVisible).toBe(false);
+    expect(e.ghostX).toBeNull();
+    expect(e.ghostY).toBeNull();
+    expect(e.wanderAngle).toBeGreaterThanOrEqual(0);
+    expect(e.wanderAngle).toBeLessThan(Math.PI * 2);
+    expect(e.wanderTimer).toBeGreaterThan(0);
+  });
 });

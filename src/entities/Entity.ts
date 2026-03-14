@@ -33,6 +33,15 @@ export interface Enemy extends Entity {
   vx: number;
   vy: number;
   friction: number;
+  /** Whether this enemy is currently visible from a recent ping/sweep */
+  pingVisible: boolean;
+  /** Ghost marker position (last-known location when ping wore off) */
+  ghostX: number | null;
+  ghostY: number | null;
+  /** Current wander direction (radians) */
+  wanderAngle: number;
+  /** Time until next wander direction change */
+  wanderTimer: number;
 }
 
 export type AllySubtype = 'healer' | 'shield' | 'beacon';
@@ -102,6 +111,11 @@ export function createEnemy(x: number, y: number, subtype?: EnemySubtype): Enemy
     vx: 0,
     vy: 0,
     friction: stats.friction,
+    pingVisible: false,
+    ghostX: null,
+    ghostY: null,
+    wanderAngle: Math.random() * Math.PI * 2,
+    wanderTimer: 1 + Math.random() * 2,
   };
 }
 
