@@ -34,6 +34,7 @@ export class BlipRenderer {
   ): void {
     ctx.save();
     ctx.globalAlpha = 0.25;
+    ctx.shadowBlur = 0;
     ctx.fillStyle = '#000000';
     ctx.beginPath();
     ctx.ellipse(x, y + size + 2, size * 1.3, size * 0.5, 0, 0, Math.PI * 2);

@@ -465,12 +465,14 @@ const loop = new GameLoop({
     ctx.translate(cx, cy);
 
     // Drop shadow beneath player
+    ctx.save();
     ctx.globalAlpha = 0.25;
+    ctx.shadowBlur = 0;
     ctx.fillStyle = '#000000';
     ctx.beginPath();
     ctx.ellipse(0, 8, 7, 3, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.restore();
 
     ctx.fillStyle = '#00ff41';
     ctx.shadowColor = '#00ff41';
