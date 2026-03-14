@@ -27,25 +27,9 @@ export interface Drone {
   friction: number;
 }
 
-export interface HomingMissile {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  speed: number;
-  damage: number;
-  lifetime: number;
-  active: boolean;
-  friction: number;
-  phase: 'launch' | 'homing';
-  launchTimer: number;
-  target: Enemy | null;
-}
-
 export class AbilitySystem {
   abilities: Ability[];
   drones: Drone[] = [];
-  missiles: HomingMissile[] = [];
   private player: Player;
 
   constructor(player: Player) {
@@ -91,16 +75,6 @@ export class AbilitySystem {
         durationRemaining: 0,
         active: false,
       },
-      {
-        id: 'homing_missile',
-        name: 'Missile',
-        keybind: '5',
-        cooldown: 0,
-        cooldownRemaining: 0,
-        duration: 0,
-        durationRemaining: 0,
-        active: false,
-      },
     ];
   }
 
@@ -129,11 +103,6 @@ export class AbilitySystem {
       this.spawnDrone();
     } else if (id === 'dash') {
       this.activateDash();
-    } else if (id === 'homing_missile') {
-      if (!this.spawnMissile(entities)) {
-        ability.cooldownRemaining = 0; // Refund cooldown if no target
-        return false;
-      }
     }
 
     return true;
@@ -167,9 +136,6 @@ export class AbilitySystem {
 
     // Update drones
     this.updateDrones(dt, entities, addFloatingText);
-
-    // Update missiles
-    this.updateMissiles(dt, entities, addFloatingText);
   }
 
   private activateBlast(
@@ -291,116 +257,5 @@ export class AbilitySystem {
 
     // Clean up dead drones
     this.drones = this.drones.filter((d) => d.active);
-  }
-
-  private spawnMissile(entities: GameEntity[]): boolean {
-    // Find nearest enemy
-    let nearest: Enemy | null = null;
-    let nearestDistSq = Infinity;
-
-    for (const entity of entities) {
-      if (!entity.active || entity.type !== 'enemy') continue;
-      const enemy = entity as Enemy;
-      const dx = enemy.x - this.player.x;
-      const dy = enemy.y - this.player.y;
-      const distSq = dx * dx + dy * dy;
-      if (distSq < nearestDistSq) {
-        nearestDistSq = distSq;
-        nearest = enemy;
-      }
-    }
-
-    if (!nearest) return false;
-
-    // Launch at player heading + random offset (±30°)
-    const randomOffset = (Math.random() - 0.5) * Math.PI;
-    const launchAngle = this.player.heading + randomOffset;
-    const launchSpeed = 300;
-
-    this.missiles.push({
-      x: this.player.x,
-      y: this.player.y,
-      vx: Math.cos(launchAngle) * launchSpeed,
-      vy: Math.sin(launchAngle) * launchSpeed,
-      speed: 400,
-      damage: 35,
-      lifetime: 6,
-      active: true,
-      friction: 1.5,
-      phase: 'launch',
-      launchTimer: 0.3,
-      target: nearest,
-    });
-
-    return true;
-  }
-
-  private updateMissiles(
-    dt: number,
-    entities: GameEntity[],
-    addFloatingText: FloatingTextCallback,
-  ): void {
-    for (const missile of this.missiles) {
-      if (!missile.active) continue;
-
-      missile.lifetime -= dt;
-      if (missile.lifetime <= 0) {
-        missile.active = false;
-        continue;
-      }
-
-      // Phase management
-      if (missile.phase === 'launch') {
-        missile.launchTimer -= dt;
-        if (missile.launchTimer <= 0) {
-          missile.phase = 'homing';
-        }
-      }
-
-      // Homing steering — only when in homing phase and target is alive
-      if (missile.phase === 'homing' && missile.target && missile.target.active) {
-        const dx = missile.target.x - missile.x;
-        const dy = missile.target.y - missile.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 0) {
-          const accel = missile.speed * missile.friction;
-          missile.vx += (dx / dist) * accel * dt;
-          missile.vy += (dy / dist) * accel * dt;
-        }
-      }
-      // If target is dead, missile goes ballistic (no steering, just friction decay)
-
-      // Apply friction and update position
-      const decay = Math.exp(-missile.friction * dt);
-      missile.vx *= decay;
-      missile.vy *= decay;
-      missile.x += missile.vx * dt;
-      missile.y += missile.vy * dt;
-
-      // Collision check against all enemies
-      for (const entity of entities) {
-        if (!entity.active || entity.type !== 'enemy') continue;
-        const enemy = entity as Enemy;
-        const dx = enemy.x - missile.x;
-        const dy = enemy.y - missile.y;
-        if (dx * dx + dy * dy < 15 * 15) {
-          enemy.health -= missile.damage;
-          addFloatingText(`-${missile.damage}`, enemy.x, enemy.y, '#ff8800');
-          missile.active = false;
-
-          if (enemy.health <= 0) {
-            enemy.active = false;
-            this.player.addEnergy(enemy.energyDrop);
-            this.player.kills++;
-            this.player.score += 50;
-            addFloatingText('+50', enemy.x, enemy.y - 15, '#ffaa00');
-          }
-          break;
-        }
-      }
-    }
-
-    // Clean up dead missiles
-    this.missiles = this.missiles.filter((m) => m.active);
   }
 }

@@ -1,4 +1,4 @@
-export type EntityType = 'resource' | 'enemy' | 'ally';
+export type EntityType = 'resource' | 'enemy' | 'ally' | 'salvage' | 'dropoff';
 
 export interface Entity {
   x: number;
@@ -60,6 +60,25 @@ export interface Ally extends Entity {
   beaconRange: number;
 }
 
+export interface Salvage extends Entity {
+  type: 'salvage';
+  /** Whether this salvage is being towed behind the player */
+  towedByPlayer: boolean;
+  /** Tow physics velocity */
+  towVx: number;
+  towVy: number;
+  /** Randomized rope rest length for this specific item */
+  ropeLength: number;
+}
+
+export interface Dropoff extends Entity {
+  type: 'dropoff';
+  /** Radius of the dropoff zone — salvage entering this area is deposited */
+  radius: number;
+  /** Energy reward per salvage item deposited */
+  rewardPerItem: number;
+}
+
 export interface Projectile {
   x: number;
   y: number;
@@ -70,7 +89,7 @@ export interface Projectile {
   lifetime: number;
 }
 
-export type GameEntity = Resource | Enemy | Ally;
+export type GameEntity = Resource | Enemy | Ally | Salvage | Dropoff;
 
 export function createResource(x: number, y: number): Resource {
   return {
@@ -137,5 +156,37 @@ export function createAlly(x: number, y: number, subtype?: AllySubtype): Ally {
     shieldDuration: st === 'shield' ? 5 : 0,
     energyPerSecond: st === 'beacon' ? 2 : 0,
     beaconRange: st === 'beacon' ? 150 : 0,
+  };
+}
+
+/** Min/max rope length for salvage items (randomized per item for visual spread) */
+const SALVAGE_ROPE_MIN = 25;
+const SALVAGE_ROPE_MAX = 55;
+
+export function createSalvage(x: number, y: number): Salvage {
+  return {
+    x,
+    y,
+    type: 'salvage',
+    active: true,
+    visible: true,
+    pingedThisWave: false,
+    towedByPlayer: false,
+    towVx: 0,
+    towVy: 0,
+    ropeLength: SALVAGE_ROPE_MIN + Math.random() * (SALVAGE_ROPE_MAX - SALVAGE_ROPE_MIN),
+  };
+}
+
+export function createDropoff(x: number, y: number): Dropoff {
+  return {
+    x,
+    y,
+    type: 'dropoff',
+    active: true,
+    visible: true,
+    pingedThisWave: false,
+    radius: 60,
+    rewardPerItem: 50,
   };
 }

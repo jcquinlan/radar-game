@@ -1,11 +1,15 @@
 import {
   GameEntity,
+  Salvage,
   createEnemy,
+  createSalvage,
   EnemySubtype,
 } from '../entities/Entity';
 import { selectPOI, spawnResourceVein, scaleEnemy } from './POIGenerator';
 
 const CHUNK_SIZE = 400;
+/** Probability of a salvage item spawning in any given chunk */
+const SALVAGE_CHANCE_PER_CHUNK = 0.15;
 
 /** Returns a difficulty multiplier based on distance from origin */
 function getDifficultyMultiplier(x: number, y: number): number {
@@ -62,6 +66,16 @@ export class World {
           // Non-POI chunk — ambient resources as veins + occasional solo enemies
           this.spawnAmbient(chunkX, chunkY, difficulty, isNearPlayer);
         }
+
+        // Salvage (rare towable items)
+        if (Math.random() < SALVAGE_CHANCE_PER_CHUNK) {
+          this.entities.push(
+            createSalvage(
+              chunkX + Math.random() * CHUNK_SIZE,
+              chunkY + Math.random() * CHUNK_SIZE
+            )
+          );
+        }
       }
     }
   }
@@ -99,6 +113,8 @@ export class World {
   /** Remove inactive entities that are far from the player */
   cleanup(playerX: number, playerY: number, maxDist: number = 2000): void {
     this.entities = this.entities.filter((e) => {
+      // Keep towed salvage regardless of distance
+      if (e.type === 'salvage' && (e as Salvage).towedByPlayer) return true;
       if (!e.active) return false;
       const dx = e.x - playerX;
       const dy = e.y - playerY;

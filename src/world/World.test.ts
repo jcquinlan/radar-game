@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { World, getThreatLevel } from './World';
-import { Enemy } from '../entities/Entity';
+import { Enemy, createSalvage } from '../entities/Entity';
 
 describe('World', () => {
   it('spawns entities when visiting new chunks', () => {
@@ -33,6 +33,17 @@ describe('World', () => {
     const activeCount = world.entities.filter((e) => e.active).length;
     world.cleanup(0, 0);
     expect(world.entities.length).toBe(activeCount);
+  });
+
+  it('preserves towed salvage during cleanup regardless of distance', () => {
+    const world = new World();
+    const towedSalvage = createSalvage(9999, 9999); // Far from player
+    towedSalvage.towedByPlayer = true;
+    world.entities.push(towedSalvage);
+
+    world.cleanup(0, 0); // Player is at origin, salvage is very far
+
+    expect(world.entities).toContain(towedSalvage);
   });
 
   it('enemies spawned further from origin are stronger', () => {

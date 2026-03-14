@@ -1,9 +1,11 @@
-import { GameEntity, Ally, Enemy } from '../entities/Entity';
+import { GameEntity, Ally, Enemy, Salvage } from '../entities/Entity';
 
-const BLIP_COLORS = {
+const BLIP_COLORS: Record<string, string> = {
   resource: '#00ff41',
   enemy: '#ff4141',
   ally: '#4488ff',
+  salvage: '#ffaa00',
+  dropoff: '#ffdd00',
 };
 
 const ALLY_SUBTYPE_COLORS = {
@@ -12,10 +14,12 @@ const ALLY_SUBTYPE_COLORS = {
   beacon: '#88ff41',
 };
 
-const BLIP_SIZES = {
+const BLIP_SIZES: Record<string, number> = {
   resource: 3,
   enemy: 5,
   ally: 4,
+  salvage: 5,
+  dropoff: 6,
 };
 
 export class BlipRenderer {
@@ -112,10 +116,44 @@ export class BlipRenderer {
         }
       }
 
-      ctx.beginPath();
-      ctx.arc(screenX, screenY, currentSize, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
+      // Dropoffs are rendered in full by main.ts — skip blip
+      if (entity.type === 'dropoff') {
+        ctx.restore();
+        continue;
+      }
+
+      // Salvage: pulsing diamond with aura (skip if already towed — rendered by tow rope system)
+      if (entity.type === 'salvage') {
+        const salvage = entity as Salvage;
+        if (salvage.towedByPlayer) {
+          ctx.restore();
+          continue;
+        }
+        const pulse = 1 + Math.sin(this.time * 4) * 0.3;
+        const auraSize = currentSize + 8 + Math.sin(this.time * 3) * 3;
+        ctx.globalAlpha = 0.12 + Math.sin(this.time * 3) * 0.04;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, auraSize, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Diamond shape
+        ctx.save();
+        ctx.translate(screenX, screenY);
+        ctx.rotate(Math.PI / 4);
+        const s = currentSize * pulse;
+        ctx.beginPath();
+        ctx.rect(-s, -s, s * 2, s * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.restore();
+      } else {
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, currentSize, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
 
       // Resolution upgrade: show type-specific labels at level 2+
       if (resolutionLevel >= 2) {
@@ -134,6 +172,8 @@ export class BlipRenderer {
           label = 'E';
         } else if (entity.type === 'enemy') {
           label = '!';
+        } else if (entity.type === 'salvage') {
+          label = 'S';
         } else {
           const ally = entity as Ally;
           label = ally.subtype === 'healer' ? '+' : ally.subtype === 'shield' ? 'S' : 'B';

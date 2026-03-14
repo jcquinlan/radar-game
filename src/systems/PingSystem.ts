@@ -162,6 +162,9 @@ export class PingSystem {
         return this.damageEnemy(entity as Enemy, player);
       case 'ally':
         return this.healFromAlly(entity as Ally, player);
+      case 'salvage':
+      case 'dropoff':
+        return null; // These are not interacted with by ping
     }
   }
 

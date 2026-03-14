@@ -8,7 +8,7 @@ import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
 import { PingSystem } from './systems/PingSystem';
 import { CombatSystem } from './systems/CombatSystem';
-import { Ally, Enemy, Resource } from './entities/Entity';
+import { Ally, Enemy, Resource, Dropoff } from './entities/Entity';
 import { UpgradeSystem } from './systems/UpgradeSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
@@ -22,6 +22,7 @@ import { AbilityBar } from './ui/AbilityBar';
 import { KeyRemapScreen } from './ui/KeyRemapScreen';
 import { PauseMenu } from './ui/PauseMenu';
 import { MotionTrail } from './radar/MotionTrail';
+import { TowRopeSystem } from './systems/TowRopeSystem';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
 import { CRTEffect } from './rendering/effects/CRTEffect';
 
@@ -56,6 +57,7 @@ let abilityEffects: AbilityEffects;
 let abilityBar: AbilityBar;
 let keyRemapScreen: KeyRemapScreen;
 let motionTrail: MotionTrail;
+let towRopeSystem: TowRopeSystem;
 let resolutionLevel: number;
 let gameOver: boolean;
 let prevHealth: number;
@@ -88,6 +90,7 @@ function init() {
   abilityEffects = new AbilityEffects();
   abilityBar = new AbilityBar();
   motionTrail = new MotionTrail();
+  towRopeSystem = new TowRopeSystem();
   keyRemapScreen = new KeyRemapScreen();
   keyRemapScreen.addExtraBinding({
     id: 'upgrades',
@@ -282,10 +285,10 @@ const loop = new GameLoop({
     if (player.magnetRange > 0) {
       for (const entity of world.entities) {
         if (!entity.active || entity.type !== 'resource') continue;
+        const resource = entity as Resource;
         const mdx = entity.x - player.x;
         const mdy = entity.y - player.y;
         if (mdx * mdx + mdy * mdy < player.magnetRange * player.magnetRange) {
-          const resource = entity as Resource;
           player.addEnergy(resource.energyValue);
           player.totalEnergyCollected += resource.energyValue;
           player.score += resource.energyValue;
@@ -293,6 +296,24 @@ const loop = new GameLoop({
           resource.active = false;
         }
       }
+    }
+
+    // Salvage proximity pickup — player must fly close to attach
+    const pickedUp = towRopeSystem.checkPickups(world.entities, player);
+    for (const salvage of pickedUp) {
+      floatingText.add('SALVAGE!', salvage.x, salvage.y, '#ffaa00');
+    }
+
+    // Update tow rope physics
+    towRopeSystem.update(player, dt);
+
+    // Check if towed salvage entered a dropoff zone
+    const deposited = towRopeSystem.checkDropoffs(world.entities);
+    for (const { salvage, dropoff } of deposited) {
+      player.addEnergy(dropoff.rewardPerItem);
+      player.score += dropoff.rewardPerItem;
+      floatingText.add(`+${dropoff.rewardPerItem}E`, salvage.x, salvage.y, '#ffdd00');
+      screenShake.trigger(2);
     }
 
     // Shield buff countdown
@@ -349,11 +370,14 @@ const loop = new GameLoop({
       motionTrail.track(did, drone.x, drone.y, drone.vx, drone.vy, '#00ffff', dt);
       activeTrailIds.add(did);
     }
-    for (let i = 0; i < abilitySystem.missiles.length; i++) {
-      const missile = abilitySystem.missiles[i];
-      const mid = `m${i}`;
-      motionTrail.track(mid, missile.x, missile.y, missile.vx, missile.vy, '#ff8800', dt);
-      activeTrailIds.add(mid);
+    const missiles = (abilitySystem as any).missiles as Array<{x: number; y: number; vx: number; vy: number}> | undefined;
+    if (missiles) {
+      for (let i = 0; i < missiles.length; i++) {
+        const missile = missiles[i];
+        const mid = `m${i}`;
+        motionTrail.track(mid, missile.x, missile.y, missile.vx, missile.vy, '#ff8800', dt);
+        activeTrailIds.add(mid);
+      }
     }
     motionTrail.prune(activeTrailIds);
 
@@ -371,6 +395,7 @@ const loop = new GameLoop({
 
     if (!alive) {
       gameOver = true;
+      towRopeSystem.clear();
       gameOverScreen.show(canvas, player, () => {
         input.detach();
         upgradePanel.detach(canvas);
@@ -407,6 +432,89 @@ const loop = new GameLoop({
 
     // Motion trails (rendered behind blips)
     motionTrail.render(ctx, player.x, player.y, cx, cy);
+
+    // Dropoff zones — pulsing ring markers
+    for (const entity of world.entities) {
+      if (!entity.active || entity.type !== 'dropoff') continue;
+      const dropoff = entity as Dropoff;
+      const dsx = cx + (dropoff.x - player.x);
+      const dsy = cy + (dropoff.y - player.y);
+      const pulse = 1 + Math.sin(player.survivalTime * 2) * 0.08;
+
+      ctx.save();
+      // Outer ring
+      ctx.beginPath();
+      ctx.arc(dsx, dsy, dropoff.radius * pulse, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 221, 0, 0.3)';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = '#ffdd00';
+      ctx.shadowBlur = 8;
+      ctx.stroke();
+
+      // Inner glow fill
+      ctx.beginPath();
+      ctx.arc(dsx, dsy, dropoff.radius * pulse, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 221, 0, 0.04)';
+      ctx.fill();
+
+      // Center diamond marker
+      ctx.translate(dsx, dsy);
+      ctx.rotate(Math.PI / 4);
+      ctx.beginPath();
+      ctx.rect(-5, -5, 10, 10);
+      ctx.strokeStyle = 'rgba(255, 221, 0, 0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Tow ropes and towed salvage blips (hub-and-spoke: all anchored to player)
+    const towedItems = towRopeSystem.getTowedItems();
+    if (towedItems.length > 0) {
+      ctx.save();
+      for (const item of towedItems) {
+        const sal = item.salvage;
+        const itemSX = cx + (sal.x - player.x);
+        const itemSY = cy + (sal.y - player.y);
+
+        // Fade-out alpha
+        const alpha = item.fadeOut !== null ? Math.max(0, item.fadeOut / 0.3) : 1;
+        ctx.globalAlpha = alpha;
+
+        // Bezier rope: control point offset perpendicular to line by velocity delta
+        const midX = (cx + itemSX) / 2;
+        const midY = (cy + itemSY) / 2;
+        const dvx = player.vx - item.vx;
+        const dvy = player.vy - item.vy;
+        const cpX = midX + (-dvy) * 0.3;
+        const cpY = midY + dvx * 0.3;
+
+        // Draw rope (amber)
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.quadraticCurveTo(cpX, cpY, itemSX, itemSY);
+        ctx.strokeStyle = `rgba(255, 170, 0, ${0.5 * alpha})`;
+        ctx.lineWidth = 1.5;
+        ctx.shadowColor = '#ffaa00';
+        ctx.shadowBlur = 4;
+        ctx.stroke();
+
+        // Draw towed salvage blip (diamond shape, amber/gold)
+        ctx.save();
+        ctx.translate(itemSX, itemSY);
+        ctx.rotate(Math.PI / 4);
+        ctx.beginPath();
+        ctx.rect(-4.5, -4.5, 9, 9);
+        ctx.fillStyle = `rgba(255, 170, 0, ${alpha})`;
+        ctx.shadowColor = '#ffaa00';
+        ctx.shadowBlur = 8;
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
 
     // Entity blips (positions are rotated by the canvas transform)
     const worldRot = -player.heading - Math.PI / 2;
@@ -455,7 +563,8 @@ const loop = new GameLoop({
     }
 
     // Render missiles
-    for (const missile of abilitySystem.missiles) {
+    const renderMissiles = (abilitySystem as any).missiles as Array<{x: number; y: number}> | undefined;
+    for (const missile of renderMissiles ?? []) {
       const mx = cx + (missile.x - player.x);
       const my = cy + (missile.y - player.y);
       ctx.save();
