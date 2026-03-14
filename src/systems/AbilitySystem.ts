@@ -95,7 +95,7 @@ export class AbilitySystem {
         id: 'homing_missile',
         name: 'Missile',
         keybind: '5',
-        cooldown: 8,
+        cooldown: 0,
         cooldownRemaining: 0,
         duration: 0,
         durationRemaining: 0,
@@ -313,7 +313,7 @@ export class AbilitySystem {
     if (!nearest) return false;
 
     // Launch at player heading + random offset (±30°)
-    const randomOffset = (Math.random() - 0.5) * (Math.PI / 3);
+    const randomOffset = (Math.random() - 0.5) * Math.PI;
     const launchAngle = this.player.heading + randomOffset;
     const launchSpeed = 300;
 
