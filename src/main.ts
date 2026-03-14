@@ -185,7 +185,7 @@ const loop = new GameLoop({
 
     if (!alive) {
       gameOver = true;
-      gameOverScreen.show(canvas, () => {
+      gameOverScreen.show(canvas, player, () => {
         input.detach();
         upgradePanel.detach(canvas);
         init();
