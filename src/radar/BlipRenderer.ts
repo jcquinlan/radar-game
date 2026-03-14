@@ -25,6 +25,22 @@ export class BlipRenderer {
     this.time += dt;
   }
 
+  /** Draw a subtle elliptical drop shadow below a unit */
+  private renderShadow(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    size: number
+  ): void {
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.ellipse(x, y + size + 2, size * 1.3, size * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   renderBlips(
     ctx: CanvasRenderingContext2D,
     entities: GameEntity[],
@@ -110,6 +126,11 @@ export class BlipRenderer {
           ctx.stroke();
           ctx.globalAlpha = 1;
         }
+      }
+
+      // Drop shadow beneath the blip
+      if (entity.type === 'enemy' || entity.type === 'ally') {
+        this.renderShadow(ctx, screenX, screenY, currentSize);
       }
 
       ctx.beginPath();

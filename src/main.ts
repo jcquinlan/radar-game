@@ -463,6 +463,15 @@ const loop = new GameLoop({
     // Player heading indicator (fixed to screen, always points up)
     ctx.save();
     ctx.translate(cx, cy);
+
+    // Drop shadow beneath player
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.ellipse(0, 8, 7, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
     ctx.fillStyle = '#00ff41';
     ctx.shadowColor = '#00ff41';
     ctx.shadowBlur = 6;
