@@ -74,9 +74,9 @@ describe('SweepSystem', () => {
     sweep.update(0.1, [resource], player, 300, 0.016);
     expect(resource.active).toBe(false);
 
-    // Even if we try again with a new resource at same spot (but sweptThisRotation is true)
+    // Even if we try again with a new resource at same spot (but pingedThisWave is true)
     const resource2 = createResource(100, 0);
-    resource2.sweptThisRotation = true;
+    resource2.pingedThisWave = true;
     const events = sweep.update(0.2, [resource2], player, 300, 0.016);
     expect(events).toHaveLength(0);
   });
@@ -101,7 +101,7 @@ describe('SweepSystem', () => {
     expect(player.health).toBe(60);
 
     // Reset sweep rotation flag to simulate next rotation
-    ally.sweptThisRotation = false;
+    ally.pingedThisWave = false;
 
     // Second heal too soon — should return no event
     const events = sweep.update(0.2, [ally], player, 300, 0.016);

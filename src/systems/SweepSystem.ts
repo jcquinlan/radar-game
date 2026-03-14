@@ -26,16 +26,16 @@ export class SweepSystem {
     this.events.length = 0;
     this.gameTime += dt;
 
-    // Detect when sweep completes a full rotation to reset sweptThisRotation flags
+    // Detect when sweep completes a full rotation to reset pingedThisWave flags
     if (this.lastSweepAngle > sweepAngle + Math.PI) {
       // Wrapped around 2*PI -> 0
       for (const entity of entities) {
-        entity.sweptThisRotation = false;
+        entity.pingedThisWave = false;
       }
     }
 
     for (const entity of entities) {
-      if (!entity.active || entity.sweptThisRotation) continue;
+      if (!entity.active || entity.pingedThisWave) continue;
 
       // Get entity angle relative to player
       const relX = entity.x - player.x;
@@ -50,7 +50,7 @@ export class SweepSystem {
 
       // Check if sweep line passed over this entity
       if (this.isAngleBetween(entityAngle, this.lastSweepAngle, sweepAngle)) {
-        entity.sweptThisRotation = true;
+        entity.pingedThisWave = true;
         const event = this.processInteraction(entity, player);
         if (event) {
           this.events.push(event);
