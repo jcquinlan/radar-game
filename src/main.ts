@@ -20,17 +20,20 @@ import { AbilitySystem } from './systems/AbilitySystem';
 import { AbilityEffects } from './radar/AbilityEffects';
 import { AbilityBar } from './ui/AbilityBar';
 import { KeyRemapScreen } from './ui/KeyRemapScreen';
+import { PauseMenu } from './ui/PauseMenu';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
 import { CRTEffect } from './rendering/effects/CRTEffect';
 
 const canvas = createCanvas('game-canvas');
 const ctx = canvas.getContext('2d')!;
 
-// Shader pipeline (persists across game restarts)
+// Shader pipeline and pause menu (persist across game restarts)
 const shaderPipeline = ShaderPipeline.create(canvas);
 if (shaderPipeline) {
   shaderPipeline.addEffect(new CRTEffect());
 }
+const pauseMenu = new PauseMenu();
+let paused = false;
 
 let radar: RadarDisplay;
 let blipRenderer: BlipRenderer;
@@ -102,10 +105,54 @@ function init() {
   world.updateSpawning(player.x, player.y);
 }
 
+function togglePause() {
+  if (paused) {
+    paused = false;
+    pauseMenu.close(canvas);
+  } else {
+    paused = true;
+    // Close other panels when pausing
+    if (keyRemapScreen && keyRemapScreen.isVisible()) keyRemapScreen.toggle();
+    pauseMenu.open(canvas, {
+      onResume: () => togglePause(),
+      onRestart: () => {
+        paused = false;
+        pauseMenu.close(canvas);
+        input.detach();
+        upgradePanel.detach(canvas);
+        keyRemapScreen.detach(canvas);
+        init();
+      },
+      onToggleShaders: () => {
+        if (shaderPipeline) {
+          shaderPipeline.setEnabled(!shaderPipeline.enabled);
+          radar.scanlineEnabled = !shaderPipeline.enabled;
+        }
+      },
+      onOpenKeybinds: () => {
+        paused = false;
+        pauseMenu.close(canvas);
+        keyRemapScreen.toggle();
+      },
+      isShaderEnabled: () => shaderPipeline ? shaderPipeline.enabled : false,
+    });
+  }
+}
+
 // Toggle panels (registered once, outside init)
 window.addEventListener('keydown', (e) => {
   // Key remap screen captures keys when listening — skip other handlers
   if (keyRemapScreen && keyRemapScreen.isListening()) return;
+
+  // Escape toggles pause menu
+  if (e.key === 'Escape') {
+    if (gameOver) return;
+    togglePause();
+    return;
+  }
+
+  // Don't process other keys while paused
+  if (paused) return;
 
   const upgradesBinding = keyRemapScreen.getExtraBinding('upgrades');
   const upgradesKey = upgradesBinding ? upgradesBinding.key : 'e';
@@ -114,10 +161,6 @@ window.addEventListener('keydown', (e) => {
   }
   if ((e.key === 'k' || e.key === 'K') && !gameOver) {
     keyRemapScreen.toggle();
-  }
-  if (e.key === '`' && shaderPipeline) {
-    shaderPipeline.setEnabled(!shaderPipeline.enabled);
-    radar.scanlineEnabled = !shaderPipeline.enabled;
   }
 
   // Ability keybinds (dynamic from ability.keybind)
@@ -157,7 +200,7 @@ init();
 
 const loop = new GameLoop({
   update(dt) {
-    if (gameOver) return;
+    if (gameOver || paused) return;
 
     // Tank-style movement: A/D turn, W/S thrust along heading
     const { turn, thrust } = input.getTankInput();
@@ -430,6 +473,9 @@ const loop = new GameLoop({
 
     // Key remap screen (on top of everything)
     keyRemapScreen.render(ctx, abilitySystem.abilities, canvas.width, canvas.height);
+
+    // Pause menu (on top of everything except shader)
+    pauseMenu.render(ctx, canvas.width, canvas.height);
 
     // Post-processing shader pass (reads the completed 2D canvas as a texture)
     if (shaderPipeline) {

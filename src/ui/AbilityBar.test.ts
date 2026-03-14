@@ -35,7 +35,7 @@ function createMockCtx(): CanvasRenderingContext2D {
 }
 
 describe('AbilityBar', () => {
-  it('renders ability icons with keybind labels', () => {
+  it('renders keybind labels prominently and ability names', () => {
     const bar = new AbilityBar();
     const ctx = createMockCtx();
     const abilities = [
@@ -48,10 +48,12 @@ describe('AbilityBar', () => {
     const fillTextCalls = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls;
     const allText = fillTextCalls.map((c: unknown[]) => c[0] as string);
 
-    expect(allText.some((t: string) => t === 'B')).toBe(true);
-    expect(allText.some((t: string) => t === 'H')).toBe(true);
+    // Keybind labels should be present (uppercase)
     expect(allText.some((t: string) => t === '1')).toBe(true);
     expect(allText.some((t: string) => t === '2')).toBe(true);
+    // Ability names should be present
+    expect(allText.some((t: string) => t === 'Blast')).toBe(true);
+    expect(allText.some((t: string) => t === 'Regen')).toBe(true);
   });
 
   it('shows cooldown seconds when ability is on cooldown', () => {

@@ -16,8 +16,8 @@ export interface CRTEffectConfig {
 export const DEFAULT_CRT_CONFIG: CRTEffectConfig = {
   curvature: 0.02,
   scanlineIntensity: 0.15,
-  vignetteStrength: 0.3,
-  aberrationAmount: 0.003,
+  vignetteStrength: 0.1,
+  aberrationAmount: 0.001,
   glowStrength: 0.15,
 };
 
