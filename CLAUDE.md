@@ -28,8 +28,8 @@ The game uses a lightweight entity-systems architecture. Entities are plain data
 
 **Update order** (every frame at 60 Hz fixed timestep):
 
-1. `InputSystem` — reads WASD/arrow key state, returns `{dx, dy}` unit vector
-2. Player position update — `player.x += dx * speed * dt`
+1. `InputSystem` — reads WASD/arrow key state, returns `{turn, thrust}` for tank-style controls
+2. Player turn + thrust — applies turn inertia (`turnVelocity *= exp(-turnFriction * dt)`), accelerates along heading
 3. `World.updateSpawning()` — lazy-loads 400px chunks in a 5x5 grid around player
 4. `RadarDisplay.update()` — advances sweep angle
 5. `SweepSystem.update()` — detects entities crossed by sweep line, returns interaction events
@@ -49,12 +49,16 @@ The game uses a lightweight entity-systems architecture. Entities are plain data
 3. Ambient particles (clipped to radar circle)
 4. Entity blips via `BlipRenderer` (color-coded by type)
 5. Sweep flash effects
-6. Enemy projectiles
-7. Helper drones (cyan blips)
+6. Enemy projectiles (red circles with glow)
+7. Helper drones (cyan circles)
 8. Floating damage/heal text
-9. HUD (health bar, energy, score, kills, distance, threat level, ability cooldowns)
-10. Upgrade panel (right side, toggled with E key)
-11. Game over overlay
+9. Player heading indicator (green triangle at screen center)
+10. Damage flash vignette (red overlay on hit)
+11. HUD (health bar, energy, score, kills, distance, time, threat level, coordinates)
+12. Ability bar (bottom center, 4 slots with cooldown timers and keybind labels)
+13. Upgrade panel (right side, toggled with E key — remappable)
+14. Game over overlay
+15. Key remap screen (modal overlay, toggled with K key)
 
 ### Directory layout
 
@@ -68,11 +72,11 @@ src/
     Entity.ts                # Type definitions (Resource, Enemy, Ally, Projectile) + factory functions
     Player.ts                # Player class — stats, damage/heal/shield/energy methods
   systems/
-    InputSystem.ts           # Keyboard input (WASD/arrows), diagonal normalization
+    InputSystem.ts           # Keyboard input — tank-style controls (A/D turn, W/S thrust)
     SweepSystem.ts           # Sweep-line entity detection using angle math
     CombatSystem.ts          # Enemy AI behaviors, projectile lifecycle, contact damage
     UpgradeSystem.ts         # 7 upgrades with cost formulas and apply callbacks
-    AbilitySystem.ts         # 3 cooldown abilities — blast, heal over time, helper drone
+    AbilitySystem.ts         # 4 cooldown abilities — blast, heal over time, helper drone, dash
   world/
     World.ts                 # Chunk-based spawning, difficulty scaling, entity cleanup
   radar/
@@ -82,18 +86,22 @@ src/
     AbilityEffects.ts        # Blast ring, regen glow, drone spawn flash
     AmbientParticles.ts      # Decorative floating particles inside radar
   ui/
-    HUD.ts                   # Health bar, energy, score, kills, distance, threat level
+    HUD.ts                   # Health bar, energy, score, kills, distance, time, threat level, coordinates
     UpgradePanel.ts          # Right-side upgrade shop (E key toggle, click to buy)
     GameOverScreen.ts        # "SIGNAL LOST" overlay with final stats and restart
     FloatingText.ts          # Rising damage/heal/collection numbers
     ScreenShake.ts           # Camera shake on damage (random offset, 0.15s decay)
+    AbilityBar.ts            # Bottom-center ability slots with cooldown timers and keybind labels
+    KeyRemapScreen.ts        # K key toggle — rebind ability keys and upgrades key, persists to localStorage
 ```
 
 ### Key conventions
 
 - **Factories over constructors** for entities: `createResource()`, `createEnemy()`, `createAlly()` in `Entity.ts`
 - **Frame-rate independent**: all movement multiplied by `dt` (seconds)
-- **Inertia model**: acceleration + exponential friction (`vel *= exp(-friction * dt)`). Acceleration = `speed * friction` so steady-state velocity equals `speed`. Player friction: 2.0, scouts: 2.5, brutes: 1.2, ranged: 1.8
+- **Tank-style movement**: A/D (or left/right arrows) rotate the player heading; W/S (or up/down arrows) thrust forward/backward along the heading direction
+- **Inertia model**: acceleration + exponential friction (`vel *= exp(-friction * dt)`). Acceleration = `speed * friction` so steady-state velocity equals `speed`. Player friction: 2.0, scouts: 2.5, brutes: 1.2, ranged: 1.8. Turning also uses inertia: `turnVelocity *= exp(-turnFriction * dt)` with turnFriction: 3.0
+- **Key remapping**: ability keys (1-4) and upgrades key (E) are remappable via K key; bindings persist to `localStorage` under `'radar-game-keybindings'`
 - **Events, not mutations**: `SweepSystem.update()` returns an array of interaction events; the main loop processes them
 - **One sweep per rotation**: `sweptThisRotation` flag on each entity prevents double-interaction until the sweep wraps past 2pi
 - **Difficulty scales with distance**: `1 + log2(1 + distFromOrigin / 1000)` — enemies get stronger the further you go from the origin
@@ -123,7 +131,7 @@ src/
 | engine_speed | 5 | 25 + lvl*30 | +15 movement speed |
 | energy_magnet | 5 | 40 + lvl*45 | Auto-collect resources within 50+lvl*30 px |
 
-**Abilities** (4 total, activated with number keys 1-4, always available):
+**Abilities** (4 total, activated with number keys 1-4 by default — remappable via K key):
 
 | ID | Key | Cooldown | Effect |
 |----|-----|----------|--------|
@@ -153,7 +161,7 @@ npm run test:watch   # Watch mode
 
 ## Commit Convention
 
-Commits follow the pattern: `prd-NNN: <description>` for features, `review:` / `fix:` / `qa:` / `chore:` for other work. The codebase was built incrementally from prd-001 (Vite setup) through prd-015 (score system).
+Commits follow the pattern: `prd-NNN: <description>` for features, `review:` / `fix:` / `qa:` / `chore:` / `merge:` for other work. The codebase was built incrementally from prd-001 (Vite setup) through prd-026b (turn inertia).
 
 ## Development Notes
 
