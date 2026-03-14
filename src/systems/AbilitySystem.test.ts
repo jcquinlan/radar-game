@@ -356,14 +356,11 @@ describe('AbilitySystem', () => {
       // Kill the target
       enemy.active = false;
 
-      const vxBefore = system.missiles[0].vx;
-      const vyBefore = system.missiles[0].vy;
       system.update(0.1, entities, () => {});
 
       // Missile should still be active (goes ballistic, doesn't self-destruct)
       expect(system.missiles[0].active).toBe(true);
-      // Velocity should decay (friction) but not steer toward dead target
-      // Just verify it's still moving
+      // Velocity should decay (friction) but missile keeps moving
       expect(Math.abs(system.missiles[0].vx) + Math.abs(system.missiles[0].vy)).toBeGreaterThan(0);
     });
 
