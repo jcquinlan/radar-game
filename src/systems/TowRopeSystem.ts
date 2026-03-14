@@ -2,9 +2,9 @@ import { Salvage } from '../entities/Entity';
 import { Player } from '../entities/Player';
 
 // Tuning constants — exported for tests and future adjustment
-export const SPRING_K = 1.5;
-export const SPRING_DAMPING = 0.5;
-export const TOW_FRICTION = 1.5;
+export const SPRING_K = 1.2;
+export const SPRING_DAMPING = 0.25;
+export const TOW_FRICTION = 0.8;
 export const REPULSION_RADIUS = 20;
 export const REPULSION_FORCE = 80;
 export const MAX_TOWED = 8;

@@ -445,7 +445,7 @@ const loop = new GameLoop({
         ctx.translate(itemSX, itemSY);
         ctx.rotate(Math.PI / 4);
         ctx.beginPath();
-        ctx.rect(-3, -3, 6, 6);
+        ctx.rect(-4.5, -4.5, 9, 9);
         ctx.fillStyle = `rgba(255, 170, 0, ${alpha})`;
         ctx.shadowColor = '#ffaa00';
         ctx.shadowBlur = 8;

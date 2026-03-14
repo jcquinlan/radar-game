@@ -17,7 +17,7 @@ const BLIP_SIZES: Record<string, number> = {
   resource: 3,
   enemy: 5,
   ally: 4,
-  salvage: 4,
+  salvage: 5,
 };
 
 export class BlipRenderer {
