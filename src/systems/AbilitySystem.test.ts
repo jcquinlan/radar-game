@@ -218,4 +218,45 @@ describe('AbilitySystem', () => {
       expect(player.score).toBe(50);
     });
   });
+
+  describe('dash', () => {
+    it('boosts player velocity in current movement direction', () => {
+      const { system, player } = buildAbilitySystem();
+      player.vx = 50;
+      player.vy = 0;
+      system.activate('dash', [], () => {});
+
+      // Should be boosted to 3x player speed in the same direction
+      expect(player.vx).toBe(player.speed * 3);
+      expect(player.vy).toBe(0);
+    });
+
+    it('does not dash when player is stationary', () => {
+      const { system, player } = buildAbilitySystem();
+      player.vx = 0;
+      player.vy = 0;
+      system.activate('dash', [], () => {});
+
+      expect(player.vx).toBe(0);
+      expect(player.vy).toBe(0);
+    });
+
+    it('has 5 second cooldown', () => {
+      const { system } = buildAbilitySystem();
+      const ability = system.getAbility('dash')!;
+      expect(ability.cooldown).toBe(5);
+    });
+
+    it('preserves dash direction for diagonal movement', () => {
+      const { system, player } = buildAbilitySystem();
+      player.vx = 30;
+      player.vy = 40; // 3-4-5 triangle, speed = 50
+      system.activate('dash', [], () => {});
+
+      const dashSpeed = player.speed * 3;
+      // Direction should be preserved: vx/vy ratio = 3/4
+      expect(player.vx).toBeCloseTo(dashSpeed * 0.6);
+      expect(player.vy).toBeCloseTo(dashSpeed * 0.8);
+    });
+  });
 });

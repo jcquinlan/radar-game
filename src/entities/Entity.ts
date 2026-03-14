@@ -78,9 +78,9 @@ export function createEnemy(x: number, y: number, subtype?: EnemySubtype): Enemy
   const st = subtype ?? (['scout', 'scout', 'brute', 'ranged'][Math.floor(Math.random() * 4)] as EnemySubtype);
 
   const stats = {
-    scout: { health: 15, damage: 3, speed: 90, chaseRange: 200, energyDrop: 5, fireRate: 0, projectileSpeed: 0, friction: 4.0 },
-    brute: { health: 80, damage: 12, speed: 25, chaseRange: 180, energyDrop: 25, fireRate: 0, projectileSpeed: 0, friction: 2.5 },
-    ranged: { health: 30, damage: 0, speed: 30, chaseRange: 300, energyDrop: 15, fireRate: 2.5, projectileSpeed: 120, friction: 3.5 },
+    scout: { health: 15, damage: 3, speed: 90, chaseRange: 200, energyDrop: 5, fireRate: 0, projectileSpeed: 0, friction: 2.5 },
+    brute: { health: 80, damage: 12, speed: 25, chaseRange: 180, energyDrop: 25, fireRate: 0, projectileSpeed: 0, friction: 1.2 },
+    ranged: { health: 30, damage: 0, speed: 30, chaseRange: 300, energyDrop: 15, fireRate: 2.5, projectileSpeed: 120, friction: 1.8 },
   }[st];
 
   return {

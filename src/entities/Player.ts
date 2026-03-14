@@ -36,7 +36,7 @@ export class Player {
     this.y = y;
     this.vx = 0;
     this.vy = 0;
-    this.friction = 5.0;
+    this.friction = 2.0;
     this.maxHealth = 100;
     this.health = this.maxHealth;
     this.energy = 0;

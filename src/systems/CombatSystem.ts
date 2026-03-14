@@ -23,18 +23,18 @@ export class CombatSystem {
       // Chase the player if within range (scouts and brutes)
       // Stop at standoff distance instead of stacking on top of the player
       const standoffDist = enemy.subtype === 'brute' ? 20 : 25;
-      const accel = enemy.speed * 10;
+      const enemyAccel = enemy.speed * enemy.friction;
       if (enemy.subtype !== 'ranged' && dist < enemy.chaseRange && dist > standoffDist) {
-        enemy.vx += (dx / dist) * accel * dt;
-        enemy.vy += (dy / dist) * accel * dt;
+        enemy.vx += (dx / dist) * enemyAccel * dt;
+        enemy.vy += (dy / dist) * enemyAccel * dt;
       }
 
       // Ranged enemies: maintain distance and fire
       if (enemy.subtype === 'ranged' && dist < enemy.chaseRange) {
         // Back away if too close
         if (dist < 100 && dist > 0) {
-          enemy.vx -= (dx / dist) * accel * dt;
-          enemy.vy -= (dy / dist) * accel * dt;
+          enemy.vx -= (dx / dist) * enemyAccel * dt;
+          enemy.vy -= (dy / dist) * enemyAccel * dt;
         }
 
         // Fire projectile
@@ -52,17 +52,10 @@ export class CombatSystem {
         }
       }
 
-      // Apply friction and velocity to position
-      enemy.vx *= Math.pow(1e-4, dt / (1 / enemy.friction));
-      enemy.vy *= Math.pow(1e-4, dt / (1 / enemy.friction));
-      // Clamp to max speed
-      const enemySpeedSq = enemy.vx * enemy.vx + enemy.vy * enemy.vy;
-      const maxEnemySpeed = enemy.speed * 1.2;
-      if (enemySpeedSq > maxEnemySpeed * maxEnemySpeed) {
-        const scale = maxEnemySpeed / Math.sqrt(enemySpeedSq);
-        enemy.vx *= scale;
-        enemy.vy *= scale;
-      }
+      // Apply exponential friction and update position
+      const enemyDecay = Math.exp(-enemy.friction * dt);
+      enemy.vx *= enemyDecay;
+      enemy.vy *= enemyDecay;
       enemy.x += enemy.vx * dt;
       enemy.y += enemy.vy * dt;
 

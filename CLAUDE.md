@@ -93,6 +93,7 @@ src/
 
 - **Factories over constructors** for entities: `createResource()`, `createEnemy()`, `createAlly()` in `Entity.ts`
 - **Frame-rate independent**: all movement multiplied by `dt` (seconds)
+- **Inertia model**: acceleration + exponential friction (`vel *= exp(-friction * dt)`). Acceleration = `speed * friction` so steady-state velocity equals `speed`. Player friction: 2.0, scouts: 2.5, brutes: 1.2, ranged: 1.8
 - **Events, not mutations**: `SweepSystem.update()` returns an array of interaction events; the main loop processes them
 - **One sweep per rotation**: `sweptThisRotation` flag on each entity prevents double-interaction until the sweep wraps past 2pi
 - **Difficulty scales with distance**: `1 + log2(1 + distFromOrigin / 1000)` — enemies get stronger the further you go from the origin
@@ -122,13 +123,14 @@ src/
 | engine_speed | 5 | 25 + lvl*30 | +15 movement speed |
 | energy_magnet | 5 | 40 + lvl*45 | Auto-collect resources within 50+lvl*30 px |
 
-**Abilities** (3 total, activated with number keys 1/2/3, always available):
+**Abilities** (4 total, activated with number keys 1-4, always available):
 
 | ID | Key | Cooldown | Effect |
 |----|-----|----------|--------|
 | damage_blast | 1 | 6s | AoE 20 damage to all enemies within 200px |
 | heal_over_time | 2 | 10s | Heals 5 HP/sec for 4 seconds (20 HP total) |
 | helper_drone | 3 | 15s | Spawns a drone that chases enemies, deals 5 dmg/s contact, lasts 10s |
+| dash | 4 | 5s | Instant velocity burst at 3x max speed in current movement direction |
 
 **Damage formula:** `effective = max(0, rawDamage - armor) * (1 - shieldReduction)`
 

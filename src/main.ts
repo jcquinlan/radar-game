@@ -106,6 +106,14 @@ window.addEventListener('keydown', (e) => {
       floatingText.add('DRONE!', player.x, player.y - 25, '#00ffff');
     }
   }
+  if (e.key === '4' && !gameOver) {
+    const addText = (text: string, x: number, y: number, color: string) =>
+      floatingText.add(text, x, y, color);
+    if (abilitySystem.activate('dash', world.entities, addText)) {
+      floatingText.add('DASH!', player.x, player.y - 25, '#ffff00');
+      screenShake.trigger(2);
+    }
+  }
 });
 
 init();
@@ -114,23 +122,16 @@ const loop = new GameLoop({
   update(dt) {
     if (gameOver) return;
 
-    // Player movement (acceleration + friction for inertia)
+    // Player movement (acceleration + exponential friction for inertia)
     const { dx, dy } = input.getMovementVector();
     const oldX = player.x;
     const oldY = player.y;
-    const accel = player.speed * 12;
-    player.vx += dx * accel * dt;
-    player.vy += dy * accel * dt;
-    player.vx *= Math.pow(1e-4, dt / (1 / player.friction));
-    player.vy *= Math.pow(1e-4, dt / (1 / player.friction));
-    // Clamp to max speed
-    const playerSpeedSq = player.vx * player.vx + player.vy * player.vy;
-    const maxSpeed = player.speed * 1.2;
-    if (playerSpeedSq > maxSpeed * maxSpeed) {
-      const scale = maxSpeed / Math.sqrt(playerSpeedSq);
-      player.vx *= scale;
-      player.vy *= scale;
-    }
+    const playerAccel = player.speed * player.friction;
+    player.vx += dx * playerAccel * dt;
+    player.vy += dy * playerAccel * dt;
+    const decay = Math.exp(-player.friction * dt);
+    player.vx *= decay;
+    player.vy *= decay;
     player.x += player.vx * dt;
     player.y += player.vy * dt;
 

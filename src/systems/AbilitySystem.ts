@@ -65,6 +65,16 @@ export class AbilitySystem {
         durationRemaining: 0,
         active: false,
       },
+      {
+        id: 'dash',
+        name: 'Dash',
+        keybind: '4',
+        cooldown: 5,
+        cooldownRemaining: 0,
+        duration: 0,
+        durationRemaining: 0,
+        active: false,
+      },
     ];
   }
 
@@ -91,6 +101,8 @@ export class AbilitySystem {
       ability.active = true;
       ability.durationRemaining = ability.duration;
       this.spawnDrone();
+    } else if (id === 'dash') {
+      this.activateDash();
     }
 
     return true;
@@ -156,6 +168,16 @@ export class AbilitySystem {
     }
   }
 
+  private activateDash(): void {
+    const dashSpeed = this.player.speed * 3;
+    // Dash in current velocity direction, or do nothing if stationary
+    const currentSpeed = Math.sqrt(this.player.vx * this.player.vx + this.player.vy * this.player.vy);
+    if (currentSpeed > 1) {
+      this.player.vx = (this.player.vx / currentSpeed) * dashSpeed;
+      this.player.vy = (this.player.vy / currentSpeed) * dashSpeed;
+    }
+  }
+
   private spawnDrone(): void {
     this.drones.push({
       x: this.player.x,
@@ -166,7 +188,7 @@ export class AbilitySystem {
       damage: 5,
       lifetime: 10,
       active: true,
-      friction: 3.0,
+      friction: 2.0,
     });
   }
 
@@ -206,7 +228,7 @@ export class AbilitySystem {
         const dy = nearest.y - drone.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist > 0) {
-          const droneAccel = drone.speed * 10;
+          const droneAccel = drone.speed * drone.friction;
           drone.vx += (dx / dist) * droneAccel * dt;
           drone.vy += (dy / dist) * droneAccel * dt;
         }
@@ -225,16 +247,10 @@ export class AbilitySystem {
         }
       }
 
-      // Apply friction and velocity
-      drone.vx *= Math.pow(1e-4, dt / (1 / drone.friction));
-      drone.vy *= Math.pow(1e-4, dt / (1 / drone.friction));
-      const droneSpeedSq = drone.vx * drone.vx + drone.vy * drone.vy;
-      const maxDroneSpeed = drone.speed * 1.2;
-      if (droneSpeedSq > maxDroneSpeed * maxDroneSpeed) {
-        const scale = maxDroneSpeed / Math.sqrt(droneSpeedSq);
-        drone.vx *= scale;
-        drone.vy *= scale;
-      }
+      // Apply exponential friction and update position
+      const droneDecay = Math.exp(-drone.friction * dt);
+      drone.vx *= droneDecay;
+      drone.vy *= droneDecay;
       drone.x += drone.vx * dt;
       drone.y += drone.vy * dt;
     }
