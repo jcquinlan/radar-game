@@ -79,6 +79,7 @@ src/
     RadarDisplay.ts          # Radar rendering — circle, rings, sweep line, CRT scanlines
     BlipRenderer.ts          # Entity blip rendering — colors, sizes, pulse animations, labels
     SweepEffects.ts          # Expanding flash circles on sweep interactions
+    AbilityEffects.ts        # Blast ring, regen glow, drone spawn flash
     AmbientParticles.ts      # Decorative floating particles inside radar
   ui/
     HUD.ts                   # Health bar, energy, score, kills, distance, threat level
@@ -101,8 +102,8 @@ src/
 **Entities:**
 - **Resources** — green blips, 5-15 energy each, collected by sweep or magnet
 - **Enemies** — three subtypes:
-  - Scout: fast (90 speed), low HP (15), low damage (3), chases aggressively
-  - Brute: slow (25 speed), tank (80 HP), heavy damage (12), charges at player
+  - Scout: fast (90 speed), low HP (15), low damage (3), chases to 25px standoff
+  - Brute: slow (25 speed), tank (80 HP), heavy damage (12), charges to 20px standoff
   - Ranged: medium (30 speed), shoots projectiles (8 dmg) every 2.5s from 300px range
 - **Allies** — three subtypes:
   - Healer: heals 8-16 HP on sweep (3s cooldown)
