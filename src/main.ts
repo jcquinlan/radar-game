@@ -6,7 +6,7 @@ import { SweepEffects } from './radar/SweepEffects';
 import { AmbientParticles } from './radar/AmbientParticles';
 import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
-import { SweepSystem } from './systems/SweepSystem';
+import { PingSystem } from './systems/PingSystem';
 import { CombatSystem } from './systems/CombatSystem';
 import { Ally, Resource } from './entities/Entity';
 import { UpgradeSystem } from './systems/UpgradeSystem';
@@ -30,7 +30,7 @@ let sweepEffects: SweepEffects;
 let ambientParticles: AmbientParticles;
 let player: Player;
 let input: InputSystem;
-let sweepSystem: SweepSystem;
+let pingSystem: PingSystem;
 let combatSystem: CombatSystem;
 let upgradeSystem: UpgradeSystem;
 let world: World;
@@ -46,7 +46,6 @@ let keyRemapScreen: KeyRemapScreen;
 let resolutionLevel: number;
 let gameOver: boolean;
 let prevHealth: number;
-let lastSweepAngle: number;
 let damageFlash: number;
 
 function init() {
@@ -56,7 +55,7 @@ function init() {
   ambientParticles = new AmbientParticles();
   player = new Player();
   input = new InputSystem();
-  sweepSystem = new SweepSystem();
+  pingSystem = new PingSystem({ maxRadius: radar.getRadius() });
   combatSystem = new CombatSystem();
   world = new World();
   hud = new HUD();
@@ -67,12 +66,11 @@ function init() {
   resolutionLevel = 0;
   gameOver = false;
   prevHealth = player.health;
-  lastSweepAngle = 0;
   damageFlash = 0;
 
   upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
     resolutionLevel = lvl;
-  });
+  }, pingSystem);
   abilitySystem = new AbilitySystem(player);
   abilityEffects = new AbilityEffects();
   abilityBar = new AbilityBar();
@@ -174,21 +172,17 @@ const loop = new GameLoop({
     // Spawn entities in new areas
     world.updateSpawning(player.x, player.y);
 
-    // Radar sweep
-    radar.update(dt);
+    // Radar + blip updates
     blipRenderer.update(dt);
     ambientParticles.update(dt);
 
-    // Sweep interactions
-    const events = sweepSystem.update(
-      radar.getSweepAngle(),
-      world.entities,
-      player,
-      radar.getRadius(),
-      dt
-    );
+    // Ping system — expanding circle detection
+    const events = pingSystem.update(world.entities, player, dt);
 
-    // Track score and floating text from sweep events
+    // Feed ping state to radar for rendering
+    radar.setPingState(pingSystem.getState());
+
+    // Track score and floating text from ping events
     for (const event of events) {
       if (event.type === 'collect') {
         player.totalEnergyCollected += event.value;
@@ -211,7 +205,7 @@ const loop = new GameLoop({
       }
     }
 
-    // Visual effects from sweep interactions
+    // Visual effects from ping interactions
     sweepEffects.addEvents(events, player.x, player.y);
     sweepEffects.update(dt);
     floatingText.update(dt);
@@ -284,13 +278,6 @@ const loop = new GameLoop({
         init();
       });
     }
-
-    // Detect sweep rotation completion for ping flash
-    const currentAngle = radar.getSweepAngle();
-    if (lastSweepAngle > currentAngle + Math.PI) {
-      // Full rotation completed — ping flash handled in render
-    }
-    lastSweepAngle = currentAngle;
 
     // Periodic cleanup
     world.cleanup(player.x, player.y);
