@@ -7,7 +7,7 @@ import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
 import { SweepSystem } from './systems/SweepSystem';
 import { CombatSystem } from './systems/CombatSystem';
-import { Ally } from './entities/Entity';
+import { Ally, Resource } from './entities/Entity';
 import { UpgradeSystem } from './systems/UpgradeSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
@@ -98,9 +98,38 @@ const loop = new GameLoop({
       dt
     );
 
+    // Track score from sweep events
+    for (const event of events) {
+      if (event.type === 'collect') {
+        player.totalEnergyCollected += event.value;
+        player.score += event.value;
+      }
+      if (event.type === 'damage' && !event.entity.active) {
+        // Enemy killed
+        player.kills++;
+        player.score += 50;
+      }
+    }
+
     // Visual effects from sweep interactions
     sweepEffects.addEvents(events, player.x, player.y);
     sweepEffects.update(dt);
+
+    // Energy magnet: auto-collect nearby resources
+    if (player.magnetRange > 0) {
+      for (const entity of world.entities) {
+        if (!entity.active || entity.type !== 'resource') continue;
+        const mdx = entity.x - player.x;
+        const mdy = entity.y - player.y;
+        if (mdx * mdx + mdy * mdy < player.magnetRange * player.magnetRange) {
+          const resource = entity as Resource;
+          player.addEnergy(resource.energyValue);
+          player.totalEnergyCollected += resource.energyValue;
+          player.score += resource.energyValue;
+          resource.active = false;
+        }
+      }
+    }
 
     // Shield buff countdown
     player.updateShield(dt);

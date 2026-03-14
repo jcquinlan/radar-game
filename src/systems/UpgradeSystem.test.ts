@@ -18,8 +18,8 @@ describe('UpgradeSystem', () => {
     });
   });
 
-  it('initializes with 4 upgrades at level 0', () => {
-    expect(upgrades.upgrades).toHaveLength(4);
+  it('initializes with 7 upgrades at level 0', () => {
+    expect(upgrades.upgrades).toHaveLength(7);
     for (const u of upgrades.upgrades) {
       expect(u.level).toBe(0);
     }
@@ -99,6 +99,25 @@ describe('UpgradeSystem', () => {
       upgrades.purchase('radar_resolution', player);
     }
     expect(upgrades.getNextCost('radar_resolution')).toBeNull();
+  });
+
+  it('hull armor upgrade reduces damage taken', () => {
+    player.addEnergy(100);
+    upgrades.purchase('hull_armor', player);
+    expect(player.armor).toBeGreaterThan(0);
+  });
+
+  it('engine speed upgrade increases player speed', () => {
+    const initialSpeed = player.speed;
+    player.addEnergy(100);
+    upgrades.purchase('engine_speed', player);
+    expect(player.speed).toBeGreaterThan(initialSpeed);
+  });
+
+  it('energy magnet upgrade sets magnet range', () => {
+    player.addEnergy(100);
+    upgrades.purchase('energy_magnet', player);
+    expect(player.magnetRange).toBeGreaterThan(0);
   });
 
   it('canPurchase returns correct values', () => {

@@ -60,6 +60,39 @@ export class UpgradeSystem {
           onResolutionChange(lvl);
         },
       },
+      {
+        id: 'hull_armor',
+        name: 'Hull Armor',
+        description: 'Reduce incoming damage',
+        level: 0,
+        maxLevel: 5,
+        cost: (lvl) => 35 + lvl * 40,
+        apply: (lvl) => {
+          player.armor = lvl * 2;
+        },
+      },
+      {
+        id: 'engine_speed',
+        name: 'Engine Speed',
+        description: 'Increase movement speed',
+        level: 0,
+        maxLevel: 5,
+        cost: (lvl) => 25 + lvl * 30,
+        apply: (lvl) => {
+          player.speed = player.baseSpeed + lvl * 15;
+        },
+      },
+      {
+        id: 'energy_magnet',
+        name: 'Energy Magnet',
+        description: 'Auto-collect nearby resources',
+        level: 0,
+        maxLevel: 5,
+        cost: (lvl) => 40 + lvl * 45,
+        apply: (lvl) => {
+          player.magnetRange = 50 + lvl * 30;
+        },
+      },
     ];
   }
 
