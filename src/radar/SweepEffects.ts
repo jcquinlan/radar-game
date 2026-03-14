@@ -1,4 +1,4 @@
-import { SweepEvent } from '../systems/SweepSystem';
+import { PingEvent } from '../systems/PingSystem';
 
 interface FlashEffect {
   x: number;
@@ -20,7 +20,7 @@ const FLASH_DURATION = 0.3; // seconds
 export class SweepEffects {
   private flashes: FlashEffect[] = [];
 
-  addEvents(events: SweepEvent[], playerX: number, playerY: number): void {
+  addEvents(events: PingEvent[], playerX: number, playerY: number): void {
     for (const event of events) {
       this.flashes.push({
         x: event.entity.x - playerX,

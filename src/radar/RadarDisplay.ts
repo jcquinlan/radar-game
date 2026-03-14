@@ -1,8 +1,8 @@
+import { PingState } from '../systems/PingSystem';
+
 export interface RadarConfig {
   /** Radar radius in pixels */
   radius: number;
-  /** Sweep rotation speed in radians per second */
-  sweepSpeed: number;
   /** Number of range rings */
   ringCount: number;
   /** Green color for the CRT aesthetic */
@@ -15,7 +15,6 @@ export interface RadarConfig {
 
 export const DEFAULT_RADAR_CONFIG: RadarConfig = {
   radius: 340,
-  sweepSpeed: Math.PI * 0.25, // ~8 seconds per full rotation
   ringCount: 4,
   color: '#00ff41',
   dimColor: '#003b0f',
@@ -23,12 +22,8 @@ export const DEFAULT_RADAR_CONFIG: RadarConfig = {
 };
 
 export class RadarDisplay {
-  private sweepAngle = 0;
   private config: RadarConfig;
-
-  // Store previous sweep positions for the fading trail
-  private trailAngles: number[] = [];
-  private readonly trailLength = 60;
+  private pingState: PingState | null = null;
 
   constructor(config: Partial<RadarConfig> = {}) {
     this.config = { ...DEFAULT_RADAR_CONFIG, ...config };
@@ -36,10 +31,6 @@ export class RadarDisplay {
 
   getConfig(): RadarConfig {
     return this.config;
-  }
-
-  getSweepAngle(): number {
-    return this.sweepAngle;
   }
 
   getRadius(): number {
@@ -50,16 +41,9 @@ export class RadarDisplay {
     this.config.radius = radius;
   }
 
-  setSweepSpeed(speed: number): void {
-    this.config.sweepSpeed = speed;
-  }
-
-  update(dt: number): void {
-    this.sweepAngle = (this.sweepAngle + this.config.sweepSpeed * dt) % (Math.PI * 2);
-    this.trailAngles.unshift(this.sweepAngle);
-    if (this.trailAngles.length > this.trailLength) {
-      this.trailAngles.length = this.trailLength;
-    }
+  /** Update the ping state from PingSystem each frame */
+  setPingState(state: PingState): void {
+    this.pingState = state;
   }
 
   render(ctx: CanvasRenderingContext2D, centerX: number, centerY: number): void {
@@ -96,34 +80,41 @@ export class RadarDisplay {
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Sweep trail (fading)
-    for (let i = this.trailAngles.length - 1; i >= 0; i--) {
-      const alpha = ((this.trailAngles.length - i) / this.trailAngles.length) * 0.3;
-      const angle = this.trailAngles[i];
-      const endX = centerX + Math.cos(angle) * radius;
-      const endY = centerY + Math.sin(angle) * radius;
+    // Ping ring (expanding circle with fade)
+    if (this.pingState && this.pingState.active && this.pingState.radius > 0) {
+      const pingRadius = Math.min(this.pingState.radius, radius);
+      const alpha = this.pingState.alpha;
 
+      // Filled area behind the ping (faint glow showing what's been scanned)
+      ctx.save();
       ctx.beginPath();
-      ctx.moveTo(centerX, centerY);
-      ctx.lineTo(endX, endY);
-      ctx.strokeStyle = `rgba(0, 255, 65, ${alpha})`;
+      ctx.arc(centerX, centerY, pingRadius, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(0, 255, 65, ${alpha * 0.03})`;
+      ctx.fill();
+      ctx.restore();
+
+      // Main ping ring with glow
+      ctx.save();
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, pingRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(0, 255, 65, ${alpha * 0.9})`;
       ctx.lineWidth = 2;
       ctx.stroke();
+      ctx.restore();
+
+      // Secondary inner ring (trailing echo)
+      if (pingRadius > 20) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, pingRadius - 10, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(0, 255, 65, ${alpha * 0.3})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      }
     }
-
-    // Main sweep line with glow
-    const sweepEndX = centerX + Math.cos(this.sweepAngle) * radius;
-    const sweepEndY = centerY + Math.sin(this.sweepAngle) * radius;
-
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 15;
-    ctx.beginPath();
-    ctx.moveTo(centerX, centerY);
-    ctx.lineTo(sweepEndX, sweepEndY);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
 
     // Outer ring (border)
     ctx.beginPath();

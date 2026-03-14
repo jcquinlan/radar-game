@@ -36,7 +36,7 @@ export class BlipRenderer {
     resolutionLevel: number
   ): void {
     for (const entity of entities) {
-      if (!entity.active) continue;
+      if (!entity.active || !entity.visible) continue;
 
       // Convert world position to radar position
       const relX = entity.x - playerX;
