@@ -74,6 +74,13 @@ function init() {
   abilitySystem = new AbilitySystem(player);
   abilityEffects = new AbilityEffects();
   keyRemapScreen = new KeyRemapScreen();
+  keyRemapScreen.addExtraBinding({
+    id: 'upgrades',
+    name: 'Upgrades',
+    description: 'Open the upgrades panel',
+    key: 'e',
+  });
+  keyRemapScreen.load(abilitySystem.abilities);
 
   input.attach();
   keyRemapScreen.attach(canvas, abilitySystem.abilities);
@@ -86,7 +93,9 @@ window.addEventListener('keydown', (e) => {
   // Key remap screen captures keys when listening — skip other handlers
   if (keyRemapScreen && keyRemapScreen.isListening()) return;
 
-  if ((e.key === 'e' || e.key === 'E') && !gameOver && !keyRemapScreen.isVisible()) {
+  const upgradesBinding = keyRemapScreen.getExtraBinding('upgrades');
+  const upgradesKey = upgradesBinding ? upgradesBinding.key : 'e';
+  if ((e.key === upgradesKey || e.key === upgradesKey.toUpperCase()) && !gameOver && !keyRemapScreen.isVisible()) {
     upgradePanel.toggle();
   }
   if ((e.key === 'k' || e.key === 'K') && !gameOver) {
