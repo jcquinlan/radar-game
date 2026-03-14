@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { World, getThreatLevel } from './World';
-import { Enemy } from '../entities/Entity';
+import { Enemy, createResource } from '../entities/Entity';
 
 describe('World', () => {
   it('spawns entities when visiting new chunks', () => {
@@ -33,6 +33,17 @@ describe('World', () => {
     const activeCount = world.entities.filter((e) => e.active).length;
     world.cleanup(0, 0);
     expect(world.entities.length).toBe(activeCount);
+  });
+
+  it('preserves towed resources during cleanup regardless of distance', () => {
+    const world = new World();
+    const towedResource = createResource(9999, 9999); // Far from player
+    towedResource.towedByPlayer = true;
+    world.entities.push(towedResource);
+
+    world.cleanup(0, 0); // Player is at origin, resource is very far
+
+    expect(world.entities).toContain(towedResource);
   });
 
   it('enemies spawned further from origin are stronger', () => {

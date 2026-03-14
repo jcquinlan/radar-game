@@ -33,6 +33,20 @@ describe('PingSystem', () => {
     expect(resource.active).toBe(false);
   });
 
+  it('calls onCollectResource callback instead of deactivating when set', () => {
+    const resource = createResource(50, 0);
+    resource.energyValue = 10;
+    const collected: typeof resource[] = [];
+    ping.onCollectResource = (r) => collected.push(r);
+
+    ping.update([resource], player, 0.1);
+
+    expect(collected).toHaveLength(1);
+    expect(collected[0]).toBe(resource);
+    expect(resource.active).toBe(true); // Not deactivated
+    expect(player.energy).toBe(10); // Energy still granted
+  });
+
   it('damages an enemy when the ping reaches it', () => {
     const enemy = createEnemy(50, 0);
     enemy.health = 50;
