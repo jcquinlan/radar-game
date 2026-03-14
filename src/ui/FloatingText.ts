@@ -39,7 +39,8 @@ export class FloatingText {
     playerX: number,
     playerY: number,
     centerX: number,
-    centerY: number
+    centerY: number,
+    worldRotation?: number
   ): void {
     ctx.save();
     ctx.font = 'bold 14px monospace';
@@ -50,11 +51,20 @@ export class FloatingText {
       const screenX = centerX + (entry.x - playerX);
       const screenY = centerY + (entry.y - playerY);
 
+      ctx.save();
+      // Counter-rotate around the text position so it stays upright
+      if (worldRotation) {
+        ctx.translate(screenX, screenY);
+        ctx.rotate(-worldRotation);
+        ctx.translate(-screenX, -screenY);
+      }
+
       ctx.globalAlpha = alpha;
       ctx.shadowColor = entry.color;
       ctx.shadowBlur = 5;
       ctx.fillStyle = entry.color;
       ctx.fillText(entry.text, screenX, screenY);
+      ctx.restore();
     }
 
     ctx.restore();

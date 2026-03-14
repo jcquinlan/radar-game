@@ -8,6 +8,8 @@ describe('Entity factories', () => {
     expect(r.y).toBe(200);
     expect(r.type).toBe('resource');
     expect(r.active).toBe(true);
+    expect(r.visible).toBe(true);
+    expect(r.pingedThisWave).toBe(false);
     expect(r.energyValue).toBeGreaterThan(0);
   });
 
@@ -15,6 +17,8 @@ describe('Entity factories', () => {
     const e = createEnemy(50, 75, 'scout');
     expect(e.type).toBe('enemy');
     expect(e.subtype).toBe('scout');
+    expect(e.visible).toBe(false);
+    expect(e.pingedThisWave).toBe(false);
     expect(e.speed).toBeGreaterThan(50); // scouts are fast
     expect(e.health).toBeLessThan(30); // scouts are fragile
   });
@@ -38,6 +42,8 @@ describe('Entity factories', () => {
     expect(a.type).toBe('ally');
     expect(a.subtype).toBe('healer');
     expect(a.active).toBe(true);
+    expect(a.visible).toBe(true);
+    expect(a.pingedThisWave).toBe(false);
     expect(a.healAmount).toBeGreaterThan(0);
     expect(a.cooldown).toBeGreaterThan(0);
   });
