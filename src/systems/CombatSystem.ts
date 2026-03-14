@@ -18,21 +18,23 @@ export class CombatSystem {
       const enemy = entity as Enemy;
       const dx = player.x - enemy.x;
       const dy = player.y - enemy.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const distSq = dx * dx + dy * dy;
 
       // Chase the player if within range (scouts and brutes)
       // Stop at standoff distance instead of stacking on top of the player
       const standoffDist = enemy.subtype === 'brute' ? 20 : 25;
       const enemyAccel = enemy.speed * enemy.friction;
-      const inChaseRange = dist < enemy.chaseRange;
+      const inChaseRange = distSq < enemy.chaseRange * enemy.chaseRange;
 
-      if (enemy.subtype !== 'ranged' && inChaseRange && dist > standoffDist) {
+      if (enemy.subtype !== 'ranged' && inChaseRange && distSq > standoffDist * standoffDist) {
+        const dist = Math.sqrt(distSq);
         enemy.vx += (dx / dist) * enemyAccel * dt;
         enemy.vy += (dy / dist) * enemyAccel * dt;
       }
 
       // Ranged enemies: maintain distance and fire
       if (enemy.subtype === 'ranged' && inChaseRange) {
+        const dist = Math.sqrt(distSq);
         // Back away if too close
         if (dist < 100 && dist > 0) {
           enemy.vx -= (dx / dist) * enemyAccel * dt;
@@ -77,8 +79,8 @@ export class CombatSystem {
       // Recalculate distance after movement
       const postDx = player.x - enemy.x;
       const postDy = player.y - enemy.y;
-      const postDist = Math.sqrt(postDx * postDx + postDy * postDy);
-      if (enemy.subtype !== 'ranged' && postDist < 30) {
+      const postDistSq = postDx * postDx + postDy * postDy;
+      if (enemy.subtype !== 'ranged' && postDistSq < 30 * 30) {
         player.takeDamage(enemy.damage * dt);
       }
     }
