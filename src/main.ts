@@ -407,6 +407,68 @@ const loop = new GameLoop({
     // Motion trails (rendered behind blips)
     motionTrail.render(ctx, player.x, player.y, cx, cy);
 
+    // Tow ropes and towed item blips
+    const towedItems = towRopeSystem.getTowedItems();
+    if (towedItems.length > 0) {
+      ctx.save();
+      for (let i = 0; i < towedItems.length; i++) {
+        const item = towedItems[i];
+        const res = item.resource;
+        const itemSX = cx + (res.x - player.x);
+        const itemSY = cy + (res.y - player.y);
+
+        // Anchor: player for first, previous item for rest
+        let anchorSX: number, anchorSY: number;
+        let anchorVx: number, anchorVy: number;
+        if (i === 0) {
+          anchorSX = cx;
+          anchorSY = cy;
+          anchorVx = player.vx;
+          anchorVy = player.vy;
+        } else {
+          const prev = towedItems[i - 1].resource;
+          anchorSX = cx + (prev.x - player.x);
+          anchorSY = cy + (prev.y - player.y);
+          anchorVx = towedItems[i - 1].vx;
+          anchorVy = towedItems[i - 1].vy;
+        }
+
+        // Fade-out alpha
+        const alpha = item.fadeOut !== null ? Math.max(0, item.fadeOut / 0.3) : 1;
+        ctx.globalAlpha = alpha;
+
+        // Bezier rope: control point offset perpendicular to line by velocity delta
+        const midX = (anchorSX + itemSX) / 2;
+        const midY = (anchorSY + itemSY) / 2;
+        const dvx = anchorVx - item.vx;
+        const dvy = anchorVy - item.vy;
+        // Perpendicular offset (rotate velocity delta 90 degrees)
+        const cpX = midX + (-dvy) * 0.3;
+        const cpY = midY + dvx * 0.3;
+
+        // Draw rope
+        ctx.beginPath();
+        ctx.moveTo(anchorSX, anchorSY);
+        ctx.quadraticCurveTo(cpX, cpY, itemSX, itemSY);
+        ctx.strokeStyle = `rgba(0, 255, 65, ${0.6 * alpha})`;
+        ctx.lineWidth = 1.5;
+        ctx.shadowColor = '#00ff41';
+        ctx.shadowBlur = 4;
+        ctx.stroke();
+
+        // Draw towed item blip
+        ctx.beginPath();
+        ctx.arc(itemSX, itemSY, 3, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(0, 255, 65, ${alpha})`;
+        ctx.shadowColor = '#00ff41';
+        ctx.shadowBlur = 6;
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+
     // Entity blips (positions are rotated by the canvas transform)
     const worldRot = -player.heading - Math.PI / 2;
     blipRenderer.renderBlips(
