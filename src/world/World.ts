@@ -10,7 +10,7 @@ const SPAWN_RADIUS_MAX = 800;
 const CHUNK_SIZE = 400;
 const RESOURCES_PER_CHUNK = 3;
 const ENEMIES_PER_CHUNK = 1;
-const ALLIES_PER_CHUNK = 0.3; // ~1 per 3 chunks
+const ALLIES_PER_CHUNK = 0.6; // ~1 per 2 chunks
 
 export class World {
   entities: GameEntity[] = [];

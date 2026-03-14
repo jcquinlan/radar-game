@@ -7,6 +7,7 @@ import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
 import { SweepSystem } from './systems/SweepSystem';
 import { CombatSystem } from './systems/CombatSystem';
+import { Ally } from './entities/Entity';
 import { UpgradeSystem } from './systems/UpgradeSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
@@ -92,6 +93,21 @@ const loop = new GameLoop({
     // Visual effects from sweep interactions
     sweepEffects.addEvents(events, player.x, player.y);
     sweepEffects.update(dt);
+
+    // Shield buff countdown
+    player.updateShield(dt);
+
+    // Beacon passive energy generation
+    for (const entity of world.entities) {
+      if (!entity.active || entity.type !== 'ally') continue;
+      const ally = entity as Ally;
+      if (ally.subtype !== 'beacon') continue;
+      const dx = ally.x - player.x;
+      const dy = ally.y - player.y;
+      if (dx * dx + dy * dy < ally.beaconRange * ally.beaconRange) {
+        player.addEnergy(ally.energyPerSecond * dt);
+      }
+    }
 
     // Combat
     const alive = combatSystem.update(world.entities, player, dt);

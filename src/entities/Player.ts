@@ -11,7 +11,22 @@ export class Player {
   maxHealth: number;
   energy: number;
   speed: number;
+  baseSpeed: number;
   sweepDamage: number;
+  armor: number;
+  magnetRange: number;
+
+  // Shield buff
+  shieldActive: boolean;
+  shieldReduction: number;
+  shieldTimeRemaining: number;
+
+  // Stats tracking
+  score: number;
+  kills: number;
+  totalEnergyCollected: number;
+  distanceTraveled: number;
+  survivalTime: number;
 
   constructor(x = 0, y = 0) {
     this.x = x;
@@ -19,12 +34,44 @@ export class Player {
     this.maxHealth = 100;
     this.health = this.maxHealth;
     this.energy = 0;
-    this.speed = 80; // pixels per second — slow, lumbering feel
+    this.baseSpeed = 80;
+    this.speed = 80;
     this.sweepDamage = 10;
+    this.armor = 0;
+    this.magnetRange = 0;
+    this.shieldActive = false;
+    this.shieldReduction = 0;
+    this.shieldTimeRemaining = 0;
+    this.score = 0;
+    this.kills = 0;
+    this.totalEnergyCollected = 0;
+    this.distanceTraveled = 0;
+    this.survivalTime = 0;
   }
 
   takeDamage(amount: number): void {
-    this.health = Math.max(0, this.health - amount);
+    let effectiveAmount = Math.max(0, amount - this.armor);
+    if (this.shieldActive) {
+      effectiveAmount *= (1 - this.shieldReduction);
+    }
+    this.health = Math.max(0, this.health - effectiveAmount);
+  }
+
+  applyShield(reduction: number, duration: number): void {
+    this.shieldActive = true;
+    this.shieldReduction = reduction;
+    this.shieldTimeRemaining = duration;
+  }
+
+  updateShield(dt: number): void {
+    if (this.shieldActive) {
+      this.shieldTimeRemaining -= dt;
+      if (this.shieldTimeRemaining <= 0) {
+        this.shieldActive = false;
+        this.shieldReduction = 0;
+        this.shieldTimeRemaining = 0;
+      }
+    }
   }
 
   heal(amount: number): void {

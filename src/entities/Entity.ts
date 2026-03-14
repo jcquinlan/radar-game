@@ -24,11 +24,20 @@ export interface Enemy extends Entity {
   energyDrop: number;
 }
 
+export type AllySubtype = 'healer' | 'shield' | 'beacon';
+
 export interface Ally extends Entity {
   type: 'ally';
+  subtype: AllySubtype;
   healAmount: number;
   cooldown: number;
   lastHealTime: number;
+  /** Shield: damage reduction multiplier (0-1), duration in seconds */
+  shieldReduction: number;
+  shieldDuration: number;
+  /** Beacon: energy per second when player is in range */
+  energyPerSecond: number;
+  beaconRange: number;
 }
 
 export type GameEntity = Resource | Enemy | Ally;
@@ -61,15 +70,21 @@ export function createEnemy(x: number, y: number): Enemy {
   };
 }
 
-export function createAlly(x: number, y: number): Ally {
+export function createAlly(x: number, y: number, subtype?: AllySubtype): Ally {
+  const st = subtype ?? (['healer', 'shield', 'beacon'][Math.floor(Math.random() * 3)] as AllySubtype);
   return {
     x,
     y,
     type: 'ally',
+    subtype: st,
     active: true,
     sweptThisRotation: false,
-    healAmount: 5 + Math.floor(Math.random() * 10),
-    cooldown: 3, // seconds between heals
+    healAmount: st === 'healer' ? 8 + Math.floor(Math.random() * 8) : 0,
+    cooldown: st === 'healer' ? 3 : st === 'shield' ? 8 : 0,
     lastHealTime: -Infinity,
+    shieldReduction: st === 'shield' ? 0.5 : 0,
+    shieldDuration: st === 'shield' ? 5 : 0,
+    energyPerSecond: st === 'beacon' ? 2 : 0,
+    beaconRange: st === 'beacon' ? 150 : 0,
   };
 }

@@ -22,13 +22,31 @@ describe('Entity factories', () => {
     expect(e.speed).toBeGreaterThan(0);
   });
 
-  it('creates an ally at the given position', () => {
-    const a = createAlly(300, 400);
-    expect(a.x).toBe(300);
-    expect(a.y).toBe(400);
+  it('creates a healer ally with heal properties', () => {
+    const a = createAlly(300, 400, 'healer');
     expect(a.type).toBe('ally');
+    expect(a.subtype).toBe('healer');
     expect(a.active).toBe(true);
     expect(a.healAmount).toBeGreaterThan(0);
     expect(a.cooldown).toBeGreaterThan(0);
+  });
+
+  it('creates a shield ally with shield properties', () => {
+    const a = createAlly(300, 400, 'shield');
+    expect(a.subtype).toBe('shield');
+    expect(a.shieldReduction).toBeGreaterThan(0);
+    expect(a.shieldDuration).toBeGreaterThan(0);
+  });
+
+  it('creates a beacon ally with energy properties', () => {
+    const a = createAlly(300, 400, 'beacon');
+    expect(a.subtype).toBe('beacon');
+    expect(a.energyPerSecond).toBeGreaterThan(0);
+    expect(a.beaconRange).toBeGreaterThan(0);
+  });
+
+  it('creates a random ally subtype when none specified', () => {
+    const a = createAlly(300, 400);
+    expect(['healer', 'shield', 'beacon']).toContain(a.subtype);
   });
 });

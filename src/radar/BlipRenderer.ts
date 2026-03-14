@@ -1,9 +1,15 @@
-import { GameEntity } from '../entities/Entity';
+import { GameEntity, Ally } from '../entities/Entity';
 
 const BLIP_COLORS = {
   resource: '#00ff41',
   enemy: '#ff4141',
-  ally: '#4141ff',
+  ally: '#4488ff',
+};
+
+const ALLY_SUBTYPE_COLORS = {
+  healer: '#4488ff',
+  shield: '#00ffff',
+  beacon: '#88ff41',
 };
 
 const BLIP_SIZES = {
@@ -43,8 +49,13 @@ export class BlipRenderer {
       const screenX = radarCenterX + relX;
       const screenY = radarCenterY + relY;
 
-      const color = BLIP_COLORS[entity.type];
+      let color = BLIP_COLORS[entity.type];
       const size = BLIP_SIZES[entity.type];
+
+      // Ally subtype colors
+      if (entity.type === 'ally') {
+        color = ALLY_SUBTYPE_COLORS[(entity as Ally).subtype] ?? color;
+      }
 
       ctx.save();
 
@@ -52,10 +63,33 @@ export class BlipRenderer {
       ctx.shadowColor = color;
       ctx.shadowBlur = 8;
 
-      // Enemy pulsing effect
       let currentSize = size;
+
+      // Enemy pulsing effect
       if (entity.type === 'enemy') {
         currentSize = size + Math.sin(this.time * 4) * 1.5;
+      }
+
+      // Ally gentle pulsing aura
+      if (entity.type === 'ally') {
+        const auraSize = size + 6 + Math.sin(this.time * 2) * 3;
+        ctx.globalAlpha = 0.15 + Math.sin(this.time * 2) * 0.05;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, auraSize, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Beacon range indicator
+        if ((entity as Ally).subtype === 'beacon') {
+          ctx.globalAlpha = 0.06;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, (entity as Ally).beaconRange, 0, Math.PI * 2);
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
       }
 
       ctx.beginPath();
@@ -63,17 +97,20 @@ export class BlipRenderer {
       ctx.fillStyle = color;
       ctx.fill();
 
-      // Resolution upgrade: show type-specific shapes at level 2+
+      // Resolution upgrade: show type-specific labels at level 2+
       if (resolutionLevel >= 2) {
         ctx.font = '10px monospace';
         ctx.fillStyle = color;
         ctx.shadowBlur = 3;
-        const label =
-          entity.type === 'resource'
-            ? 'E'
-            : entity.type === 'enemy'
-              ? '!'
-              : '+';
+        let label: string;
+        if (entity.type === 'resource') {
+          label = 'E';
+        } else if (entity.type === 'enemy') {
+          label = '!';
+        } else {
+          const ally = entity as Ally;
+          label = ally.subtype === 'healer' ? '+' : ally.subtype === 'shield' ? 'S' : 'B';
+        }
         ctx.fillText(label, screenX + size + 2, screenY + 3);
       }
 

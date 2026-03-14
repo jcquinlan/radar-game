@@ -47,15 +47,24 @@ describe('SweepSystem', () => {
     expect(player.energy).toBe(20);
   });
 
-  it('heals the player when the sweep passes over an ally', () => {
+  it('heals the player when the sweep passes over a healer ally', () => {
     player.takeDamage(30);
-    const ally = createAlly(100, 0);
+    const ally = createAlly(100, 0, 'healer');
     ally.healAmount = 10;
 
     const events = sweep.update(0.1, [ally], player, 300, 0.016);
     expect(events).toHaveLength(1);
     expect(events[0].type).toBe('heal');
     expect(player.health).toBe(80); // 70 + 10
+  });
+
+  it('applies shield when the sweep passes over a shield ally', () => {
+    const ally = createAlly(100, 0, 'shield');
+
+    const events = sweep.update(0.1, [ally], player, 300, 0.016);
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('shield');
+    expect(player.shieldActive).toBe(true);
   });
 
   it('does not interact with the same entity twice per rotation', () => {
@@ -83,7 +92,7 @@ describe('SweepSystem', () => {
 
   it('respects ally heal cooldown', () => {
     player.takeDamage(50);
-    const ally = createAlly(100, 0);
+    const ally = createAlly(100, 0, 'healer');
     ally.healAmount = 10;
     ally.cooldown = 3;
 

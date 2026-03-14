@@ -3,7 +3,7 @@ import { Player } from '../entities/Player';
 
 export interface SweepEvent {
   entity: GameEntity;
-  type: 'collect' | 'damage' | 'heal';
+  type: 'collect' | 'damage' | 'heal' | 'shield';
   value: number;
 }
 
@@ -104,11 +104,25 @@ export class SweepSystem {
   }
 
   private healFromAlly(ally: Ally, player: Player): SweepEvent | null {
-    if (this.gameTime - ally.lastHealTime < ally.cooldown) {
+    if (ally.cooldown > 0 && this.gameTime - ally.lastHealTime < ally.cooldown) {
       return null; // On cooldown
     }
     ally.lastHealTime = this.gameTime;
-    player.heal(ally.healAmount);
-    return { entity: ally, type: 'heal', value: ally.healAmount };
+
+    switch (ally.subtype) {
+      case 'healer':
+        player.heal(ally.healAmount);
+        return { entity: ally, type: 'heal', value: ally.healAmount };
+      case 'shield':
+        player.applyShield(ally.shieldReduction, ally.shieldDuration);
+        return { entity: ally, type: 'shield', value: ally.shieldDuration };
+      case 'beacon':
+        // Beacons work passively, but sweeping gives a small energy bonus
+        player.addEnergy(5);
+        return { entity: ally, type: 'collect', value: 5 };
+      default:
+        player.heal(ally.healAmount);
+        return { entity: ally, type: 'heal', value: ally.healAmount };
+    }
   }
 }

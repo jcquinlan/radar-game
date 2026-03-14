@@ -8,10 +8,11 @@ interface FlashEffect {
   maxDuration: number;
 }
 
-const FLASH_COLORS = {
+const FLASH_COLORS: Record<string, string> = {
   collect: '#00ff41',
   damage: '#ff4141',
   heal: '#4488ff',
+  shield: '#00ffff',
 };
 
 const FLASH_DURATION = 0.3; // seconds

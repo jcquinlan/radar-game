@@ -10,6 +10,8 @@ describe('Player', () => {
     expect(player.maxHealth).toBe(100);
     expect(player.energy).toBe(0);
     expect(player.isAlive()).toBe(true);
+    expect(player.armor).toBe(0);
+    expect(player.magnetRange).toBe(0);
   });
 
   it('initializes at a given position', () => {
@@ -26,6 +28,29 @@ describe('Player', () => {
     player.takeDamage(200);
     expect(player.health).toBe(0);
     expect(player.isAlive()).toBe(false);
+  });
+
+  it('reduces damage taken by armor amount', () => {
+    const player = new Player();
+    player.armor = 3;
+    player.takeDamage(10);
+    expect(player.health).toBe(93); // 100 - (10-3)
+  });
+
+  it('reduces damage further when shield is active', () => {
+    const player = new Player();
+    player.applyShield(0.5, 5);
+    player.takeDamage(20);
+    expect(player.health).toBe(90); // 100 - (20 * 0.5)
+  });
+
+  it('shield expires after its duration', () => {
+    const player = new Player();
+    player.applyShield(0.5, 2);
+    expect(player.shieldActive).toBe(true);
+
+    player.updateShield(2.1);
+    expect(player.shieldActive).toBe(false);
   });
 
   it('heals without exceeding max health', () => {
