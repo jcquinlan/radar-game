@@ -191,6 +191,12 @@ window.addEventListener('keydown', (e) => {
           floatingText.add('DASH!', player.x, player.y - 25, '#ffff00');
           screenShake.trigger(2);
         }
+      } else if (ability.id === 'homing_missile') {
+        if (abilitySystem.activate('homing_missile', world.entities, addText)) {
+          abilityEffects.triggerMissileLaunch(player.x, player.y);
+          floatingText.add('MISSILE!', player.x, player.y - 25, '#ff8800');
+          screenShake.trigger(3);
+        }
       }
       break;
     }
@@ -343,6 +349,12 @@ const loop = new GameLoop({
       motionTrail.track(did, drone.x, drone.y, drone.vx, drone.vy, '#00ffff', dt);
       activeTrailIds.add(did);
     }
+    for (let i = 0; i < abilitySystem.missiles.length; i++) {
+      const missile = abilitySystem.missiles[i];
+      const mid = `m${i}`;
+      motionTrail.track(mid, missile.x, missile.y, missile.vx, missile.vy, '#ff8800', dt);
+      activeTrailIds.add(mid);
+    }
     motionTrail.prune(activeTrailIds);
 
     // Screen shake + damage flash on damage
@@ -438,6 +450,20 @@ const loop = new GameLoop({
       ctx.beginPath();
       ctx.arc(droneX, droneY, 4, 0, Math.PI * 2);
       ctx.fillStyle = '#00ffff';
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Render missiles
+    for (const missile of abilitySystem.missiles) {
+      const mx = cx + (missile.x - player.x);
+      const my = cy + (missile.y - player.y);
+      ctx.save();
+      ctx.shadowColor = '#ff8800';
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(mx, my, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#ff8800';
       ctx.fill();
       ctx.restore();
     }

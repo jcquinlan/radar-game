@@ -259,4 +259,194 @@ describe('AbilitySystem', () => {
       expect(player.vy).toBeCloseTo(dashSpeed * 0.8);
     });
   });
+
+  describe('homing missile', () => {
+    it('spawns a missile at the player position', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 100;
+      player.y = 200;
+      const enemy = createEnemy(300, 200, 'brute');
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('homing_missile', entities, () => {});
+      expect(system.missiles.length).toBe(1);
+      expect(system.missiles[0].x).toBe(100);
+      expect(system.missiles[0].y).toBe(200);
+    });
+
+    it('locks onto the nearest enemy at spawn time', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      const nearEnemy = createEnemy(100, 0, 'scout');
+      const farEnemy = createEnemy(500, 0, 'brute');
+      const entities: GameEntity[] = [nearEnemy, farEnemy];
+
+      system.activate('homing_missile', entities, () => {});
+      expect(system.missiles[0].target).toBe(nearEnemy);
+    });
+
+    it('does not spawn if no enemies exist', () => {
+      const { system } = buildAbilitySystem();
+      const result = system.activate('homing_missile', [], () => {});
+      expect(result).toBe(false);
+      expect(system.missiles.length).toBe(0);
+    });
+
+    it('launches at a semi-random vector before homing', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      player.heading = 0;
+      const enemy = createEnemy(200, 0, 'scout');
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('homing_missile', entities, () => {});
+      const missile = system.missiles[0];
+
+      // Should have non-zero velocity (launched)
+      expect(Math.sqrt(missile.vx * missile.vx + missile.vy * missile.vy)).toBeGreaterThan(0);
+      // Should be in launch phase
+      expect(missile.phase).toBe('launch');
+    });
+
+    it('transitions from launch to homing phase after launch timer expires', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      const enemy = createEnemy(500, 0, 'scout');
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('homing_missile', entities, () => {});
+      expect(system.missiles[0].phase).toBe('launch');
+
+      // Advance past launch timer (0.3s)
+      system.update(0.35, entities, () => {});
+      expect(system.missiles[0].phase).toBe('homing');
+    });
+
+    it('steers toward target during homing phase', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      const enemy = createEnemy(500, 0, 'scout');
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('homing_missile', entities, () => {});
+      // Skip past launch phase
+      system.update(0.35, entities, () => {});
+
+      const missileBefore = system.missiles[0].x;
+      system.update(0.5, entities, () => {});
+
+      // Missile should have moved toward enemy (positive x direction)
+      expect(system.missiles[0].x).toBeGreaterThan(missileBefore);
+    });
+
+    it('goes ballistic when target dies mid-flight', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      const enemy = createEnemy(500, 0, 'scout');
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('homing_missile', entities, () => {});
+      system.update(0.35, entities, () => {}); // Enter homing phase
+
+      // Kill the target
+      enemy.active = false;
+
+      system.update(0.1, entities, () => {});
+
+      // Missile should still be active (goes ballistic, doesn't self-destruct)
+      expect(system.missiles[0].active).toBe(true);
+      // Velocity should decay (friction) but missile keeps moving
+      expect(Math.abs(system.missiles[0].vx) + Math.abs(system.missiles[0].vy)).toBeGreaterThan(0);
+    });
+
+    it('deals damage on collision with an enemy', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      const enemy = createEnemy(10, 0, 'brute'); // Very close
+      enemy.health = 80;
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('homing_missile', entities, () => {});
+      // Move missile to enemy position
+      system.missiles[0].x = enemy.x;
+      system.missiles[0].y = enemy.y;
+
+      system.update(0.016, entities, () => {});
+
+      // Enemy should take damage
+      expect(enemy.health).toBeLessThan(80);
+      // Missile should be deactivated after hit
+      expect(system.missiles.length).toBe(0);
+    });
+
+    it('awards score and energy on kill', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      const enemy = createEnemy(10, 0, 'scout');
+      enemy.health = 1; // Nearly dead
+      enemy.energyDrop = 5;
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('homing_missile', entities, () => {});
+      system.missiles[0].x = enemy.x;
+      system.missiles[0].y = enemy.y;
+
+      system.update(0.016, entities, () => {});
+
+      expect(enemy.active).toBe(false);
+      expect(player.kills).toBe(1);
+      expect(player.score).toBe(50);
+      expect(player.energy).toBe(5);
+    });
+
+    it('expires after lifetime runs out', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      const enemy = createEnemy(5000, 0, 'brute'); // Very far away
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('homing_missile', entities, () => {});
+      expect(system.missiles.length).toBe(1);
+
+      // Advance past lifetime (6s)
+      system.update(7, entities, () => {});
+      expect(system.missiles.length).toBe(0);
+    });
+
+    it('has 8 second cooldown', () => {
+      const { system } = buildAbilitySystem();
+      const ability = system.getAbility('homing_missile')!;
+      expect(ability.cooldown).toBe(8);
+    });
+
+    it('generates floating text on hit', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      const enemy = createEnemy(10, 0, 'brute');
+      enemy.health = 80;
+      const entities: GameEntity[] = [enemy];
+      const texts: Array<{ text: string; color: string }> = [];
+
+      system.activate('homing_missile', entities, (text, _x, _y, color) => {
+        texts.push({ text, color });
+      });
+      system.missiles[0].x = enemy.x;
+      system.missiles[0].y = enemy.y;
+
+      system.update(0.016, entities, (text, _x, _y, color) => {
+        texts.push({ text, color });
+      });
+
+      expect(texts.some(t => t.text === '-35')).toBe(true);
+    });
+  });
 });
