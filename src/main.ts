@@ -8,7 +8,7 @@ import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
 import { PingSystem } from './systems/PingSystem';
 import { CombatSystem } from './systems/CombatSystem';
-import { Ally, Resource } from './entities/Entity';
+import { Ally, Enemy, Resource } from './entities/Entity';
 import { UpgradeSystem } from './systems/UpgradeSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
@@ -20,9 +20,21 @@ import { AbilitySystem } from './systems/AbilitySystem';
 import { AbilityEffects } from './radar/AbilityEffects';
 import { AbilityBar } from './ui/AbilityBar';
 import { KeyRemapScreen } from './ui/KeyRemapScreen';
+import { PauseMenu } from './ui/PauseMenu';
+import { MotionTrail } from './radar/MotionTrail';
+import { ShaderPipeline } from './rendering/ShaderPipeline';
+import { CRTEffect } from './rendering/effects/CRTEffect';
 
 const canvas = createCanvas('game-canvas');
 const ctx = canvas.getContext('2d')!;
+
+// Shader pipeline and pause menu (persist across game restarts)
+const shaderPipeline = ShaderPipeline.create(canvas);
+if (shaderPipeline) {
+  shaderPipeline.addEffect(new CRTEffect());
+}
+const pauseMenu = new PauseMenu();
+let paused = false;
 
 let radar: RadarDisplay;
 let blipRenderer: BlipRenderer;
@@ -43,6 +55,7 @@ let abilitySystem: AbilitySystem;
 let abilityEffects: AbilityEffects;
 let abilityBar: AbilityBar;
 let keyRemapScreen: KeyRemapScreen;
+let motionTrail: MotionTrail;
 let resolutionLevel: number;
 let gameOver: boolean;
 let prevHealth: number;
@@ -74,6 +87,7 @@ function init() {
   abilitySystem = new AbilitySystem(player);
   abilityEffects = new AbilityEffects();
   abilityBar = new AbilityBar();
+  motionTrail = new MotionTrail();
   keyRemapScreen = new KeyRemapScreen();
   keyRemapScreen.addExtraBinding({
     id: 'upgrades',
@@ -83,16 +97,63 @@ function init() {
   });
   keyRemapScreen.load(abilitySystem.abilities);
 
+  // Disable Canvas 2D scanlines when shader pipeline is active
+  radar.scanlineEnabled = !shaderPipeline || !shaderPipeline.enabled;
+
   input.attach();
   keyRemapScreen.attach(canvas, abilitySystem.abilities);
   upgradePanel.attach(canvas, upgradeSystem, player);
   world.updateSpawning(player.x, player.y);
 }
 
+function togglePause() {
+  if (paused) {
+    paused = false;
+    pauseMenu.close(canvas);
+  } else {
+    paused = true;
+    // Close other panels when pausing
+    if (keyRemapScreen && keyRemapScreen.isVisible()) keyRemapScreen.toggle();
+    pauseMenu.open(canvas, {
+      onResume: () => togglePause(),
+      onRestart: () => {
+        paused = false;
+        pauseMenu.close(canvas);
+        input.detach();
+        upgradePanel.detach(canvas);
+        keyRemapScreen.detach(canvas);
+        init();
+      },
+      onToggleShaders: () => {
+        if (shaderPipeline) {
+          shaderPipeline.setEnabled(!shaderPipeline.enabled);
+          radar.scanlineEnabled = !shaderPipeline.enabled;
+        }
+      },
+      onOpenKeybinds: () => {
+        paused = false;
+        pauseMenu.close(canvas);
+        keyRemapScreen.toggle();
+      },
+      isShaderEnabled: () => shaderPipeline ? shaderPipeline.enabled : false,
+    });
+  }
+}
+
 // Toggle panels (registered once, outside init)
 window.addEventListener('keydown', (e) => {
   // Key remap screen captures keys when listening — skip other handlers
   if (keyRemapScreen && keyRemapScreen.isListening()) return;
+
+  // Escape toggles pause menu
+  if (e.key === 'Escape') {
+    if (gameOver) return;
+    togglePause();
+    return;
+  }
+
+  // Don't process other keys while paused
+  if (paused) return;
 
   const upgradesBinding = keyRemapScreen.getExtraBinding('upgrades');
   const upgradesKey = upgradesBinding ? upgradesBinding.key : 'e';
@@ -140,7 +201,7 @@ init();
 
 const loop = new GameLoop({
   update(dt) {
-    if (gameOver) return;
+    if (gameOver || paused) return;
 
     // Tank-style movement: A/D turn, W/S thrust along heading
     const { turn, thrust } = input.getTankInput();
@@ -257,6 +318,32 @@ const loop = new GameLoop({
     // Combat
     const alive = combatSystem.update(world.entities, player, dt);
 
+    // Motion trails — track fast-moving entities
+    motionTrail.track('player', player.x, player.y, player.vx, player.vy, '#00ff41', dt);
+    const activeTrailIds = new Set(['player']);
+    for (let i = 0; i < world.entities.length; i++) {
+      const entity = world.entities[i];
+      if (!entity.active || entity.type !== 'enemy') continue;
+      const enemy = entity as Enemy;
+      const eid = `e${i}`;
+      motionTrail.track(eid, enemy.x, enemy.y, enemy.vx, enemy.vy, '#ff4141', dt);
+      activeTrailIds.add(eid);
+    }
+    for (let i = 0; i < combatSystem.projectiles.length; i++) {
+      const p = combatSystem.projectiles[i];
+      if (!p.active) continue;
+      const pid = `p${i}`;
+      motionTrail.track(pid, p.x, p.y, p.vx, p.vy, '#ff6641', dt);
+      activeTrailIds.add(pid);
+    }
+    for (let i = 0; i < abilitySystem.drones.length; i++) {
+      const drone = abilitySystem.drones[i];
+      const did = `d${i}`;
+      motionTrail.track(did, drone.x, drone.y, drone.vx, drone.vy, '#00ffff', dt);
+      activeTrailIds.add(did);
+    }
+    motionTrail.prune(activeTrailIds);
+
     // Screen shake + damage flash on damage
     if (player.health < prevHealth) {
       const dmgTaken = prevHealth - player.health;
@@ -304,6 +391,9 @@ const loop = new GameLoop({
     ctx.translate(-cx, -cy);
 
     ambientParticles.renderDeep(ctx, cx, cy, radar.getRadius(), player.x, player.y);
+
+    // Motion trails (rendered behind blips)
+    motionTrail.render(ctx, player.x, player.y, cx, cy);
 
     // Entity blips (positions are rotated by the canvas transform)
     const worldRot = -player.heading - Math.PI / 2;
@@ -408,6 +498,14 @@ const loop = new GameLoop({
 
     // Key remap screen (on top of everything)
     keyRemapScreen.render(ctx, abilitySystem.abilities, canvas.width, canvas.height);
+
+    // Pause menu (on top of everything except shader)
+    pauseMenu.render(ctx, canvas.width, canvas.height);
+
+    // Post-processing shader pass (reads the completed 2D canvas as a texture)
+    if (shaderPipeline) {
+      shaderPipeline.render(performance.now() / 1000);
+    }
   },
 });
 

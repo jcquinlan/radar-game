@@ -1,12 +1,5 @@
 import type { Ability } from '../systems/AbilitySystem';
 
-const ICON_SYMBOLS: Record<string, string> = {
-  damage_blast: 'B',
-  heal_over_time: 'H',
-  helper_drone: 'D',
-  dash: 'S',
-};
-
 const ICON_COLORS: Record<string, string> = {
   damage_blast: '#ff4141',
   heal_over_time: '#00ff41',
@@ -63,26 +56,17 @@ export class AbilityBar {
       }
       ctx.strokeRect(x, y, boxSize, boxSize);
 
-      // Icon symbol
-      ctx.font = 'bold 22px monospace';
+      // Keybind — large and prominent
+      const keyLabel = ability.keybind === ' ' ? 'SPC' : ability.keybind.toUpperCase();
+      ctx.font = 'bold 24px monospace';
       ctx.fillStyle = ready || isActive ? color : '#335533';
       ctx.textAlign = 'center';
-      ctx.fillText(
-        ICON_SYMBOLS[ability.id] || '?',
-        x + boxSize / 2,
-        y + 28,
-      );
+      ctx.fillText(keyLabel, x + boxSize / 2, y + 30);
 
-      // Ability name (small)
+      // Ability name (small, below keybind)
       ctx.font = '9px monospace';
       ctx.fillStyle = '#557755';
-      ctx.fillText(ability.name, x + boxSize / 2, y + 42);
-
-      // Keybind
-      ctx.font = 'bold 11px monospace';
-      ctx.fillStyle = ready ? '#00ff41' : '#335533';
-      const keyLabel = ability.keybind === ' ' ? 'SPC' : ability.keybind.toUpperCase();
-      ctx.fillText(keyLabel, x + boxSize / 2, y + boxSize - 6);
+      ctx.fillText(ability.name, x + boxSize / 2, y + 44);
 
       // Status text
       if (!ready && !isActive) {
@@ -91,7 +75,7 @@ export class AbilityBar {
         ctx.fillText(
           `${Math.ceil(ability.cooldownRemaining)}s`,
           x + boxSize / 2,
-          y + boxSize / 2 + 20,
+          y + boxSize - 8,
         );
       } else if (isActive) {
         ctx.font = 'bold 10px monospace';
@@ -99,7 +83,7 @@ export class AbilityBar {
         ctx.fillText(
           `${Math.ceil(ability.durationRemaining)}s`,
           x + boxSize / 2,
-          y + boxSize / 2 + 20,
+          y + boxSize - 8,
         );
       }
     }
