@@ -45,14 +45,15 @@ export function createResource(x: number, y: number): Resource {
 }
 
 export function createEnemy(x: number, y: number): Enemy {
+  const health = 20 + Math.floor(Math.random() * 30);
   return {
     x,
     y,
     type: 'enemy',
     active: true,
     sweptThisRotation: false,
-    health: 20 + Math.floor(Math.random() * 30),
-    maxHealth: 50,
+    health,
+    maxHealth: health,
     damage: 5 + Math.floor(Math.random() * 5),
     speed: 40 + Math.random() * 40,
     chaseRange: 250,

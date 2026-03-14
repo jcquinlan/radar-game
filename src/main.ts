@@ -53,14 +53,14 @@ function init() {
   input.attach();
   upgradePanel.attach(canvas, upgradeSystem, player);
   world.updateSpawning(player.x, player.y);
-
-  // Toggle upgrade panel with E key
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'e' || e.key === 'E') {
-      upgradePanel.toggle();
-    }
-  });
 }
+
+// Toggle upgrade panel with E key (registered once, outside init)
+window.addEventListener('keydown', (e) => {
+  if ((e.key === 'e' || e.key === 'E') && !gameOver) {
+    upgradePanel.toggle();
+  }
+});
 
 init();
 
