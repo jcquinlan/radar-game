@@ -21,7 +21,9 @@ export class CombatSystem {
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       // Chase the player if within range (scouts and brutes)
-      if (enemy.subtype !== 'ranged' && dist < enemy.chaseRange && dist > 0) {
+      // Stop at standoff distance instead of stacking on top of the player
+      const standoffDist = enemy.subtype === 'brute' ? 20 : 25;
+      if (enemy.subtype !== 'ranged' && dist < enemy.chaseRange && dist > standoffDist) {
         const moveX = (dx / dist) * enemy.speed * dt;
         const moveY = (dy / dist) * enemy.speed * dt;
         enemy.x += moveX;
@@ -51,8 +53,8 @@ export class CombatSystem {
         }
       }
 
-      // Contact damage (scouts and brutes only)
-      if (enemy.subtype !== 'ranged' && dist < 15) {
+      // Contact damage (scouts and brutes only) — range matches standoff distance
+      if (enemy.subtype !== 'ranged' && dist < 30) {
         player.takeDamage(enemy.damage * dt);
       }
     }

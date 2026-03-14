@@ -83,4 +83,26 @@ describe('CombatSystem', () => {
     combat.update([], player, 0.2);
     expect(combat.projectiles).toHaveLength(0);
   });
+
+  it('melee enemies stop chasing when within standoff distance', () => {
+    // Scout at 20px — within standoff range, should not move closer
+    const enemy = createEnemy(20, 0, 'scout');
+    const initialX = enemy.x;
+    combat.update([enemy], player, 0.1);
+    // Should not have moved closer to player
+    expect(enemy.x).toBeGreaterThanOrEqual(initialX);
+  });
+
+  it('brute enemies stop chasing when within standoff distance', () => {
+    const enemy = createEnemy(15, 0, 'brute');
+    const initialX = enemy.x;
+    combat.update([enemy], player, 0.1);
+    expect(enemy.x).toBeGreaterThanOrEqual(initialX);
+  });
+
+  it('melee enemies still deal contact damage at standoff distance', () => {
+    const enemy = createEnemy(20, 0, 'scout');
+    combat.update([enemy], player, 1);
+    expect(player.health).toBeLessThan(player.maxHealth);
+  });
 });
