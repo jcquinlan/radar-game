@@ -26,7 +26,7 @@ describe('HUD', () => {
     const ctx = createMockCtx();
     const player = new Player();
 
-    expect(() => hud.render(ctx, player, 800)).not.toThrow();
+    expect(() => hud.render(ctx, player, 800, 600)).not.toThrow();
     expect(ctx.fillText).toHaveBeenCalled();
   });
 
@@ -37,7 +37,7 @@ describe('HUD', () => {
     player.energy = 42;
     player.score = 100;
 
-    hud.render(ctx, player, 800);
+    hud.render(ctx, player, 800, 600);
 
     const fillTextCalls = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls;
     const allText = fillTextCalls.map((c: unknown[]) => c[0] as string);

@@ -2,10 +2,25 @@ import { Player } from '../entities/Player';
 import { getThreatLevel } from '../world/World';
 
 export class HUD {
+  private fps = 0;
+  private frameCount = 0;
+  private elapsed = 0;
+
+  update(dt: number): void {
+    this.frameCount++;
+    this.elapsed += dt;
+    if (this.elapsed >= 0.5) {
+      this.fps = Math.round(this.frameCount / this.elapsed);
+      this.frameCount = 0;
+      this.elapsed = 0;
+    }
+  }
+
   render(
     ctx: CanvasRenderingContext2D,
     player: Player,
     canvasWidth: number,
+    canvasHeight: number,
   ): void {
     const padding = 20;
     const barWidth = 200;
@@ -76,6 +91,12 @@ export class HUD {
       canvasWidth - padding,
       y + 50
     );
+
+    // FPS counter (bottom left, very discreet)
+    ctx.textAlign = 'left';
+    ctx.font = '10px monospace';
+    ctx.fillStyle = 'rgba(85, 119, 85, 0.5)';
+    ctx.fillText(`${this.fps} FPS`, padding, canvasHeight - 10);
 
     ctx.restore();
   }

@@ -233,9 +233,10 @@ const loop = new GameLoop({
     // Spawn entities in new areas
     world.updateSpawning(player.x, player.y);
 
-    // Blip + particle updates
+    // Blip + particle + HUD updates
     blipRenderer.update(dt);
     ambientParticles.update(dt);
+    hud.update(dt);
 
     // Ping system — expanding circle detection
     const events = pingSystem.update(world.entities, player, dt);
@@ -373,24 +374,24 @@ const loop = new GameLoop({
     const cx = canvas.width / 2 + screenShake.offsetX;
     const cy = canvas.height / 2 + screenShake.offsetY;
 
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = '#0a0a0a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Radar (drawn without rotation — rings/crosshair are fixed)
     radar.render(ctx, cx, cy);
 
-    // Rotated world layer — everything inside the radar rotates with player heading
+    // Rotated world layer — full screen visibility, no circular clip
     ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, radar.getRadius(), 0, Math.PI * 2);
-    ctx.clip();
 
     // Rotate world around center by negative heading (world rotates opposite to player turn)
     ctx.translate(cx, cy);
     ctx.rotate(-player.heading - Math.PI / 2); // Offset so heading=0 (up) maps to screen-up
     ctx.translate(-cx, -cy);
 
-    ambientParticles.renderDeep(ctx, cx, cy, radar.getRadius(), player.x, player.y);
+    // View radius covers the full screen (corner-to-corner distance)
+    const viewRadius = Math.sqrt(canvas.width * canvas.width + canvas.height * canvas.height) / 2;
+
+    ambientParticles.renderDeep(ctx, cx, cy, viewRadius, player.x, player.y);
 
     // Motion trails (rendered behind blips)
     motionTrail.render(ctx, player.x, player.y, cx, cy);
@@ -404,7 +405,7 @@ const loop = new GameLoop({
       player.y,
       cx,
       cy,
-      radar.getRadius(),
+      viewRadius,
       resolutionLevel,
       worldRot
     );
@@ -446,8 +447,17 @@ const loop = new GameLoop({
     floatingText.render(ctx, player.x, player.y, cx, cy, worldRotation);
 
     // Foreground particles (on top of entities — closer to camera)
-    ambientParticles.renderForeground(ctx, cx, cy, radar.getRadius(), player.x, player.y);
+    ambientParticles.renderForeground(ctx, cx, cy, viewRadius, player.x, player.y);
 
+    ctx.restore();
+
+    // Subtle darkening outside the ping range ring
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, canvas.width, canvas.height);
+    ctx.arc(cx, cy, radar.getRadius(), 0, Math.PI * 2, true);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+    ctx.fill();
     ctx.restore();
 
     // Player heading indicator (fixed to screen, always points up)
@@ -467,25 +477,24 @@ const loop = new GameLoop({
     // Damage flash vignette — red overlay that fades when player takes damage
     if (damageFlash > 0) {
       ctx.save();
-      const gradient = ctx.createRadialGradient(cx, cy, radar.getRadius() * 0.5, cx, cy, radar.getRadius());
+      const vignetteRadius = Math.max(canvas.width, canvas.height) * 0.7;
+      const gradient = ctx.createRadialGradient(cx, cy, vignetteRadius * 0.5, cx, cy, vignetteRadius);
       gradient.addColorStop(0, 'rgba(255, 0, 0, 0)');
       gradient.addColorStop(1, `rgba(255, 0, 0, ${damageFlash})`);
-      ctx.beginPath();
-      ctx.arc(cx, cy, radar.getRadius(), 0, Math.PI * 2);
       ctx.fillStyle = gradient;
-      ctx.fill();
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Red border flash
-      ctx.beginPath();
-      ctx.arc(cx, cy, radar.getRadius(), 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(255, 65, 65, ${damageFlash * 1.5})`;
-      ctx.lineWidth = 3;
-      ctx.stroke();
+      // Red border glow at screen edges
+      const edgeGradient = ctx.createRadialGradient(cx, cy, vignetteRadius * 0.7, cx, cy, vignetteRadius);
+      edgeGradient.addColorStop(0, 'rgba(255, 65, 65, 0)');
+      edgeGradient.addColorStop(1, `rgba(255, 65, 65, ${damageFlash * 1.5})`);
+      ctx.fillStyle = edgeGradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.restore();
     }
 
     // HUD
-    hud.render(ctx, player, canvas.width);
+    hud.render(ctx, player, canvas.width, canvas.height);
 
     // Ability bar (bottom center)
     abilityBar.render(ctx, abilitySystem.abilities, canvas.width, canvas.height);

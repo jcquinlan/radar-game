@@ -8,15 +8,15 @@ interface Particle {
   size: number;
 }
 
-const DEEP_COUNT = 35;
-const FOREGROUND_COUNT = 12;
+const DEEP_COUNT = 80;
+const FOREGROUND_COUNT = 30;
 
 /** How much each layer shifts relative to player movement (0 = fixed, 1 = moves with world) */
 const DEEP_PARALLAX = 0.05;
 const FOREGROUND_PARALLAX = 0.4;
 
-/** Spawn range — particles tile across a region larger than the radar */
-const SPAWN_RANGE = 800;
+/** Spawn range — particles tile across a region larger than the viewport */
+const SPAWN_RANGE = 2400;
 
 export class AmbientParticles {
   private deep: Particle[] = [];
