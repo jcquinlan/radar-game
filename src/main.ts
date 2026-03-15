@@ -272,11 +272,8 @@ window.addEventListener('keydown', (e) => {
 
   const addText = (text: string, x: number, y: number, color: string) =>
     floatingText.add(text, x, y, color);
-  const onDeath = (x: number, y: number, srcX: number, srcY: number, color: string) => {
-    const dirX = isNaN(srcX) ? 0 : x - srcX;
-    const dirY = isNaN(srcX) ? 0 : y - srcY;
-    deathParticles.emit(x, y, dirX, dirY, color, 10);
-  };
+  const onDeath = (x: number, y: number, srcX: number, srcY: number, color: string) =>
+    deathParticles.emitFromSource(x, y, srcX, srcY, color);
 
   for (const ability of abilitySystem.abilities) {
     if (e.key === ability.keybind) {
@@ -439,12 +436,9 @@ const loop = new GameLoop({
     if (features?.abilities !== false) {
       const addText = (text: string, x: number, y: number, color: string) =>
         floatingText.add(text, x, y, color);
-      const onDeath = (x: number, y: number, srcX: number, srcY: number, color: string) => {
-        const dirX = isNaN(srcX) ? 0 : x - srcX;
-        const dirY = isNaN(srcX) ? 0 : y - srcY;
-        deathParticles.emit(x, y, dirX, dirY, color, 10);
-      };
-      abilitySystem.update(dt, world.entities, addText, onDeath);
+      const onAbilityDeath = (x: number, y: number, srcX: number, srcY: number, color: string) =>
+        deathParticles.emitFromSource(x, y, srcX, srcY, color);
+      abilitySystem.update(dt, world.entities, addText, onAbilityDeath);
 
       const hotAbility = abilitySystem.getAbility('heal_over_time');
       if (hotAbility) {
@@ -456,15 +450,10 @@ const loop = new GameLoop({
     // Combat — only if enabled
     let alive = true;
     if (features?.combat !== false) {
-      const onCombatDeath = (x: number, y: number, srcX: number, srcY: number, color: string) => {
-        const dirX = isNaN(srcX) ? 0 : x - srcX;
-        const dirY = isNaN(srcX) ? 0 : y - srcY;
-        deathParticles.emit(x, y, dirX, dirY, color, 10);
-      };
       alive = combatSystem.update(
         world.entities, player, dt, abilitySystem.isDashing(), 15,
         (text, x, y, color) => floatingText.add(text, x, y, color),
-        onCombatDeath,
+        (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color),
       );
     }
 

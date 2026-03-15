@@ -1,9 +1,9 @@
 import { Enemy, GameEntity, Projectile } from '../entities/Entity';
 import { Player } from '../entities/Player';
 import { getTheme } from '../themes/theme';
+import type { DeathCallback } from './AbilitySystem';
 
 type FloatingTextCallback = (text: string, x: number, y: number, color: string) => void;
-type DeathCallback = (x: number, y: number, sourceX: number, sourceY: number, color: string) => void;
 
 export class CombatSystem {
   projectiles: Projectile[] = [];

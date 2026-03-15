@@ -91,46 +91,30 @@ export class DeathParticles {
   ): void {
     const r2 = radius * radius;
 
-    // Group active particles by color to minimize fillStyle changes
-    // Use a Map-free approach: sort by color and batch
-    let currentColor = '';
-    let batchStarted = false;
-
-    // First pass: collect active particles sorted by color
-    // To avoid allocation, we do two passes — one per unique color found
-    const seen: string[] = [];
+    ctx.save();
     for (let i = 0; i < this.pool.length; i++) {
       const p = this.pool[i];
       if (!p.active) continue;
-      if (seen.indexOf(p.color) === -1) seen.push(p.color);
-    }
 
-    ctx.save();
-    for (let c = 0; c < seen.length; c++) {
-      currentColor = seen[c];
-      ctx.fillStyle = currentColor;
-      ctx.beginPath();
-      batchStarted = false;
+      const dx = p.x - playerX;
+      const dy = p.y - playerY;
+      if (dx * dx + dy * dy > r2) continue;
 
-      for (let i = 0; i < this.pool.length; i++) {
-        const p = this.pool[i];
-        if (!p.active || p.color !== currentColor) continue;
-
-        const sx = cx + (p.x - playerX);
-        const sy = cy + (p.y - playerY);
-
-        // Cull particles outside radar radius
-        const dx = sx - cx;
-        const dy = sy - cy;
-        if (dx * dx + dy * dy > r2) continue;
-
-        ctx.globalAlpha = p.life / p.maxLife;
-        // Can't truly batch with varying alpha, so draw individually
-        ctx.fillRect(sx - p.size / 2, sy - p.size / 2, p.size, p.size);
-        batchStarted = true;
-      }
+      ctx.globalAlpha = p.life / p.maxLife;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(cx + dx - p.size / 2, cy + dy - p.size / 2, p.size, p.size);
     }
     ctx.restore();
+  }
+
+  /**
+   * Convenience: emit particles flying away from the damage source.
+   * Pass NaN for sourceX/sourceY to get omnidirectional spread.
+   */
+  emitFromSource(x: number, y: number, sourceX: number, sourceY: number, color: string, count = 10): void {
+    const dirX = isNaN(sourceX) ? 0 : x - sourceX;
+    const dirY = isNaN(sourceY) ? 0 : y - sourceY;
+    this.emit(x, y, dirX, dirY, color, count);
   }
 
   reset(): void {
