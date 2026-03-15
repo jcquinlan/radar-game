@@ -1,5 +1,6 @@
 import { Player } from '../entities/Player';
 import { GameEntity } from '../entities/Entity';
+import { getTheme } from '../themes/theme';
 
 const SIZE = 160;
 const PADDING = 20;
@@ -7,15 +8,16 @@ const WORLD_RADIUS = 2000;
 const DOT_RADIUS = 3;
 const PLAYER_DOT_RADIUS = 4;
 const HEADING_LINE_LENGTH = 12;
-const BORDER_COLOR = 'rgba(0, 255, 65, 0.3)';
-const BG_COLOR = 'rgba(10, 10, 10, 0.7)';
 
-const ENTITY_COLORS: Record<string, string> = {
-  dropoff: '#ffdd00',
-  ally: '#4488ff',
-  enemy: '#ff4141',
-  salvage: '#ffaa00',
-};
+function getEntityColors(): Record<string, string> {
+  const t = getTheme().entities;
+  return {
+    dropoff: t.dropoff,
+    ally: t.ally,
+    enemy: t.enemy,
+    salvage: t.salvage,
+  };
+}
 
 export class Minimap {
   getSize(): number {
@@ -30,7 +32,7 @@ export class Minimap {
   }
 
   getEntityColor(entity: GameEntity): string {
-    return ENTITY_COLORS[entity.type] ?? '#ffffff';
+    return getEntityColors()[entity.type] ?? '#ffffff';
   }
 
   worldToMinimap(
@@ -74,16 +76,20 @@ export class Minimap {
     const x = PADDING;
     const y = canvasHeight - PADDING - SIZE;
 
+    const theme = getTheme();
+
     ctx.save();
 
     // Background
-    ctx.fillStyle = BG_COLOR;
+    ctx.fillStyle = theme.ui.panelBackground;
     ctx.fillRect(x, y, SIZE, SIZE);
 
     // Border
-    ctx.strokeStyle = BORDER_COLOR;
+    ctx.strokeStyle = theme.ui.borderDim;
+    ctx.globalAlpha = 0.3;
     ctx.lineWidth = 1;
     ctx.strokeRect(x, y, SIZE, SIZE);
+    ctx.globalAlpha = 1;
 
     // Clip to minimap area
     ctx.beginPath();
@@ -103,10 +109,10 @@ export class Minimap {
       ctx.fill();
     }
 
-    // Player dot (green, center)
+    // Player dot (primary, center)
     ctx.beginPath();
     ctx.arc(centerX, centerY, PLAYER_DOT_RADIUS, 0, Math.PI * 2);
-    ctx.fillStyle = '#00ff41';
+    ctx.fillStyle = theme.radar.primary;
     ctx.fill();
 
     // Heading indicator line
@@ -115,7 +121,7 @@ export class Minimap {
     ctx.beginPath();
     ctx.moveTo(centerX, centerY);
     ctx.lineTo(hx, hy);
-    ctx.strokeStyle = '#00ff41';
+    ctx.strokeStyle = theme.radar.primary;
     ctx.lineWidth = 1.5;
     ctx.stroke();
 

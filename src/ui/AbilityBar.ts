@@ -1,12 +1,5 @@
 import type { Ability } from '../systems/AbilitySystem';
-
-const ICON_COLORS: Record<string, string> = {
-  damage_blast: '#ff4141',
-  heal_over_time: '#00ff41',
-  helper_drone: '#00ffff',
-  dash: '#ffff00',
-  homing_missile: '#ff8800',
-};
+import { getTheme } from '../themes/theme';
 
 export class AbilityBar {
   render(
@@ -21,6 +14,9 @@ export class AbilityBar {
     const startX = (canvasWidth - totalWidth) / 2;
     const y = canvasHeight - boxSize - 16;
 
+    const theme = getTheme();
+    const ICON_COLORS = theme.abilities as Record<string, string>;
+
     ctx.save();
 
     for (let i = 0; i < abilities.length; i++) {
@@ -29,16 +25,16 @@ export class AbilityBar {
       const ready = ability.charges > 0;
       const isActive = ability.active && ability.durationRemaining > 0;
       const cooldownFill = ready ? 1 : 1 - ability.cooldownRemaining / ability.cooldown;
-      const color = ICON_COLORS[ability.id] || '#00ff41';
+      const color = ICON_COLORS[ability.id] || theme.ui.textPrimary;
 
       // Background
-      ctx.fillStyle = 'rgba(0, 10, 0, 0.85)';
+      ctx.fillStyle = theme.ui.panelBackground;
       ctx.fillRect(x, y, boxSize, boxSize);
 
       // Cooldown fill (fills from bottom up)
       if (!ready) {
         const fillHeight = boxSize * cooldownFill;
-        ctx.fillStyle = 'rgba(0, 255, 65, 0.08)';
+        ctx.fillStyle = theme.ui.highlightSubtle;
         ctx.fillRect(x, y + boxSize - fillHeight, boxSize, fillHeight);
       }
 
@@ -49,7 +45,7 @@ export class AbilityBar {
       }
 
       // Border
-      ctx.strokeStyle = ready ? color : '#335533';
+      ctx.strokeStyle = ready ? color : theme.ui.borderDim;
       ctx.lineWidth = ready ? 2 : 1;
       if (isActive) {
         ctx.strokeStyle = color;
@@ -60,13 +56,13 @@ export class AbilityBar {
       // Keybind — large and prominent
       const keyLabel = ability.keybind === ' ' ? 'SPC' : ability.keybind.toUpperCase();
       ctx.font = 'bold 24px monospace';
-      ctx.fillStyle = ready || isActive ? color : '#335533';
+      ctx.fillStyle = ready || isActive ? color : theme.ui.textDisabled;
       ctx.textAlign = 'center';
       ctx.fillText(keyLabel, x + boxSize / 2, y + 30);
 
       // Ability name (small, below keybind)
       ctx.font = '9px monospace';
-      ctx.fillStyle = '#557755';
+      ctx.fillStyle = theme.ui.labelText;
       ctx.fillText(ability.name, x + boxSize / 2, y + 44);
 
       // Charge indicators (for multi-charge abilities)
@@ -79,7 +75,7 @@ export class AbilityBar {
           const dotX = dotStartX + c * dotSpacing;
           ctx.beginPath();
           ctx.arc(dotX, dotY, 3, 0, Math.PI * 2);
-          ctx.fillStyle = c < ability.charges ? color : '#333333';
+          ctx.fillStyle = c < ability.charges ? color : theme.ui.barBackground;
           ctx.fill();
         }
       }
@@ -87,7 +83,7 @@ export class AbilityBar {
       // Status text
       if (!ready && !isActive) {
         ctx.font = 'bold 12px monospace';
-        ctx.fillStyle = '#663333';
+        ctx.fillStyle = theme.ui.cooldownText;
         ctx.fillText(
           `${Math.ceil(ability.cooldownRemaining)}s`,
           x + boxSize / 2,

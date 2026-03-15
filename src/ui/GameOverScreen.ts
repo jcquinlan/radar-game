@@ -1,4 +1,5 @@
 import { Player } from '../entities/Player';
+import { getTheme } from '../themes/theme';
 
 export class GameOverScreen {
   private visible = false;
@@ -53,13 +54,15 @@ export class GameOverScreen {
     const cx = canvasWidth / 2;
     const cy = canvasHeight / 2;
 
+    const theme = getTheme();
+
     ctx.save();
 
     // Game Over text
-    ctx.shadowColor = '#ff4141';
+    ctx.shadowColor = theme.entities.enemy;
     ctx.shadowBlur = 20;
     ctx.font = 'bold 48px monospace';
-    ctx.fillStyle = '#ff4141';
+    ctx.fillStyle = theme.entities.enemy;
     ctx.textAlign = 'center';
     ctx.fillText('SIGNAL LOST', cx, cy - 120);
     ctx.shadowBlur = 0;
@@ -70,14 +73,14 @@ export class GameOverScreen {
     const seconds = Math.floor(stats.survivalTime % 60);
 
     ctx.font = '18px monospace';
-    ctx.fillStyle = '#00ff41';
-    ctx.shadowColor = '#00ff41';
+    ctx.fillStyle = theme.ui.textPrimary;
+    ctx.shadowColor = theme.ui.textPrimary;
     ctx.shadowBlur = 3;
     ctx.fillText(`FINAL SCORE: ${Math.floor(stats.score)}`, cx, cy - 70);
     ctx.shadowBlur = 0;
 
     ctx.font = '14px monospace';
-    ctx.fillStyle = '#88aa88';
+    ctx.fillStyle = theme.ui.statsText;
     const lineH = 24;
     let y = cy - 40;
     ctx.fillText(`Enemies Destroyed: ${stats.kills}`, cx, y); y += lineH;
@@ -95,12 +98,12 @@ export class GameOverScreen {
     const btnY = cy + 80;
     this.buttonBounds = { x: btnX, y: btnY, width: btnWidth, height: btnHeight };
 
-    ctx.strokeStyle = '#00ff41';
+    ctx.strokeStyle = theme.ui.border;
     ctx.lineWidth = 2;
     ctx.strokeRect(btnX, btnY, btnWidth, btnHeight);
 
     ctx.font = '20px monospace';
-    ctx.fillStyle = '#00ff41';
+    ctx.fillStyle = theme.ui.textPrimary;
     ctx.fillText('RESTART', cx, btnY + 32);
 
     ctx.restore();

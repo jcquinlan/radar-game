@@ -1,3 +1,5 @@
+import { getTheme } from '../themes/theme';
+
 export interface PauseMenuCallbacks {
   onResume: () => void;
   onRestart: () => void;
@@ -74,6 +76,8 @@ export class PauseMenu {
 
     const buttons = this.getButtons();
 
+    const theme = getTheme();
+
     ctx.save();
 
     // Dim overlay
@@ -89,18 +93,18 @@ export class PauseMenu {
     const panelY = (canvasHeight - panelHeight) / 2;
 
     // Panel background
-    ctx.fillStyle = 'rgba(0, 15, 0, 0.95)';
+    ctx.fillStyle = theme.ui.panelBackgroundSolid;
     ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
 
     // Border
-    ctx.strokeStyle = '#00ff41';
+    ctx.strokeStyle = theme.ui.border;
     ctx.lineWidth = 2;
     ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
 
     // Title
     ctx.font = 'bold 20px monospace';
-    ctx.fillStyle = '#00ff41';
-    ctx.shadowColor = '#00ff41';
+    ctx.fillStyle = theme.ui.textPrimary;
+    ctx.shadowColor = theme.ui.textPrimary;
     ctx.shadowBlur = 8;
     ctx.textAlign = 'center';
     ctx.fillText('PAUSED', cx, panelY + 35);
@@ -108,7 +112,7 @@ export class PauseMenu {
 
     // Subtitle
     ctx.font = '10px monospace';
-    ctx.fillStyle = '#557755';
+    ctx.fillStyle = theme.ui.textSecondary;
     ctx.fillText('ESC to resume', cx, panelY + 52);
 
     // Buttons
@@ -121,17 +125,17 @@ export class PauseMenu {
       this.buttonRects.push({ x: bx, y: by, w: btnWidth, h: btnHeight });
 
       // Button background
-      ctx.fillStyle = 'rgba(0, 255, 65, 0.05)';
+      ctx.fillStyle = theme.ui.highlightSubtle;
       ctx.fillRect(bx, by, btnWidth, btnHeight);
 
       // Button border
-      ctx.strokeStyle = '#335533';
+      ctx.strokeStyle = theme.ui.borderDim;
       ctx.lineWidth = 1;
       ctx.strokeRect(bx, by, btnWidth, btnHeight);
 
       // Button text
       ctx.font = 'bold 14px monospace';
-      ctx.fillStyle = '#00ff41';
+      ctx.fillStyle = theme.ui.textPrimary;
       ctx.textAlign = 'center';
       const label = btn.dynamicLabel ? btn.dynamicLabel() : btn.label;
       ctx.fillText(label, cx, by + btnHeight / 2 + 5);

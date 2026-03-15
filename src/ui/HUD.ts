@@ -1,5 +1,6 @@
 import { Player } from '../entities/Player';
 import { getThreatLevel } from '../world/World';
+import { getTheme } from '../themes/theme';
 
 export class HUD {
   private fps = 0;
@@ -27,6 +28,8 @@ export class HUD {
     const barHeight = 16;
     const y = padding;
 
+    const theme = getTheme();
+
     ctx.save();
     ctx.font = '14px monospace';
 
@@ -38,20 +41,20 @@ export class HUD {
       barWidth,
       barHeight,
       player.health / player.maxHealth,
-      player.shieldActive ? '#00ffff' : '#00ff41',
+      player.shieldActive ? theme.entities.allyShield : theme.ui.textPrimary,
       `HP: ${Math.ceil(player.health)}/${player.maxHealth}${player.shieldActive ? ' [SHIELD]' : ''}`
     );
 
     // Energy counter
-    ctx.fillStyle = '#00ff41';
-    ctx.shadowColor = '#00ff41';
+    ctx.fillStyle = theme.ui.textPrimary;
+    ctx.shadowColor = theme.ui.textPrimary;
     ctx.shadowBlur = 5;
     ctx.fillText(`Energy: ${Math.floor(player.energy)}`, padding, y + barHeight + 24);
     ctx.shadowBlur = 0;
 
     // Distance from origin
     const dist = Math.floor(Math.sqrt(player.x * player.x + player.y * player.y));
-    ctx.fillStyle = '#557755';
+    ctx.fillStyle = theme.ui.textSecondary;
     ctx.fillText(`RANGE: ${dist}m`, padding, y + barHeight + 44);
 
     // Threat level
@@ -63,7 +66,7 @@ export class HUD {
     ctx.shadowBlur = 0;
 
     // Coordinates
-    ctx.fillStyle = '#335533';
+    ctx.fillStyle = theme.ui.textTertiary;
     ctx.font = '11px monospace';
     ctx.fillText(
       `POS: ${Math.floor(player.x)}, ${Math.floor(player.y)}`,
@@ -73,15 +76,15 @@ export class HUD {
 
     // Score (top right)
     ctx.font = '16px monospace';
-    ctx.fillStyle = '#00ff41';
-    ctx.shadowColor = '#00ff41';
+    ctx.fillStyle = theme.ui.textPrimary;
+    ctx.shadowColor = theme.ui.textPrimary;
     ctx.shadowBlur = 5;
     ctx.textAlign = 'right';
     ctx.fillText(`SCORE: ${Math.floor(player.score)}`, canvasWidth - padding, y + 16);
     ctx.shadowBlur = 0;
 
     ctx.font = '12px monospace';
-    ctx.fillStyle = '#557755';
+    ctx.fillStyle = theme.ui.textSecondary;
     ctx.fillText(`KILLS: ${player.kills}`, canvasWidth - padding, y + 34);
 
     const minutes = Math.floor(player.survivalTime / 60);
@@ -95,8 +98,10 @@ export class HUD {
     // FPS counter (bottom left, very discreet)
     ctx.textAlign = 'left';
     ctx.font = '10px monospace';
-    ctx.fillStyle = 'rgba(85, 119, 85, 0.5)';
+    ctx.fillStyle = theme.ui.textSecondary;
+    ctx.globalAlpha = 0.5;
     ctx.fillText(`${this.fps} FPS`, padding, canvasHeight - 10);
+    ctx.globalAlpha = 1;
 
     ctx.restore();
   }
@@ -111,7 +116,8 @@ export class HUD {
     color: string,
     label: string
   ): void {
-    ctx.fillStyle = '#1a1a1a';
+    const theme = getTheme();
+    ctx.fillStyle = theme.ui.barBackground;
     ctx.fillRect(x, y, width, height);
 
     ctx.fillStyle = color;
