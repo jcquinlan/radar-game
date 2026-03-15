@@ -104,6 +104,73 @@ describe('World', () => {
   });
 });
 
+describe('World with level config', () => {
+  it('respects maxChunks constraint', () => {
+    const world = new World();
+    world.setLevelConfig({
+      id: 'test',
+      name: 'Test',
+      description: '',
+      features: { combat: true, upgrades: true, abilities: true, salvage: true, towRope: true },
+      world: { maxChunks: 5, difficultyMultiplier: null, spawnEnemies: true, spawnAllies: true },
+      objectives: [],
+      hints: [],
+    });
+
+    // Spawning at origin would normally load up to 25 chunks (5x5 grid), but limited to 5
+    world.updateSpawning(0, 0);
+    expect(world.getChunkCount()).toBeLessThanOrEqual(5);
+
+    // Moving far should not add more chunks beyond the limit
+    world.updateSpawning(5000, 5000);
+    expect(world.getChunkCount()).toBeLessThanOrEqual(5);
+  });
+
+  it('does not spawn enemies when spawnEnemies is false', () => {
+    // Run multiple times since spawning is probabilistic
+    for (let trial = 0; trial < 5; trial++) {
+      const world = new World();
+      world.setLevelConfig({
+        id: 'test',
+        name: 'Test',
+        description: '',
+        features: { combat: false, upgrades: false, abilities: false, salvage: false, towRope: false },
+        world: { maxChunks: null, difficultyMultiplier: 0, spawnEnemies: false, spawnAllies: false },
+        objectives: [],
+        hints: [],
+      });
+      world.updateSpawning(3000, 3000); // Far from origin to trigger POIs
+      const enemies = world.entities.filter(e => e.type === 'enemy');
+      expect(enemies).toHaveLength(0);
+    }
+  });
+
+  it('uses fixed difficulty multiplier when set', () => {
+    const world = new World();
+    world.setLevelConfig({
+      id: 'test',
+      name: 'Test',
+      description: '',
+      features: { combat: true, upgrades: true, abilities: true, salvage: true, towRope: true },
+      world: { maxChunks: null, difficultyMultiplier: 0.5, spawnEnemies: true, spawnAllies: true },
+      objectives: [],
+      hints: [],
+    });
+
+    // Spawn far from origin — normally enemies would be very strong
+    world.updateSpawning(10000, 10000);
+    const enemies = world.entities.filter(e => e.type === 'enemy') as import('../entities/Entity').Enemy[];
+
+    if (enemies.length > 0) {
+      // With difficulty 0.5, enemies should be weaker than normal (base difficulty is 1.0+)
+      // A scout has 15 base HP, brute 80, ranged 25
+      // At difficulty 0.5, they should be scaled down
+      const maxEnemyHP = Math.max(...enemies.map(e => e.maxHealth));
+      expect(maxEnemyHP).toBeLessThan(200); // At distance 10000, unscaled brutes would be much stronger
+    }
+  });
+});
+
 describe('getThreatLevel', () => {
   it('returns LOW at origin', () => {
     expect(getThreatLevel(0, 0).label).toBe('LOW');

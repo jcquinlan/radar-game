@@ -32,6 +32,7 @@ export class Player {
   score: number;
   kills: number;
   totalEnergyCollected: number;
+  salvageDeposited: number;
   distanceTraveled: number;
   survivalTime: number;
 
@@ -59,6 +60,7 @@ export class Player {
     this.score = 0;
     this.kills = 0;
     this.totalEnergyCollected = 0;
+    this.salvageDeposited = 0;
     this.distanceTraveled = 0;
     this.survivalTime = 0;
   }
