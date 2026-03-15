@@ -32,6 +32,8 @@ import { LevelManager } from './levels/LevelManager';
 import { LevelConfig, checkAllObjectivesComplete, getObjectiveProgress } from './levels/LevelConfig';
 import { MainMenuScreen } from './ui/MainMenuScreen';
 import { LevelCompleteScreen } from './ui/LevelCompleteScreen';
+import { ResultsScreen } from './ui/ResultsScreen';
+import { calculateCurrency, calculateReducedCurrency, loadSaveData, saveSaveData, SaveData } from './systems/SaveSystem';
 
 type GameState = 'menu' | 'playing' | 'level_complete' | 'base_mode' | 'run_active' | 'final_wave' | 'results' | 'game_over' | 'paused';
 
@@ -47,7 +49,10 @@ const pauseMenu = new PauseMenu();
 const levelManager = new LevelManager();
 const mainMenuScreen = new MainMenuScreen();
 const levelCompleteScreen = new LevelCompleteScreen();
+const resultsScreen = new ResultsScreen();
 let gameState: GameState = 'menu';
+/** Persistent save data loaded from localStorage */
+let saveData: SaveData = loadSaveData();
 /** Tracks the state before pausing so we can restore it on unpause */
 let previousState: GameState = 'menu';
 
@@ -242,12 +247,55 @@ function init() {
   world.updateSpawning(player.x, player.y);
 }
 
+/** Show results screen after a successful run (wave survived) */
+function showRunResults() {
+  const baseHpPercent = homeBase.maxHealth > 0 ? homeBase.health / homeBase.maxHealth : 0;
+  const currency = calculateCurrency(player.salvageDeposited, player.kills, baseHpPercent);
+  saveData.currency += currency;
+  saveData.runCount++;
+  saveSaveData(saveData);
+
+  gameState = 'results';
+  towRopeSystem.clear();
+  resultsScreen.show(canvas, {
+    salvageDeposited: player.salvageDeposited,
+    enemiesKilled: player.kills,
+    baseHpPercent,
+    currencyEarned: currency,
+  }, () => {
+    cleanupCurrentGame();
+    enterBaseMode();
+  });
+}
+
+/** Show results screen after a failed run (player died or base destroyed) */
+function showRunFailed() {
+  const baseHpPercent = homeBase.maxHealth > 0 ? homeBase.health / homeBase.maxHealth : 0;
+  const currency = calculateReducedCurrency(player.salvageDeposited, player.kills, baseHpPercent);
+  saveData.currency += currency;
+  saveData.runCount++;
+  saveSaveData(saveData);
+
+  gameState = 'game_over';
+  towRopeSystem.clear();
+  resultsScreen.show(canvas, {
+    salvageDeposited: player.salvageDeposited,
+    enemiesKilled: player.kills,
+    baseHpPercent,
+    currencyEarned: currency,
+  }, () => {
+    cleanupCurrentGame();
+    enterBaseMode();
+  }, true);
+}
+
 function cleanupCurrentGame() {
   if (input) input.detach();
   if (upgradePanel) upgradePanel.detach(canvas);
   if (keyRemapScreen) keyRemapScreen.detach(canvas);
   if (towRopeSystem) towRopeSystem.clear();
   if (gameOverScreen) gameOverScreen.hide(canvas);
+  if (resultsScreen) resultsScreen.hide(canvas);
   if (levelCompleteScreen) levelCompleteScreen.hide(canvas);
   leaveBaseMode();
 }
@@ -635,42 +683,35 @@ const loop = new GameLoop({
     }
 
     if (!alive) {
-      gameState = 'game_over';
-      towRopeSystem.clear();
-      gameOverScreen.show(canvas, player, () => {
-        cleanupCurrentGame();
-        showMainMenu();
-      });
+      if (gameState === 'run_active' || gameState === 'final_wave') {
+        showRunFailed();
+      } else {
+        gameState = 'game_over';
+        towRopeSystem.clear();
+        gameOverScreen.show(canvas, player, () => {
+          cleanupCurrentGame();
+          showMainMenu();
+        });
+      }
       return;
     }
 
     // Wave end conditions during final_wave
     if (gameState === 'final_wave') {
-      // Base destroyed — game over
+      // Base destroyed — run failed
       if (homeBase.health <= 0) {
         homeBase.health = 0;
-        gameState = 'game_over';
-        towRopeSystem.clear();
-        gameOverScreen.show(canvas, player, () => {
-          cleanupCurrentGame();
-          showMainMenu();
-        });
+        showRunFailed();
         return;
       }
 
-      // All wave enemies dead — wave survived, transition to game_over for now
-      // (results screen will be added in a future PR)
+      // All wave enemies dead — wave survived, show results
       const waveEnemiesAlive = world.entities.some(
         (e: GameEntity) => e.active && e.type === 'enemy' && (e as Enemy).waveEnemy
       );
       if (!waveEnemiesAlive) {
         runCount++;
-        gameState = 'game_over';
-        towRopeSystem.clear();
-        gameOverScreen.show(canvas, player, () => {
-          cleanupCurrentGame();
-          showMainMenu();
-        });
+        showRunResults();
         return;
       }
     }
@@ -778,6 +819,20 @@ const loop = new GameLoop({
       ctx.fillStyle = '#00ff41';
       ctx.textAlign = 'center';
       ctx.fillText('START RUN', bcx, btnY + 32);
+
+      // Currency display
+      ctx.font = '16px monospace';
+      ctx.fillStyle = '#ffaa00';
+      ctx.textAlign = 'center';
+      ctx.fillText(`CURRENCY: ${saveData.currency}`, bcx, bcy + 170);
+
+      // Run count
+      if (saveData.runCount > 0) {
+        ctx.font = '12px monospace';
+        ctx.fillStyle = 'rgba(136, 170, 136, 0.6)';
+        ctx.fillText(`Runs completed: ${saveData.runCount}`, bcx, bcy + 190);
+      }
+
       ctx.restore();
 
       // Pause menu (if paused from base_mode — shows on top)
@@ -1139,6 +1194,9 @@ const loop = new GameLoop({
 
     // Game over overlay
     gameOverScreen.render(ctx, canvas.width, canvas.height);
+
+    // Results screen overlay (win or lose from run mode)
+    resultsScreen.render(ctx, canvas.width, canvas.height);
 
     // Level complete overlay
     levelCompleteScreen.render(ctx, canvas.width, canvas.height);
