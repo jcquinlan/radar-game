@@ -488,6 +488,27 @@ const loop = new GameLoop({
       runTimer -= dt;
       if (runTimer <= 0) {
         runTimer = 0;
+
+        // Auto-deposit towed salvage before clearing entities
+        const towedItems = towRopeSystem.getTowedItems();
+        for (const item of towedItems) {
+          player.addEnergy(50);
+          player.score += 50;
+          player.salvageDeposited++;
+        }
+        towRopeSystem.clear();
+
+        // Teleport player to home base position
+        player.x = 0;
+        player.y = 0;
+        player.vx = 0;
+        player.vy = 0;
+
+        // Close upgrade panel if open
+        if (upgradePanel.isVisible()) {
+          upgradePanel.toggle();
+        }
+
         // Spawn the final wave and transition to final_wave state
         const waveEnemies = spawnWave(runCount);
         // Clear non-wave entities from the world before adding wave enemies
@@ -496,6 +517,10 @@ const loop = new GameLoop({
           world.entities.push(enemy);
         }
         gameState = 'final_wave';
+
+        // Show WAVE INCOMING floating text
+        floatingText.add('WAVE INCOMING', 0, -30, '#ffff00');
+
         return;
       }
     }

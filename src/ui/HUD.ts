@@ -115,19 +115,28 @@ export class HUD {
       ctx.save();
       ctx.font = 'bold 20px monospace';
       ctx.textAlign = 'center';
-      if (runTimer <= 60) {
+      if (runTimer === 0) {
+        // Final wave in progress — show FINAL WAVE instead of 00:00
+        const pulse = Math.sin(performance.now() / 400) * 0.5 + 0.5;
+        const alpha = 0.6 + pulse * 0.4;
+        ctx.fillStyle = `rgba(255, 200, 60, ${alpha})`;
+        ctx.shadowColor = 'rgba(255, 200, 60, 0.8)';
+        ctx.shadowBlur = 8;
+        ctx.fillText('FINAL WAVE', canvasWidth / 2, y + 20);
+      } else if (runTimer <= 60) {
         // Pulsing red in the final 60 seconds
         const pulse = Math.sin(performance.now() / 500) * 0.5 + 0.5; // 0..1
         const alpha = 0.5 + pulse * 0.5; // 0.5..1.0
         ctx.fillStyle = `rgba(255, 60, 60, ${alpha})`;
         ctx.shadowColor = 'rgba(255, 60, 60, 0.8)';
         ctx.shadowBlur = 6;
+        ctx.fillText(formatTime(runTimer), canvasWidth / 2, y + 20);
       } else {
         ctx.fillStyle = '#ffffff';
         ctx.shadowColor = '#ffffff';
         ctx.shadowBlur = 4;
+        ctx.fillText(formatTime(runTimer), canvasWidth / 2, y + 20);
       }
-      ctx.fillText(formatTime(runTimer), canvasWidth / 2, y + 20);
       ctx.restore();
     }
 

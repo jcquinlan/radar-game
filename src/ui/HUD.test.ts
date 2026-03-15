@@ -74,6 +74,21 @@ describe('HUD', () => {
     expect(allText.some((t: string) => /^\d+:\d{2}$/.test(t))).toBe(false);
   });
 
+  it('renders FINAL WAVE text when runTimer is exactly 0', () => {
+    const hud = new HUD();
+    const ctx = createMockCtx();
+    const player = new Player();
+
+    hud.render(ctx, player, 800, 600, 0);
+
+    const fillTextCalls = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls;
+    const allText = fillTextCalls.map((c: unknown[]) => c[0] as string);
+
+    expect(allText.some((t: string) => t === 'FINAL WAVE')).toBe(true);
+    // Should NOT show 0:00 countdown
+    expect(allText.some((t: string) => t === '0:00')).toBe(false);
+  });
+
   it('renders timer at top-center of the canvas', () => {
     const hud = new HUD();
     const ctx = createMockCtx();
