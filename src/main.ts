@@ -8,7 +8,7 @@ import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
 import { PingSystem } from './systems/PingSystem';
 import { CombatSystem } from './systems/CombatSystem';
-import { Ally, Enemy, Resource, Dropoff } from './entities/Entity';
+import { Ally, Enemy, Resource, Dropoff, HomeBase, createHomeBase } from './entities/Entity';
 import { UpgradeSystem } from './systems/UpgradeSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
@@ -60,6 +60,7 @@ let keyRemapScreen: KeyRemapScreen;
 let motionTrail: MotionTrail;
 let towRopeSystem: TowRopeSystem;
 let minimap: Minimap;
+let homeBase: HomeBase;
 let resolutionLevel: number;
 let gameOver: boolean;
 let prevHealth: number;
@@ -80,6 +81,7 @@ function init() {
   gameOverScreen = new GameOverScreen();
   floatingText = new FloatingText();
   screenShake = new ScreenShake();
+  homeBase = createHomeBase(0, 0);
   resolutionLevel = 0;
   gameOver = false;
   prevHealth = player.health;
@@ -437,6 +439,64 @@ const loop = new GameLoop({
     // Motion trails (rendered behind blips)
     motionTrail.render(ctx, player.x, player.y, cx, cy);
 
+    // Home base — boundary ring and center marker
+    {
+      const hbx = homeBase.x - player.x;
+      const hby = homeBase.y - player.y;
+      if (hbx * hbx + hby * hby <= viewRadiusSq) {
+        const hsx = cx + hbx;
+        const hsy = cy + hby;
+        const pulse = 1 + Math.sin(player.survivalTime * 1.5) * 0.05;
+
+        ctx.save();
+
+        // Outer boundary ring
+        ctx.beginPath();
+        ctx.arc(hsx, hsy, homeBase.radius * pulse, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(100, 220, 255, 0.25)';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#64dcff';
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+
+        // Inner glow fill
+        ctx.beginPath();
+        ctx.arc(hsx, hsy, homeBase.radius * pulse, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(100, 220, 255, 0.03)';
+        ctx.fill();
+
+        // Inner ring (second boundary line for depth)
+        ctx.beginPath();
+        ctx.arc(hsx, hsy, homeBase.radius * 0.6 * pulse, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(100, 220, 255, 0.12)';
+        ctx.lineWidth = 1;
+        ctx.shadowBlur = 0;
+        ctx.stroke();
+
+        // Center structure — hexagon shape
+        ctx.translate(hsx, hsy);
+        const hexRadius = 10;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const angle = (Math.PI / 3) * i - Math.PI / 6;
+          const hxp = Math.cos(angle) * hexRadius;
+          const hyp = Math.sin(angle) * hexRadius;
+          if (i === 0) ctx.moveTo(hxp, hyp);
+          else ctx.lineTo(hxp, hyp);
+        }
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(100, 220, 255, 0.4)';
+        ctx.strokeStyle = 'rgba(100, 220, 255, 0.7)';
+        ctx.lineWidth = 1.5;
+        ctx.shadowColor = '#64dcff';
+        ctx.shadowBlur = 8;
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.restore();
+      }
+    }
+
     // Dropoff zones — pulsing ring markers
     for (const entity of world.entities) {
       if (!entity.active || entity.type !== 'dropoff') continue;
@@ -647,7 +707,7 @@ const loop = new GameLoop({
     hud.render(ctx, player, canvas.width, canvas.height);
 
     // Minimap (bottom left)
-    minimap.render(ctx, player, world.entities, canvas.width, canvas.height);
+    minimap.render(ctx, player, world.entities, canvas.width, canvas.height, homeBase);
 
     // Ability bar (bottom center)
     abilityBar.render(ctx, abilitySystem.abilities, canvas.width, canvas.height);
