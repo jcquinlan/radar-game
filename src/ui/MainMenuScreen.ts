@@ -1,25 +1,53 @@
 import { LevelConfig } from '../levels/LevelConfig';
 
+/** Bounds for a clickable button region */
+interface ButtonBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export class MainMenuScreen {
   private visible = false;
   private levels: LevelConfig[] = [];
   private onSelect: ((index: number) => void) | null = null;
-  private buttonBounds: Array<{ x: number; y: number; width: number; height: number }> = [];
+  private onStartGame: (() => void) | null = null;
+  private startGameBounds: ButtonBounds | null = null;
+  private levelButtonBounds: ButtonBounds[] = [];
   private clickHandler: ((e: MouseEvent) => void) | null = null;
 
-  show(canvas: HTMLCanvasElement, levels: LevelConfig[], onSelect: (index: number) => void): void {
+  show(
+    canvas: HTMLCanvasElement,
+    levels: LevelConfig[],
+    onSelect: (index: number) => void,
+    onStartGame?: () => void,
+  ): void {
     this.visible = true;
     this.levels = levels;
     this.onSelect = onSelect;
-    this.buttonBounds = [];
+    this.onStartGame = onStartGame ?? null;
+    this.levelButtonBounds = [];
+    this.startGameBounds = null;
 
     this.clickHandler = (e: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
 
-      for (let i = 0; i < this.buttonBounds.length; i++) {
-        const b = this.buttonBounds[i];
+      // Check Start Game button first
+      if (this.startGameBounds && this.onStartGame) {
+        const b = this.startGameBounds;
+        if (mx >= b.x && mx <= b.x + b.width && my >= b.y && my <= b.y + b.height) {
+          this.hide(canvas);
+          this.onStartGame();
+          return;
+        }
+      }
+
+      // Check level buttons
+      for (let i = 0; i < this.levelButtonBounds.length; i++) {
+        const b = this.levelButtonBounds[i];
         if (mx >= b.x && mx <= b.x + b.width && my >= b.y && my <= b.y + b.height) {
           this.hide(canvas);
           onSelect(i);
@@ -68,42 +96,70 @@ export class MainMenuScreen {
     ctx.fillStyle = '#88aa88';
     ctx.fillText('A radar-themed survival game', cx, 155);
 
-    // Level buttons
     const btnWidth = 360;
-    const btnHeight = 70;
     const gap = 16;
-    const startY = 200;
+    let currentY = 200;
 
-    this.buttonBounds = [];
+    // Start Game button (prominent, above level selection)
+    if (this.onStartGame) {
+      const startBtnHeight = 56;
+      const btnX = cx - btnWidth / 2;
+      this.startGameBounds = { x: btnX, y: currentY, width: btnWidth, height: startBtnHeight };
+
+      // Filled button with border
+      ctx.fillStyle = 'rgba(0, 255, 65, 0.1)';
+      ctx.fillRect(btnX, currentY, btnWidth, startBtnHeight);
+      ctx.strokeStyle = '#00ff41';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(btnX, currentY, btnWidth, startBtnHeight);
+
+      ctx.font = 'bold 22px monospace';
+      ctx.fillStyle = '#00ff41';
+      ctx.textAlign = 'center';
+      ctx.fillText('START GAME', cx, currentY + 35);
+
+      currentY += startBtnHeight + gap * 2;
+
+      // Tutorial section header
+      ctx.font = '13px monospace';
+      ctx.fillStyle = '#666';
+      ctx.fillText('— TUTORIALS —', cx, currentY);
+      currentY += gap + 8;
+    }
+
+    // Level buttons
+    const btnHeight = 70;
+    this.levelButtonBounds = [];
 
     for (let i = 0; i < this.levels.length; i++) {
       const level = this.levels[i];
       const btnX = cx - btnWidth / 2;
-      const btnY = startY + i * (btnHeight + gap);
 
-      this.buttonBounds.push({ x: btnX, y: btnY, width: btnWidth, height: btnHeight });
+      this.levelButtonBounds.push({ x: btnX, y: currentY, width: btnWidth, height: btnHeight });
 
       // Button border
       ctx.strokeStyle = '#00ff41';
       ctx.lineWidth = 1.5;
-      ctx.strokeRect(btnX, btnY, btnWidth, btnHeight);
+      ctx.strokeRect(btnX, currentY, btnWidth, btnHeight);
 
       // Level name
       ctx.font = '18px monospace';
       ctx.fillStyle = '#00ff41';
       ctx.textAlign = 'center';
-      ctx.fillText(level.name, cx, btnY + 28);
+      ctx.fillText(level.name, cx, currentY + 28);
 
       // Level description
       ctx.font = '12px monospace';
       ctx.fillStyle = '#88aa88';
-      ctx.fillText(level.description, cx, btnY + 50);
+      ctx.fillText(level.description, cx, currentY + 50);
+
+      currentY += btnHeight + gap;
     }
 
     // Footer
     ctx.font = '12px monospace';
     ctx.fillStyle = '#555';
-    ctx.fillText('Click a level to begin', cx, canvasHeight - 30);
+    ctx.fillText('Select an option to begin', cx, canvasHeight - 30);
 
     ctx.restore();
   }
