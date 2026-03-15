@@ -1,5 +1,6 @@
 import { Enemy, GameEntity, Projectile } from '../entities/Entity';
 import { Player } from '../entities/Player';
+import { getTheme } from '../themes/theme';
 
 type FloatingTextCallback = (text: string, x: number, y: number, color: string) => void;
 
@@ -102,7 +103,7 @@ export class CombatSystem {
           // Ram: one hit per enemy per dash
           this.ramHitEnemies.add(enemy);
           enemy.health -= ramDamage;
-          addFloatingText(`-${ramDamage}`, enemy.x, enemy.y, '#ff8800');
+          addFloatingText(`-${ramDamage}`, enemy.x, enemy.y, getTheme().effects.missile);
           // Knockback: blend player movement direction with player→enemy direction
           // so enemies deflect outward to whichever side they're on
           const playerSpeed = Math.sqrt(player.vx * player.vx + player.vy * player.vy);
@@ -123,7 +124,7 @@ export class CombatSystem {
             player.addEnergy(enemy.energyDrop);
             player.kills++;
             player.score += 50;
-            addFloatingText('+50', enemy.x, enemy.y - 15, '#ffaa00');
+            addFloatingText('+50', enemy.x, enemy.y - 15, getTheme().entities.salvage);
           }
         } else if (enemy.subtype !== 'ranged') {
           // Normal: enemy damages player (melee only)
