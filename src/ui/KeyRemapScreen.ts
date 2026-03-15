@@ -242,7 +242,7 @@ export class KeyRemapScreen {
       damage_blast: 'AoE damage to nearby enemies',
       heal_over_time: 'Heal over time',
       helper_drone: 'Spawn a helper drone',
-      dash: 'Speed burst in current direction',
+      dash: 'Dash forward, rams enemies',
       homing_missile: 'Fire a homing missile at nearest enemy',
     };
     const abilityBindings: BindingEntry[] = abilities.map((a) => ({

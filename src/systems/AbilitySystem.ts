@@ -13,6 +13,10 @@ export interface Ability {
   duration: number;
   durationRemaining: number;
   active: boolean;
+  /** Max charges (1 = no charge system, behaves like a normal cooldown) */
+  maxCharges: number;
+  /** Current available charges */
+  charges: number;
 }
 
 export interface Drone {
@@ -53,6 +57,8 @@ export class AbilitySystem {
         duration: 0,
         durationRemaining: 0,
         active: false,
+        maxCharges: 1,
+        charges: 1,
       },
       {
         id: 'heal_over_time',
@@ -63,6 +69,8 @@ export class AbilitySystem {
         duration: 4,
         durationRemaining: 0,
         active: false,
+        maxCharges: 1,
+        charges: 1,
       },
       {
         id: 'helper_drone',
@@ -73,6 +81,8 @@ export class AbilitySystem {
         duration: 10,
         durationRemaining: 0,
         active: false,
+        maxCharges: 1,
+        charges: 1,
       },
       {
         id: 'dash',
@@ -80,9 +90,11 @@ export class AbilitySystem {
         keybind: '4',
         cooldown: 5,
         cooldownRemaining: 0,
-        duration: 0,
+        duration: 1.5,
         durationRemaining: 0,
         active: false,
+        maxCharges: 2,
+        charges: 2,
       },
     ];
   }
@@ -91,15 +103,24 @@ export class AbilitySystem {
     return this.abilities.find((a) => a.id === id);
   }
 
+  isDashing(): boolean {
+    const dash = this.getAbility('dash');
+    return dash !== undefined && dash.active && dash.durationRemaining > 0;
+  }
+
   activate(
     id: string,
     entities: GameEntity[],
     addFloatingText: FloatingTextCallback,
   ): boolean {
     const ability = this.getAbility(id);
-    if (!ability || ability.cooldownRemaining > 0) return false;
+    if (!ability || ability.charges <= 0) return false;
 
-    ability.cooldownRemaining = ability.cooldown;
+    ability.charges--;
+    // Start cooldown to regenerate a charge (only if not already ticking)
+    if (ability.cooldownRemaining <= 0) {
+      ability.cooldownRemaining = ability.cooldown;
+    }
 
     if (id === 'damage_blast') {
       this.activateBlast(entities, addFloatingText);
@@ -112,6 +133,8 @@ export class AbilitySystem {
       this.spawnDrone();
     } else if (id === 'dash') {
       this.activateDash();
+      ability.active = true;
+      ability.durationRemaining = ability.duration;
     }
 
     return true;
@@ -125,6 +148,14 @@ export class AbilitySystem {
     for (const ability of this.abilities) {
       if (ability.cooldownRemaining > 0) {
         ability.cooldownRemaining = Math.max(0, ability.cooldownRemaining - dt);
+        // Regenerate a charge when cooldown expires
+        if (ability.cooldownRemaining <= 0 && ability.charges < ability.maxCharges) {
+          ability.charges++;
+          // If still not full, start another cooldown cycle
+          if (ability.charges < ability.maxCharges) {
+            ability.cooldownRemaining = ability.cooldown;
+          }
+        }
       }
 
       // Handle active duration abilities
@@ -179,12 +210,9 @@ export class AbilitySystem {
 
   private activateDash(): void {
     const dashSpeed = this.player.speed * 3;
-    // Dash in current velocity direction, or do nothing if stationary
-    const currentSpeed = Math.sqrt(this.player.vx * this.player.vx + this.player.vy * this.player.vy);
-    if (currentSpeed > 1) {
-      this.player.vx = (this.player.vx / currentSpeed) * dashSpeed;
-      this.player.vy = (this.player.vy / currentSpeed) * dashSpeed;
-    }
+    // Dash forward in the direction the ship is facing
+    this.player.vx = Math.cos(this.player.heading) * dashSpeed;
+    this.player.vy = Math.sin(this.player.heading) * dashSpeed;
   }
 
   private spawnDrone(): void {

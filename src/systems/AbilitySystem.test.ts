@@ -220,25 +220,28 @@ describe('AbilitySystem', () => {
   });
 
   describe('dash', () => {
-    it('boosts player velocity in current movement direction', () => {
+    it('accelerates player in heading direction', () => {
       const { system, player } = buildAbilitySystem();
-      player.vx = 50;
-      player.vy = 0;
-      system.activate('dash', [], () => {});
-
-      // Should be boosted to 3x player speed in the same direction
-      expect(player.vx).toBe(player.speed * 3);
-      expect(player.vy).toBe(0);
-    });
-
-    it('does not dash when player is stationary', () => {
-      const { system, player } = buildAbilitySystem();
+      player.heading = 0; // facing right
       player.vx = 0;
       player.vy = 0;
       system.activate('dash', [], () => {});
 
-      expect(player.vx).toBe(0);
-      expect(player.vy).toBe(0);
+      const dashSpeed = player.speed * 3;
+      expect(player.vx).toBeCloseTo(dashSpeed);
+      expect(player.vy).toBeCloseTo(0);
+    });
+
+    it('works when player is stationary', () => {
+      const { system, player } = buildAbilitySystem();
+      player.heading = -Math.PI / 2; // facing up
+      player.vx = 0;
+      player.vy = 0;
+      system.activate('dash', [], () => {});
+
+      const dashSpeed = player.speed * 3;
+      expect(player.vx).toBeCloseTo(0);
+      expect(player.vy).toBeCloseTo(-dashSpeed);
     });
 
     it('has 5 second cooldown', () => {
@@ -247,16 +250,81 @@ describe('AbilitySystem', () => {
       expect(ability.cooldown).toBe(5);
     });
 
-    it('preserves dash direction for diagonal movement', () => {
+    it('uses heading direction regardless of current velocity', () => {
       const { system, player } = buildAbilitySystem();
-      player.vx = 30;
-      player.vy = 40; // 3-4-5 triangle, speed = 50
+      player.heading = Math.PI / 4; // facing down-right (45 degrees)
+      player.vx = -100; // moving left (opposite of heading)
+      player.vy = -100;
       system.activate('dash', [], () => {});
 
       const dashSpeed = player.speed * 3;
-      // Direction should be preserved: vx/vy ratio = 3/4
-      expect(player.vx).toBeCloseTo(dashSpeed * 0.6);
-      expect(player.vy).toBeCloseTo(dashSpeed * 0.8);
+      // Should dash in heading direction, not velocity direction
+      expect(player.vx).toBeCloseTo(dashSpeed * Math.cos(Math.PI / 4));
+      expect(player.vy).toBeCloseTo(dashSpeed * Math.sin(Math.PI / 4));
+    });
+
+    it('has 2 charges', () => {
+      const { system } = buildAbilitySystem();
+      const ability = system.getAbility('dash')!;
+      expect(ability.maxCharges).toBe(2);
+      expect(ability.charges).toBe(2);
+    });
+
+    it('can be used twice before needing to recharge', () => {
+      const { system, player } = buildAbilitySystem();
+      player.heading = 0;
+
+      expect(system.activate('dash', [], () => {})).toBe(true);
+      expect(system.activate('dash', [], () => {})).toBe(true);
+      expect(system.activate('dash', [], () => {})).toBe(false);
+    });
+
+    it('regenerates one charge after cooldown expires', () => {
+      const { system, player } = buildAbilitySystem();
+      player.heading = 0;
+
+      system.activate('dash', [], () => {});
+      system.activate('dash', [], () => {});
+      const ability = system.getAbility('dash')!;
+      expect(ability.charges).toBe(0);
+
+      // Wait for one cooldown cycle
+      system.update(5, [], () => {});
+      expect(ability.charges).toBe(1);
+
+      // Can dash again
+      expect(system.activate('dash', [], () => {})).toBe(true);
+    });
+
+    it('regenerates both charges after two cooldown cycles', () => {
+      const { system, player } = buildAbilitySystem();
+      player.heading = 0;
+
+      system.activate('dash', [], () => {});
+      system.activate('dash', [], () => {});
+
+      const ability = system.getAbility('dash')!;
+      // First cooldown cycle regenerates one charge
+      system.update(5, [], () => {});
+      expect(ability.charges).toBe(1);
+      // Second cooldown cycle regenerates the other
+      system.update(5, [], () => {});
+      expect(ability.charges).toBe(2);
+    });
+
+    it('is actively dashing for 1.5 seconds after activation', () => {
+      const { system, player } = buildAbilitySystem();
+      player.heading = 0;
+      expect(system.isDashing()).toBe(false);
+
+      system.activate('dash', [], () => {});
+      expect(system.isDashing()).toBe(true);
+
+      system.update(1, [], () => {});
+      expect(system.isDashing()).toBe(true);
+
+      system.update(0.5, [], () => {});
+      expect(system.isDashing()).toBe(false);
     });
   });
 });

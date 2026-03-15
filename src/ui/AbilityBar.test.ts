@@ -12,6 +12,8 @@ function buildAbility(overrides: Partial<Ability> = {}): Ability {
     duration: 0,
     durationRemaining: 0,
     active: false,
+    maxCharges: 1,
+    charges: 1,
     ...overrides,
   };
 }
@@ -60,7 +62,7 @@ describe('AbilityBar', () => {
     const bar = new AbilityBar();
     const ctx = createMockCtx();
     const abilities = [
-      buildAbility({ cooldownRemaining: 3.5, cooldown: 6 }),
+      buildAbility({ cooldownRemaining: 3.5, cooldown: 6, charges: 0 }),
     ];
 
     bar.render(ctx, abilities, 800, 600);

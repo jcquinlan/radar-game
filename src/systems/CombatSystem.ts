@@ -1,16 +1,33 @@
 import { Enemy, GameEntity, Projectile } from '../entities/Entity';
 import { Player } from '../entities/Player';
 
+type FloatingTextCallback = (text: string, x: number, y: number, color: string) => void;
+
 export class CombatSystem {
   projectiles: Projectile[] = [];
   private gameTime = 0;
+  private ramHitEnemies: Set<Enemy> = new Set();
+  private wasRamActive = false;
 
   /**
    * Update enemy AI, projectiles, and handle contact damage.
    * Returns true if the player is still alive.
    */
-  update(entities: GameEntity[], player: Player, dt: number): boolean {
+  update(
+    entities: GameEntity[],
+    player: Player,
+    dt: number,
+    ramActive: boolean = false,
+    ramDamage: number = 15,
+    addFloatingText: FloatingTextCallback = () => {},
+  ): boolean {
     this.gameTime += dt;
+
+    // Clear ram hit tracking when a new dash starts
+    if (ramActive && !this.wasRamActive) {
+      this.ramHitEnemies.clear();
+    }
+    this.wasRamActive = ramActive;
 
     for (const entity of entities) {
       if (!entity.active || entity.type !== 'enemy') continue;
@@ -75,13 +92,43 @@ export class CombatSystem {
       enemy.x += enemy.vx * dt;
       enemy.y += enemy.vy * dt;
 
-      // Contact damage (scouts and brutes only) — range matches standoff distance
+      // Contact damage — range matches standoff distance
       // Recalculate distance after movement
       const postDx = player.x - enemy.x;
       const postDy = player.y - enemy.y;
       const postDistSq = postDx * postDx + postDy * postDy;
-      if (enemy.subtype !== 'ranged' && postDistSq < 30 * 30) {
-        player.takeDamage(enemy.damage * dt);
+      if (postDistSq < 30 * 30) {
+        if (ramActive && !this.ramHitEnemies.has(enemy)) {
+          // Ram: one hit per enemy per dash
+          this.ramHitEnemies.add(enemy);
+          enemy.health -= ramDamage;
+          addFloatingText(`-${ramDamage}`, enemy.x, enemy.y, '#ff8800');
+          // Knockback: blend player movement direction with player→enemy direction
+          // so enemies deflect outward to whichever side they're on
+          const playerSpeed = Math.sqrt(player.vx * player.vx + player.vy * player.vy);
+          const toEnemyDx = enemy.x - player.x;
+          const toEnemyDy = enemy.y - player.y;
+          const toEnemyDist = Math.sqrt(toEnemyDx * toEnemyDx + toEnemyDy * toEnemyDy);
+          if (playerSpeed > 1 && toEnemyDist > 0) {
+            const knockback = 200;
+            // 50% player direction + 50% outward from player to enemy
+            const kx = 0.5 * (player.vx / playerSpeed) + 0.5 * (toEnemyDx / toEnemyDist);
+            const ky = 0.5 * (player.vy / playerSpeed) + 0.5 * (toEnemyDy / toEnemyDist);
+            const kLen = Math.sqrt(kx * kx + ky * ky);
+            enemy.vx += (kx / kLen) * knockback;
+            enemy.vy += (ky / kLen) * knockback;
+          }
+          if (enemy.health <= 0 && enemy.active) {
+            enemy.active = false;
+            player.addEnergy(enemy.energyDrop);
+            player.kills++;
+            player.score += 50;
+            addFloatingText('+50', enemy.x, enemy.y - 15, '#ffaa00');
+          }
+        } else if (enemy.subtype !== 'ranged') {
+          // Normal: enemy damages player (melee only)
+          player.takeDamage(enemy.damage * dt);
+        }
       }
     }
 
