@@ -23,6 +23,7 @@ import { KeyRemapScreen } from './ui/KeyRemapScreen';
 import { PauseMenu } from './ui/PauseMenu';
 import { MotionTrail } from './radar/MotionTrail';
 import { TowRopeSystem } from './systems/TowRopeSystem';
+import { detectCombo } from './systems/ComboDetector';
 import { Minimap } from './ui/Minimap';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
 import { CRTEffect } from './rendering/effects/CRTEffect';
@@ -275,27 +276,12 @@ window.addEventListener('keydown', (e) => {
     if (e.key === ability.keybind) {
       // Detect combo: check if a different ability was used within 3 seconds
       const now = player.survivalTime;
-      const comboWindow = player.lastAbilityUsed !== null
-        && player.lastAbilityUsed !== ability.id
-        && (now - player.lastAbilityTime) <= 3;
-
-      // Determine combo overrides
-      let overrides: import('./systems/AbilitySystem').AbilityOverrides | undefined;
-
-      if (comboWindow) {
-        // Blast then Drone: drone deals 2x damage
-        if (player.lastAbilityUsed === 'damage_blast' && ability.id === 'helper_drone') {
-          overrides = { droneDamageMultiplier: 2 };
-        }
-        // HoT then Dash: dash goes 50% further
-        if (player.lastAbilityUsed === 'heal_over_time' && ability.id === 'dash') {
-          overrides = { dashSpeedMultiplier: 1.5 };
-        }
-        // Dash then Blast: blast radius increased 50%
-        if (player.lastAbilityUsed === 'dash' && ability.id === 'damage_blast') {
-          overrides = { blastRadius: 300 };
-        }
-      }
+      const overrides = detectCombo(
+        player.lastAbilityUsed,
+        player.lastAbilityTime,
+        ability.id,
+        now,
+      );
 
       if (ability.id === 'damage_blast') {
         if (abilitySystem.activate('damage_blast', world.entities, addText, overrides)) {
