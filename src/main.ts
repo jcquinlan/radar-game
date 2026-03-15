@@ -636,6 +636,11 @@ const loop = new GameLoop({
       abilityEffects.update(dt);
     }
 
+    // Turret AI — fire at nearby enemies
+    if (features?.combat !== false && defenses.length > 0) {
+      combatSystem.updateTurrets(defenses, world.entities, player.survivalTime, dt);
+    }
+
     // Combat — only if enabled
     let alive = true;
     if (features?.combat !== false) {
@@ -653,7 +658,19 @@ const loop = new GameLoop({
         (text, x, y, color) => floatingText.add(text, x, y, color),
         targetPos,
         baseTarget,
+        defenses.length > 0 ? defenses : undefined,
       );
+    }
+
+    // Repair station healing — heal player when within range
+    for (let i = 0; i < defenses.length; i++) {
+      const def = defenses[i];
+      if (!def.active || def.type !== 'repair_station') continue;
+      const rdx = player.x - def.x;
+      const rdy = player.y - def.y;
+      if (rdx * rdx + rdy * rdy < def.range * def.range) {
+        player.heal(def.healRate * dt);
+      }
     }
 
     // Motion trails — track fast-moving entities
@@ -675,6 +692,13 @@ const loop = new GameLoop({
         const pid = `p${i}`;
         motionTrail.track(pid, p.x, p.y, p.vx, p.vy, theme.effects.projectile, dt);
         activeTrailIds.add(pid);
+      }
+      for (let i = 0; i < combatSystem.turretProjectiles.length; i++) {
+        const tp = combatSystem.turretProjectiles[i];
+        if (!tp.active) continue;
+        const tpid = `tp${i}`;
+        motionTrail.track(tpid, tp.x, tp.y, tp.vx, tp.vy, '#00ddff', dt);
+        activeTrailIds.add(tpid);
       }
     }
     if (features?.abilities !== false) {
@@ -1158,6 +1182,23 @@ const loop = new GameLoop({
       ctx.beginPath();
       ctx.arc(px, py, 2, 0, Math.PI * 2);
       ctx.fillStyle = theme.effects.projectile;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Render turret projectiles (cyan)
+    for (const p of combatSystem.turretProjectiles) {
+      const trx = p.x - player.x;
+      const try_ = p.y - player.y;
+      if (trx * trx + try_ * try_ > viewRadiusSq) continue;
+      const tpx = cx + trx;
+      const tpy = cy + try_;
+      ctx.save();
+      ctx.shadowColor = '#00ddff';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(tpx, tpy, 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#00ddff';
       ctx.fill();
       ctx.restore();
     }
