@@ -87,14 +87,58 @@ const activeTrailIds = new Set<string>();
 function showMainMenu() {
   gameState = 'menu';
   levelManager.returnToMenu();
-  mainMenuScreen.show(canvas, levelManager.getLevels(), (index) => {
-    const config = levelManager.selectLevel(index);
-    if (config) {
-      currentLevelConfig = config;
-      gameState = 'playing';
+  mainMenuScreen.show(
+    canvas,
+    levelManager.getLevels(),
+    (index) => {
+      const config = levelManager.selectLevel(index);
+      if (config) {
+        currentLevelConfig = config;
+        gameState = 'playing';
+        init();
+      }
+    },
+    () => {
+      // Start Game -> base_mode (free play)
+      currentLevelConfig = null;
       init();
-    }
-  });
+      gameState = 'base_mode';
+    },
+  );
+}
+
+/** Reset per-run state for a new run without recreating one-time systems (canvas, shaders, etc.) */
+function startRun() {
+  cleanupCurrentGame();
+  player = new Player();
+  world.reset();
+  floatingText = new FloatingText();
+  screenShake = new ScreenShake();
+  sweepEffects = new SweepEffects();
+  ambientParticles = new AmbientParticles();
+  motionTrail = new MotionTrail();
+  combatSystem = new CombatSystem();
+  towRopeSystem = new TowRopeSystem();
+  abilitySystem = new AbilitySystem(player);
+  abilityEffects = new AbilityEffects();
+  pingSystem = new PingSystem({ maxRadius: radar.getRadius() });
+  upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
+    resolutionLevel = lvl;
+  }, pingSystem);
+  homeBase = createHomeBase(0, 0);
+  resolutionLevel = 0;
+  prevHealth = player.health;
+  damageFlash = 0;
+
+  // Disable Canvas 2D scanlines when shader pipeline is active
+  radar.scanlineEnabled = !shaderPipeline || !shaderPipeline.enabled;
+
+  input.attach();
+  keyRemapScreen.load(abilitySystem.abilities);
+  keyRemapScreen.attach(canvas, abilitySystem.abilities);
+  upgradePanel.attach(canvas, upgradeSystem, player);
+  world.updateSpawning(player.x, player.y);
+  gameState = 'run_active';
 }
 
 function init() {
