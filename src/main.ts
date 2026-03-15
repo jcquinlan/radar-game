@@ -76,6 +76,8 @@ let homeBase: HomeBase;
 let resolutionLevel: number;
 let prevHealth: number;
 let damageFlash: number;
+/** Countdown timer for timed runs (seconds). -1 means no active timer. */
+let runTimer: number = -1;
 let currentLevelConfig: LevelConfig | null = null;
 /** Pre-allocated Set for motion trail pruning — reused every frame to avoid GC pressure */
 const activeTrailIds = new Set<string>();
@@ -138,6 +140,7 @@ function startRun() {
   keyRemapScreen.attach(canvas, abilitySystem.abilities);
   upgradePanel.attach(canvas, upgradeSystem, player);
   world.updateSpawning(player.x, player.y);
+  runTimer = 600; // 10 minutes
   gameState = 'run_active';
 }
 
@@ -397,6 +400,21 @@ showMainMenu();
 const loop = new GameLoop({
   update(dt) {
     if (!isActiveGameplay(gameState)) return;
+
+    // Run timer countdown — only during timed runs
+    if (gameState === 'run_active' && runTimer >= 0) {
+      runTimer -= dt;
+      if (runTimer <= 0) {
+        runTimer = 0;
+        gameState = 'game_over';
+        towRopeSystem.clear();
+        gameOverScreen.show(canvas, player, () => {
+          cleanupCurrentGame();
+          showMainMenu();
+        });
+        return;
+      }
+    }
 
     const features = currentLevelConfig?.features;
 
@@ -1008,7 +1026,7 @@ const loop = new GameLoop({
     }
 
     // HUD
-    hud.render(ctx, player, canvas.width, canvas.height);
+    hud.render(ctx, player, canvas.width, canvas.height, runTimer);
 
     // Tutorial hints
     if (currentLevelConfig && currentLevelConfig.hints.length > 0) {
