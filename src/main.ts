@@ -84,6 +84,8 @@ let runCount: number = 1;
 let currentLevelConfig: LevelConfig | null = null;
 /** Pre-allocated Set for motion trail pruning — reused every frame to avoid GC pressure */
 const activeTrailIds = new Set<string>();
+/** Pre-allocated target position object — reused every frame to avoid GC pressure */
+const waveTargetPos = { x: 0, y: 0 };
 /** Bounds for the START RUN button in base_mode (recalculated each render) */
 let startRunBounds: { x: number; y: number; width: number; height: number } | null = null;
 /** Click handler for base_mode START RUN button */
@@ -561,8 +563,14 @@ const loop = new GameLoop({
     let alive = true;
     if (features?.combat !== false) {
       // During final_wave, enemies target the home base instead of the player
-      const targetPos = gameState === 'final_wave' ? { x: homeBase.x, y: homeBase.y } : undefined;
-      const baseTarget = gameState === 'final_wave' ? homeBase : undefined;
+      let targetPos: { x: number; y: number } | undefined;
+      let baseTarget: HomeBase | undefined;
+      if (gameState === 'final_wave') {
+        waveTargetPos.x = homeBase.x;
+        waveTargetPos.y = homeBase.y;
+        targetPos = waveTargetPos;
+        baseTarget = homeBase;
+      }
       alive = combatSystem.update(
         world.entities, player, dt, abilitySystem.isDashing(), 15,
         (text, x, y, color) => floatingText.add(text, x, y, color),
