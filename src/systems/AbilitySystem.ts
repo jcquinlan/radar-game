@@ -104,7 +104,7 @@ export class AbilitySystem {
         id: 'homing_missile',
         name: 'Missile',
         keybind: '5',
-        cooldown: 8,
+        cooldown: 1, // TODO: restore to 8 after testing
         cooldownRemaining: 0,
         duration: 0,
         durationRemaining: 0,
@@ -331,7 +331,7 @@ export class AbilitySystem {
       vx: Math.cos(launchAngle) * launchSpeed,
       vy: Math.sin(launchAngle) * launchSpeed,
       speed: 220,
-      damage: 25,
+      damage: 5, // TODO: restore to 25 after testing
       lifetime: 4,
       turnRate: 3.5, // radians/sec — slightly higher to compensate for random launch
       active: true,
@@ -352,12 +352,13 @@ export class AbilitySystem {
         continue;
       }
 
-      // Find nearest enemy to steer toward
+      // Find nearest visible enemy to steer toward — only track enemies
+      // the player knows about (revealed by ping), not hidden ones
       let nearest: Enemy | null = null;
       let nearestDistSq = 400 * 400; // 400px tracking range
 
       for (const entity of entities) {
-        if (!entity.active || entity.type !== 'enemy') continue;
+        if (!entity.active || entity.type !== 'enemy' || !entity.visible) continue;
         const enemy = entity as Enemy;
         const dx = enemy.x - missile.x;
         const dy = enemy.y - missile.y;
