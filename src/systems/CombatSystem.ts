@@ -1,4 +1,4 @@
-import { Enemy, GameEntity, Projectile } from '../entities/Entity';
+import { Enemy, GameEntity, HomeBase, Projectile } from '../entities/Entity';
 import { Player } from '../entities/Player';
 import { getTheme } from '../themes/theme';
 
@@ -13,6 +13,12 @@ export class CombatSystem {
   /**
    * Update enemy AI, projectiles, and handle contact damage.
    * Returns true if the player is still alive.
+   *
+   * @param targetPos - Optional override for enemy AI target position. When provided,
+   *   enemies chase this point instead of the player. Used during final_wave to direct
+   *   enemies toward the home base.
+   * @param baseTarget - Optional home base reference. When provided, enemies within 30px
+   *   of the base deal contactDamage * dt to it.
    */
   update(
     entities: GameEntity[],
@@ -21,8 +27,14 @@ export class CombatSystem {
     ramActive: boolean = false,
     ramDamage: number = 15,
     addFloatingText: FloatingTextCallback = () => {},
+    targetPos?: { x: number; y: number },
+    baseTarget?: HomeBase,
   ): boolean {
     this.gameTime += dt;
+
+    // AI target: use override if provided, otherwise chase the player
+    const aiTargetX = targetPos ? targetPos.x : player.x;
+    const aiTargetY = targetPos ? targetPos.y : player.y;
 
     // Clear ram hit tracking when a new dash starts
     if (ramActive && !this.wasRamActive) {
@@ -34,39 +46,47 @@ export class CombatSystem {
       if (!entity.active || entity.type !== 'enemy') continue;
 
       const enemy = entity as Enemy;
+
+      // Distance to AI target (for chase/fire behavior)
+      const tdx = aiTargetX - enemy.x;
+      const tdy = aiTargetY - enemy.y;
+      const targetDistSq = tdx * tdx + tdy * tdy;
+
+      // Distance to player (for contact damage — always relevant)
       const dx = player.x - enemy.x;
       const dy = player.y - enemy.y;
       const distSq = dx * dx + dy * dy;
 
-      // Chase the player if within range (scouts and brutes)
-      // Stop at standoff distance instead of stacking on top of the player
+      // Chase the AI target if within range (scouts and brutes)
+      // Stop at standoff distance instead of stacking on top of the target
       const standoffDist = enemy.subtype === 'brute' ? 20 : 25;
       const enemyAccel = enemy.speed * enemy.friction;
-      const inChaseRange = distSq < enemy.chaseRange * enemy.chaseRange;
+      // Wave enemies always chase (infinite range); normal enemies use chaseRange
+      const inChaseRange = enemy.waveEnemy || targetDistSq < enemy.chaseRange * enemy.chaseRange;
 
-      if (enemy.subtype !== 'ranged' && inChaseRange && distSq > standoffDist * standoffDist) {
-        const dist = Math.sqrt(distSq);
-        enemy.vx += (dx / dist) * enemyAccel * dt;
-        enemy.vy += (dy / dist) * enemyAccel * dt;
+      if (enemy.subtype !== 'ranged' && inChaseRange && targetDistSq > standoffDist * standoffDist) {
+        const dist = Math.sqrt(targetDistSq);
+        enemy.vx += (tdx / dist) * enemyAccel * dt;
+        enemy.vy += (tdy / dist) * enemyAccel * dt;
       }
 
-      // Ranged enemies: maintain distance and fire
+      // Ranged enemies: maintain distance and fire at AI target
       if (enemy.subtype === 'ranged' && inChaseRange) {
-        const dist = Math.sqrt(distSq);
+        const dist = Math.sqrt(targetDistSq);
         // Back away if too close
         if (dist < 100 && dist > 0) {
-          enemy.vx -= (dx / dist) * enemyAccel * dt;
-          enemy.vy -= (dy / dist) * enemyAccel * dt;
+          enemy.vx -= (tdx / dist) * enemyAccel * dt;
+          enemy.vy -= (tdy / dist) * enemyAccel * dt;
         }
 
-        // Fire projectile
+        // Fire projectile toward AI target
         if (this.gameTime - enemy.lastFireTime >= enemy.fireRate && dist > 0) {
           enemy.lastFireTime = this.gameTime;
           this.projectiles.push({
             x: enemy.x,
             y: enemy.y,
-            vx: (dx / dist) * enemy.projectileSpeed,
-            vy: (dy / dist) * enemy.projectileSpeed,
+            vx: (tdx / dist) * enemy.projectileSpeed,
+            vy: (tdy / dist) * enemy.projectileSpeed,
             damage: 8,
             active: true,
             lifetime: 3,
@@ -129,6 +149,15 @@ export class CombatSystem {
         } else if (enemy.subtype !== 'ranged') {
           // Normal: enemy damages player (melee only)
           player.takeDamage(enemy.damage * dt);
+        }
+      }
+
+      // Base damage: wave enemies within 30px of the base deal contact damage to it
+      if (baseTarget && enemy.waveEnemy) {
+        const baseDx = baseTarget.x - enemy.x;
+        const baseDy = baseTarget.y - enemy.y;
+        if (baseDx * baseDx + baseDy * baseDy < 30 * 30) {
+          baseTarget.health -= enemy.damage * dt;
         }
       }
     }

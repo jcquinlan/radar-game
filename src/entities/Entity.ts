@@ -42,6 +42,10 @@ export interface Enemy extends Entity {
   wanderAngle: number;
   /** Time until next wander direction change */
   wanderTimer: number;
+  /** Whether this enemy is part of a final wave (not a world-spawned enemy) */
+  waveEnemy: boolean;
+  /** Whether this enemy is a wave boss (renders larger) */
+  isBoss: boolean;
 }
 
 export type AllySubtype = 'healer' | 'shield' | 'beacon';
@@ -147,6 +151,8 @@ export function createEnemy(x: number, y: number, subtype?: EnemySubtype): Enemy
     ghostY: null,
     wanderAngle: Math.random() * Math.PI * 2,
     wanderTimer: 1 + Math.random() * 2,
+    waveEnemy: false,
+    isBoss: false,
   };
 }
 

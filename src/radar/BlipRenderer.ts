@@ -90,6 +90,10 @@ export class BlipRenderer {
           currentSize = 4;
           color = enemyRangedColor;
         }
+        // Bosses render at 1.5x size
+        if (enemy.isBoss) {
+          currentSize *= 1.5;
+        }
       }
 
       // Ally gentle pulsing aura
