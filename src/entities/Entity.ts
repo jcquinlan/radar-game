@@ -84,6 +84,10 @@ export interface HomeBase {
   y: number;
   /** Radius of the base boundary */
   radius: number;
+  /** Maximum health of the base */
+  maxHealth: number;
+  /** Current health of the base */
+  health: number;
 }
 
 export interface Projectile {
@@ -203,5 +207,7 @@ export function createHomeBase(x: number, y: number): HomeBase {
     x,
     y,
     radius: 150,
+    maxHealth: 500,
+    health: 500,
   };
 }

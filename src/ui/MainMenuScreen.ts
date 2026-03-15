@@ -1,4 +1,10 @@
 import { LevelConfig } from '../levels/LevelConfig';
+import { SaveData } from '../systems/SaveData';
+import {
+  renderBaseUpgradePanel,
+  handleBaseUpgradeClick,
+  BaseUpgradePanelBounds,
+} from './BaseUpgradePanel';
 
 export class MainMenuScreen {
   private visible = false;
@@ -6,6 +12,12 @@ export class MainMenuScreen {
   private onSelect: ((index: number) => void) | null = null;
   private buttonBounds: Array<{ x: number; y: number; width: number; height: number }> = [];
   private clickHandler: ((e: MouseEvent) => void) | null = null;
+  private saveData: SaveData | null = null;
+  private upgradePanelBounds: BaseUpgradePanelBounds | null = null;
+
+  setSaveData(saveData: SaveData): void {
+    this.saveData = saveData;
+  }
 
   show(canvas: HTMLCanvasElement, levels: LevelConfig[], onSelect: (index: number) => void): void {
     this.visible = true;
@@ -17,6 +29,13 @@ export class MainMenuScreen {
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
+
+      // Check base upgrade panel clicks first
+      if (this.upgradePanelBounds && this.saveData) {
+        if (handleBaseUpgradeClick(mx, my, this.upgradePanelBounds, this.saveData)) {
+          return; // Upgrade purchased, don't check level buttons
+        }
+      }
 
       for (let i = 0; i < this.buttonBounds.length; i++) {
         const b = this.buttonBounds[i];
@@ -100,9 +119,23 @@ export class MainMenuScreen {
       ctx.fillText(level.description, cx, btnY + 50);
     }
 
+    // Currency display (prominent, top center)
+    if (this.saveData) {
+      ctx.font = 'bold 20px monospace';
+      ctx.fillStyle = '#ffd700';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${Math.floor(this.saveData.currency)} CREDITS`, cx, 185);
+    }
+
+    // Base upgrade panel (right side)
+    if (this.saveData) {
+      this.upgradePanelBounds = renderBaseUpgradePanel(ctx, this.saveData, canvasWidth, canvasHeight);
+    }
+
     // Footer
     ctx.font = '12px monospace';
     ctx.fillStyle = '#555';
+    ctx.textAlign = 'center';
     ctx.fillText('Click a level to begin', cx, canvasHeight - 30);
 
     ctx.restore();

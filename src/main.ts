@@ -31,6 +31,8 @@ import { LevelManager } from './levels/LevelManager';
 import { LevelConfig, checkAllObjectivesComplete, getObjectiveProgress } from './levels/LevelConfig';
 import { MainMenuScreen } from './ui/MainMenuScreen';
 import { LevelCompleteScreen } from './ui/LevelCompleteScreen';
+import { loadSaveData, saveSaveData, SaveData } from './systems/SaveData';
+import { getBaseUpgradeLevel } from './systems/BaseUpgradeSystem';
 
 type GameState = 'menu' | 'playing' | 'level_complete' | 'game_over' | 'paused';
 
@@ -47,6 +49,7 @@ const levelManager = new LevelManager();
 const mainMenuScreen = new MainMenuScreen();
 const levelCompleteScreen = new LevelCompleteScreen();
 let gameState: GameState = 'menu';
+let saveData: SaveData = loadSaveData();
 
 let radar: RadarDisplay;
 let blipRenderer: BlipRenderer;
@@ -81,6 +84,7 @@ const activeTrailIds = new Set<string>();
 function showMainMenu() {
   gameState = 'menu';
   levelManager.returnToMenu();
+  mainMenuScreen.setSaveData(saveData);
   mainMenuScreen.show(canvas, levelManager.getLevels(), (index) => {
     const config = levelManager.selectLevel(index);
     if (config) {
@@ -108,8 +112,21 @@ function init() {
   screenShake = new ScreenShake();
   homeBase = createHomeBase(0, 0);
   resolutionLevel = 0;
-  prevHealth = player.health;
   damageFlash = 0;
+
+  // Apply persistent base upgrades from save data
+  const baseHpLevel = getBaseUpgradeLevel(saveData, 'base_hp');
+  homeBase.maxHealth = 500 + baseHpLevel * 100;
+  homeBase.health = homeBase.maxHealth;
+
+  const maxHealthLevel = getBaseUpgradeLevel(saveData, 'max_health');
+  player.maxHealth = 100 + maxHealthLevel * 20;
+  player.health = player.maxHealth;
+
+  const startingEnergyLevel = getBaseUpgradeLevel(saveData, 'starting_energy');
+  player.energy = startingEnergyLevel * 25;
+
+  prevHealth = player.health;
 
   upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
     resolutionLevel = lvl;
@@ -119,6 +136,8 @@ function init() {
   abilityBar = new AbilityBar();
   motionTrail = new MotionTrail();
   towRopeSystem = new TowRopeSystem();
+  const salvageCapLevel = getBaseUpgradeLevel(saveData, 'salvage_capacity');
+  towRopeSystem.setMaxTowed(8 + salvageCapLevel * 2);
   minimap = new Minimap();
   keyRemapScreen = new KeyRemapScreen();
   keyRemapScreen.addExtraBinding({
@@ -171,6 +190,10 @@ function cleanupCurrentGame() {
 
 function onLevelComplete() {
   gameState = 'level_complete';
+  // Award earned score as persistent currency
+  saveData.currency += player.score;
+  saveData.runCount++;
+  saveSaveData(saveData);
   const hasNext = levelManager.hasNextLevel();
   levelCompleteScreen.show(
     canvas,
@@ -508,6 +531,10 @@ const loop = new GameLoop({
     if (!alive) {
       gameState = 'game_over';
       towRopeSystem.clear();
+      // Award earned score as persistent currency
+      saveData.currency += player.score;
+      saveData.runCount++;
+      saveSaveData(saveData);
       gameOverScreen.show(canvas, player, () => {
         cleanupCurrentGame();
         showMainMenu();
