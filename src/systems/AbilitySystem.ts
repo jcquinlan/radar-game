@@ -44,6 +44,12 @@ export interface Missile {
   active: boolean;
 }
 
+export interface AbilityOverrides {
+  blastRadius?: number;
+  dashSpeedMultiplier?: number;
+  droneDamageMultiplier?: number;
+}
+
 export class AbilitySystem {
   abilities: Ability[];
   drones: Drone[] = [];
@@ -129,6 +135,7 @@ export class AbilitySystem {
     id: string,
     entities: GameEntity[],
     addFloatingText: FloatingTextCallback,
+    overrides?: AbilityOverrides,
   ): boolean {
     const ability = this.getAbility(id);
     if (!ability || ability.charges <= 0) return false;
@@ -140,16 +147,16 @@ export class AbilitySystem {
     }
 
     if (id === 'damage_blast') {
-      this.activateBlast(entities, addFloatingText);
+      this.activateBlast(entities, addFloatingText, overrides?.blastRadius);
     } else if (id === 'heal_over_time') {
       ability.active = true;
       ability.durationRemaining = ability.duration;
     } else if (id === 'helper_drone') {
       ability.active = true;
       ability.durationRemaining = ability.duration;
-      this.spawnDrone();
+      this.spawnDrone(overrides?.droneDamageMultiplier);
     } else if (id === 'dash') {
-      this.activateDash();
+      this.activateDash(overrides?.dashSpeedMultiplier);
       ability.active = true;
       ability.durationRemaining = ability.duration;
     } else if (id === 'homing_missile') {
@@ -203,8 +210,9 @@ export class AbilitySystem {
   private activateBlast(
     entities: GameEntity[],
     addFloatingText: FloatingTextCallback,
+    radiusOverride?: number,
   ): void {
-    const blastRadius = 200;
+    const blastRadius = radiusOverride ?? 200;
     const blastDamage = 20;
 
     for (const entity of entities) {
@@ -230,21 +238,21 @@ export class AbilitySystem {
     }
   }
 
-  private activateDash(): void {
-    const dashSpeed = this.player.speed * 3;
+  private activateDash(speedMultiplier?: number): void {
+    const dashSpeed = this.player.speed * 3 * (speedMultiplier ?? 1);
     // Dash forward in the direction the ship is facing
     this.player.vx = Math.cos(this.player.heading) * dashSpeed;
     this.player.vy = Math.sin(this.player.heading) * dashSpeed;
   }
 
-  private spawnDrone(): void {
+  private spawnDrone(damageMultiplier?: number): void {
     this.drones.push({
       x: this.player.x,
       y: this.player.y,
       vx: 0,
       vy: 0,
       speed: 120,
-      damage: 5,
+      damage: 5 * (damageMultiplier ?? 1),
       lifetime: 10,
       active: true,
       friction: 2.0,

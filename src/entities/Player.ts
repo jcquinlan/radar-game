@@ -26,6 +26,10 @@ export class Player {
   shieldReduction: number;
   shieldTimeRemaining: number;
 
+  // Combo tracking
+  lastAbilityUsed: string | null;
+  lastAbilityTime: number;
+
   // Stats tracking
   score: number;
   kills: number;
@@ -54,6 +58,8 @@ export class Player {
     this.shieldActive = false;
     this.shieldReduction = 0;
     this.shieldTimeRemaining = 0;
+    this.lastAbilityUsed = null;
+    this.lastAbilityTime = 0;
     this.score = 0;
     this.kills = 0;
     this.totalEnergyCollected = 0;

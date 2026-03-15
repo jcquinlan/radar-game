@@ -273,34 +273,71 @@ window.addEventListener('keydown', (e) => {
 
   for (const ability of abilitySystem.abilities) {
     if (e.key === ability.keybind) {
+      // Detect combo: check if a different ability was used within 3 seconds
+      const now = player.survivalTime;
+      const comboWindow = player.lastAbilityUsed !== null
+        && player.lastAbilityUsed !== ability.id
+        && (now - player.lastAbilityTime) <= 3;
+
+      // Determine combo overrides
+      let overrides: import('./systems/AbilitySystem').AbilityOverrides | undefined;
+
+      if (comboWindow) {
+        // Blast then Drone: drone deals 2x damage
+        if (player.lastAbilityUsed === 'damage_blast' && ability.id === 'helper_drone') {
+          overrides = { droneDamageMultiplier: 2 };
+        }
+        // HoT then Dash: dash goes 50% further
+        if (player.lastAbilityUsed === 'heal_over_time' && ability.id === 'dash') {
+          overrides = { dashSpeedMultiplier: 1.5 };
+        }
+        // Dash then Blast: blast radius increased 50%
+        if (player.lastAbilityUsed === 'dash' && ability.id === 'damage_blast') {
+          overrides = { blastRadius: 300 };
+        }
+      }
+
       if (ability.id === 'damage_blast') {
-        if (abilitySystem.activate('damage_blast', world.entities, addText)) {
+        if (abilitySystem.activate('damage_blast', world.entities, addText, overrides)) {
           abilityEffects.triggerBlast();
           screenShake.trigger(4);
+          if (overrides) floatingText.add('COMBO!', player.x, player.y - 45, '#ffff00');
+          player.lastAbilityUsed = ability.id;
+          player.lastAbilityTime = now;
         }
       } else if (ability.id === 'heal_over_time') {
-        if (abilitySystem.activate('heal_over_time', world.entities, addText)) {
+        if (abilitySystem.activate('heal_over_time', world.entities, addText, overrides)) {
           const t = getTheme();
           floatingText.add('REGEN!', player.x, player.y - 25, t.abilities.heal_over_time);
+          player.lastAbilityUsed = ability.id;
+          player.lastAbilityTime = now;
         }
       } else if (ability.id === 'helper_drone') {
-        if (abilitySystem.activate('helper_drone', world.entities, addText)) {
+        if (abilitySystem.activate('helper_drone', world.entities, addText, overrides)) {
           const t = getTheme();
           abilityEffects.triggerDroneSpawn(player.x, player.y);
           floatingText.add('DRONE!', player.x, player.y - 25, t.abilities.helper_drone);
+          if (overrides) floatingText.add('COMBO!', player.x, player.y - 45, '#ffff00');
+          player.lastAbilityUsed = ability.id;
+          player.lastAbilityTime = now;
         }
       } else if (ability.id === 'dash') {
-        if (abilitySystem.activate('dash', world.entities, addText)) {
+        if (abilitySystem.activate('dash', world.entities, addText, overrides)) {
           const t = getTheme();
           floatingText.add('DASH!', player.x, player.y - 25, t.abilities.dash);
+          if (overrides) floatingText.add('COMBO!', player.x, player.y - 45, '#ffff00');
           screenShake.trigger(2);
+          player.lastAbilityUsed = ability.id;
+          player.lastAbilityTime = now;
         }
       } else if (ability.id === 'homing_missile') {
-        if (abilitySystem.activate('homing_missile', world.entities, addText)) {
+        if (abilitySystem.activate('homing_missile', world.entities, addText, overrides)) {
           const t = getTheme();
           abilityEffects.triggerMissileLaunch(player.x, player.y);
           floatingText.add('MISSILE!', player.x, player.y - 25, t.abilities.homing_missile);
           screenShake.trigger(3);
+          player.lastAbilityUsed = ability.id;
+          player.lastAbilityTime = now;
         }
       }
       break;

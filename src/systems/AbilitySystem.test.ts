@@ -449,4 +449,111 @@ describe('AbilitySystem', () => {
       expect(enemy.health).toBe(80); // No damage — missile didn't track
     });
   });
+
+  describe('combo overrides', () => {
+    describe('blast radius override (Dash then Blast combo)', () => {
+      it('uses 300px radius when blastRadius override is passed', () => {
+        const { system, player } = buildAbilitySystem();
+        player.x = 0;
+        player.y = 0;
+        // Place enemy at 250px — outside default 200px but inside 300px
+        const enemy = createEnemy(250, 0, 'brute');
+        enemy.health = 80;
+        const entities: GameEntity[] = [enemy];
+
+        system.activate('damage_blast', entities, () => {}, { blastRadius: 300 });
+        expect(enemy.health).toBe(60); // 80 - 20 = 60, hit within 300px
+      });
+
+      it('does not hit enemies beyond overridden radius', () => {
+        const { system, player } = buildAbilitySystem();
+        player.x = 0;
+        player.y = 0;
+        const enemy = createEnemy(350, 0, 'brute');
+        enemy.health = 80;
+        const entities: GameEntity[] = [enemy];
+
+        system.activate('damage_blast', entities, () => {}, { blastRadius: 300 });
+        expect(enemy.health).toBe(80); // Not hit — 350px > 300px
+      });
+
+      it('uses default 200px radius when no override is passed', () => {
+        const { system, player } = buildAbilitySystem();
+        player.x = 0;
+        player.y = 0;
+        const enemy = createEnemy(250, 0, 'brute');
+        enemy.health = 80;
+        const entities: GameEntity[] = [enemy];
+
+        system.activate('damage_blast', entities, () => {});
+        expect(enemy.health).toBe(80); // Not hit — 250px > 200px
+      });
+    });
+
+    describe('dash speed override (HoT then Dash combo)', () => {
+      it('applies 1.5x velocity multiplier when dashSpeedMultiplier override is passed', () => {
+        const { system, player } = buildAbilitySystem();
+        player.heading = 0; // facing right
+        player.vx = 0;
+        player.vy = 0;
+        system.activate('dash', [], () => {}, { dashSpeedMultiplier: 1.5 });
+
+        const expectedSpeed = player.speed * 3 * 1.5;
+        expect(player.vx).toBeCloseTo(expectedSpeed);
+        expect(player.vy).toBeCloseTo(0);
+      });
+
+      it('uses default 1x multiplier when no override is passed', () => {
+        const { system, player } = buildAbilitySystem();
+        player.heading = 0;
+        player.vx = 0;
+        player.vy = 0;
+        system.activate('dash', [], () => {});
+
+        const expectedSpeed = player.speed * 3;
+        expect(player.vx).toBeCloseTo(expectedSpeed);
+      });
+    });
+
+    describe('drone damage override (Blast then Drone combo)', () => {
+      it('spawns drone with 2x damage when droneDamageMultiplier override is passed', () => {
+        const { system, player } = buildAbilitySystem();
+        player.x = 0;
+        player.y = 0;
+        system.activate('helper_drone', [], () => {}, { droneDamageMultiplier: 2 });
+
+        expect(system.drones.length).toBe(1);
+        expect(system.drones[0].damage).toBe(10); // 5 * 2
+      });
+
+      it('spawns drone with default damage when no override is passed', () => {
+        const { system, player } = buildAbilitySystem();
+        system.activate('helper_drone', [], () => {});
+
+        expect(system.drones[0].damage).toBe(5);
+      });
+
+      it('2x damage drone deals more contact damage to enemies', () => {
+        const { system, player } = buildAbilitySystem();
+        player.x = 0;
+        player.y = 0;
+        const enemy = createEnemy(5, 0, 'brute');
+        enemy.health = 80;
+        const entities: GameEntity[] = [enemy];
+
+        system.activate('helper_drone', entities, () => {}, { droneDamageMultiplier: 2 });
+        system.update(1, entities, () => {}); // 1 second of 10 dmg/s
+
+        expect(enemy.health).toBeLessThan(80 - 5); // More than base 5 damage
+      });
+    });
+  });
+
+  describe('combo detection (Player tracking fields)', () => {
+    it('Player initializes with null lastAbilityUsed and 0 lastAbilityTime', () => {
+      const player = new Player();
+      expect(player.lastAbilityUsed).toBeNull();
+      expect(player.lastAbilityTime).toBe(0);
+    });
+  });
 });
