@@ -327,4 +327,126 @@ describe('AbilitySystem', () => {
       expect(system.isDashing()).toBe(false);
     });
   });
+
+  describe('homing missile', () => {
+    it('spawns a missile at the player position with randomized launch direction', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 100;
+      player.y = 200;
+      const enemy = createEnemy(300, 200, 'scout');
+      enemy.visible = true;
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('homing_missile', entities, () => {});
+
+      expect(system.missiles.length).toBe(1);
+      expect(system.missiles[0].x).toBe(100);
+      expect(system.missiles[0].y).toBe(200);
+      // Launches at low speed (not full speed) — will accelerate
+      const speed = Math.sqrt(
+        system.missiles[0].vx ** 2 + system.missiles[0].vy ** 2,
+      );
+      expect(speed).toBeLessThan(system.missiles[0].speed);
+    });
+
+    it('accelerates and steers toward nearest enemy over time', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      // Enemy far to the right — gives missile time to arc toward it
+      const enemy = createEnemy(300, 0, 'brute');
+      enemy.visible = true;
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('homing_missile', entities, () => {});
+      const launchSpeed = Math.sqrt(
+        system.missiles[0].vx ** 2 + system.missiles[0].vy ** 2,
+      );
+
+      // Run several frames to let it accelerate and steer
+      for (let i = 0; i < 10; i++) system.update(0.1, entities, () => {});
+
+      const afterSpeed = Math.sqrt(
+        system.missiles[0].vx ** 2 + system.missiles[0].vy ** 2,
+      );
+      // Should have accelerated
+      expect(afterSpeed).toBeGreaterThan(launchSpeed);
+      // Should be heading toward the enemy (positive x velocity)
+      expect(system.missiles[0].vx).toBeGreaterThan(0);
+    });
+
+    it('deals damage on impact and is consumed', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      // Place enemy at moderate range — missile arcs then homes in
+      const enemy = createEnemy(150, 0, 'brute');
+      enemy.visible = true;
+      enemy.health = 80;
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('homing_missile', entities, () => {});
+      // Simulate full lifetime in small steps — missile arcs and accelerates
+      for (let i = 0; i < 80; i++) system.update(0.05, entities, () => {});
+
+      expect(enemy.health).toBeLessThan(80); // Took missile damage
+      expect(system.missiles.length).toBe(0); // Consumed on impact
+    });
+
+    it('kills enemy and awards score on lethal hit', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      const enemy = createEnemy(150, 0, 'scout');
+      enemy.visible = true;
+      enemy.health = 1; // One hit from anything kills it
+      enemy.energyDrop = 5;
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('homing_missile', entities, () => {});
+      for (let i = 0; i < 80; i++) system.update(0.05, entities, () => {});
+
+      expect(enemy.active).toBe(false);
+      expect(player.kills).toBe(1);
+      expect(player.score).toBe(50);
+      expect(player.energy).toBe(5);
+    });
+
+    it('expires after 4 seconds if it misses', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+
+      // Fire with no enemies — missile flies into void
+      system.activate('homing_missile', [], () => {});
+      expect(system.missiles.length).toBe(1);
+
+      system.update(5, [], () => {});
+      expect(system.missiles.length).toBe(0);
+    });
+
+    it('has a cooldown', () => {
+      const { system } = buildAbilitySystem();
+      const ability = system.getAbility('homing_missile')!;
+      expect(ability.cooldown).toBeGreaterThan(0);
+    });
+
+    it('does not track invisible enemies', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      player.heading = 0; // facing right
+      // Place enemy off the firing line so straight-ahead missile misses
+      const enemy = createEnemy(0, 150, 'brute');
+      enemy.visible = false; // Not revealed by ping
+      enemy.health = 80;
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('homing_missile', entities, () => {});
+      // Run full lifetime — missile fires straight ahead, misses the enemy above
+      for (let i = 0; i < 80; i++) system.update(0.05, entities, () => {});
+
+      expect(enemy.health).toBe(80); // No damage — missile didn't track
+    });
+  });
 });

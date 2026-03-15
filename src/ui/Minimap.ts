@@ -1,5 +1,5 @@
 import { Player } from '../entities/Player';
-import { GameEntity } from '../entities/Entity';
+import { GameEntity, HomeBase } from '../entities/Entity';
 
 const SIZE = 160;
 const PADDING = 20;
@@ -70,6 +70,7 @@ export class Minimap {
     entities: GameEntity[],
     canvasWidth: number,
     canvasHeight: number,
+    homeBase?: HomeBase,
   ): void {
     const x = PADDING;
     const y = canvasHeight - PADDING - SIZE;
@@ -92,6 +93,24 @@ export class Minimap {
 
     const centerX = x + SIZE / 2;
     const centerY = y + SIZE / 2;
+
+    // Home base marker
+    if (homeBase) {
+      const basePos = this.worldToMinimap(homeBase.x, homeBase.y, player, canvasWidth, canvasHeight);
+      // Base radius ring
+      const scale = SIZE / 2 / WORLD_RADIUS;
+      const baseRadiusOnMap = homeBase.radius * scale;
+      ctx.beginPath();
+      ctx.arc(basePos.x, basePos.y, Math.max(baseRadiusOnMap, 3), 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(100, 220, 255, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // Base center dot
+      ctx.beginPath();
+      ctx.arc(basePos.x, basePos.y, 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#64dcff';
+      ctx.fill();
+    }
 
     // Entity dots
     const visible = this.getVisibleEntities(entities);

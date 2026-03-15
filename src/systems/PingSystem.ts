@@ -120,11 +120,11 @@ export class PingSystem {
 
         const relX = entity.x - player.x;
         const relY = entity.y - player.y;
-        const dist = Math.sqrt(relX * relX + relY * relY);
+        const distSq = relX * relX + relY * relY;
 
-        if (dist > this.config.maxRadius) continue;
+        if (distSq > this.config.maxRadius * this.config.maxRadius) continue;
 
-        if (dist <= this.state.radius) {
+        if (distSq <= this.state.radius * this.state.radius) {
           entity.pingedThisWave = true;
 
           if (entity.type === 'enemy') {

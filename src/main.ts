@@ -8,7 +8,7 @@ import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
 import { PingSystem } from './systems/PingSystem';
 import { CombatSystem } from './systems/CombatSystem';
-import { Ally, Enemy, Resource, Dropoff } from './entities/Entity';
+import { Ally, Enemy, Resource, Dropoff, HomeBase, createHomeBase } from './entities/Entity';
 import { UpgradeSystem } from './systems/UpgradeSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
@@ -69,6 +69,7 @@ let keyRemapScreen: KeyRemapScreen;
 let motionTrail: MotionTrail;
 let towRopeSystem: TowRopeSystem;
 let minimap: Minimap;
+let homeBase: HomeBase;
 let resolutionLevel: number;
 let prevHealth: number;
 let damageFlash: number;
@@ -102,6 +103,7 @@ function init() {
   gameOverScreen = new GameOverScreen();
   floatingText = new FloatingText();
   screenShake = new ScreenShake();
+  homeBase = createHomeBase(0, 0);
   resolutionLevel = 0;
   prevHealth = player.health;
   damageFlash = 0;
@@ -285,6 +287,12 @@ window.addEventListener('keydown', (e) => {
           floatingText.add('DASH!', player.x, player.y - 25, '#ffff00');
           screenShake.trigger(2);
         }
+      } else if (ability.id === 'homing_missile') {
+        if (abilitySystem.activate('homing_missile', world.entities, addText)) {
+          abilityEffects.triggerMissileLaunch(player.x, player.y);
+          floatingText.add('MISSILE!', player.x, player.y - 25, '#ff8800');
+          screenShake.trigger(3);
+        }
       }
       break;
     }
@@ -467,6 +475,12 @@ const loop = new GameLoop({
         motionTrail.track(did, drone.x, drone.y, drone.vx, drone.vy, '#00ffff', dt);
         activeTrailIds.add(did);
       }
+      for (let i = 0; i < abilitySystem.missiles.length; i++) {
+        const missile = abilitySystem.missiles[i];
+        const mid = `m${i}`;
+        motionTrail.track(mid, missile.x, missile.y, missile.vx, missile.vy, '#ff8800', dt);
+        activeTrailIds.add(mid);
+      }
     }
     motionTrail.prune(activeTrailIds);
 
@@ -529,16 +543,78 @@ const loop = new GameLoop({
 
     // View radius covers the full screen (corner-to-corner distance)
     const viewRadius = Math.sqrt(canvas.width * canvas.width + canvas.height * canvas.height) / 2;
+    const viewRadiusSq = viewRadius * viewRadius;
 
     ambientParticles.renderDeep(ctx, cx, cy, viewRadius, player.x, player.y);
 
     // Motion trails (rendered behind blips)
     motionTrail.render(ctx, player.x, player.y, cx, cy);
 
+    // Home base — boundary ring and center marker
+    {
+      const hbx = homeBase.x - player.x;
+      const hby = homeBase.y - player.y;
+      if (hbx * hbx + hby * hby <= viewRadiusSq) {
+        const hsx = cx + hbx;
+        const hsy = cy + hby;
+        const pulse = 1 + Math.sin(player.survivalTime * 1.5) * 0.05;
+
+        ctx.save();
+
+        // Outer boundary ring
+        ctx.beginPath();
+        ctx.arc(hsx, hsy, homeBase.radius * pulse, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(100, 220, 255, 0.25)';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#64dcff';
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+
+        // Inner glow fill
+        ctx.beginPath();
+        ctx.arc(hsx, hsy, homeBase.radius * pulse, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(100, 220, 255, 0.03)';
+        ctx.fill();
+
+        // Inner ring (second boundary line for depth)
+        ctx.beginPath();
+        ctx.arc(hsx, hsy, homeBase.radius * 0.6 * pulse, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(100, 220, 255, 0.12)';
+        ctx.lineWidth = 1;
+        ctx.shadowBlur = 0;
+        ctx.stroke();
+
+        // Center structure — hexagon shape
+        ctx.translate(hsx, hsy);
+        const hexRadius = 10;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const angle = (Math.PI / 3) * i - Math.PI / 6;
+          const hxp = Math.cos(angle) * hexRadius;
+          const hyp = Math.sin(angle) * hexRadius;
+          if (i === 0) ctx.moveTo(hxp, hyp);
+          else ctx.lineTo(hxp, hyp);
+        }
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(100, 220, 255, 0.4)';
+        ctx.strokeStyle = 'rgba(100, 220, 255, 0.7)';
+        ctx.lineWidth = 1.5;
+        ctx.shadowColor = '#64dcff';
+        ctx.shadowBlur = 8;
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.restore();
+      }
+    }
+
     // Dropoff zones — pulsing ring markers
     for (const entity of world.entities) {
       if (!entity.active || entity.type !== 'dropoff') continue;
       const dropoff = entity as Dropoff;
+      const ddx = dropoff.x - player.x;
+      const ddy = dropoff.y - player.y;
+      if (ddx * ddx + ddy * ddy > viewRadiusSq) continue;
       const dsx = cx + (dropoff.x - player.x);
       const dsy = cy + (dropoff.y - player.y);
       const pulse = 1 + Math.sin(player.survivalTime * 2) * 0.08;
@@ -638,8 +714,11 @@ const loop = new GameLoop({
 
     // Render projectiles
     for (const p of combatSystem.projectiles) {
-      const px = cx + (p.x - player.x);
-      const py = cy + (p.y - player.y);
+      const prx = p.x - player.x;
+      const pry = p.y - player.y;
+      if (prx * prx + pry * pry > viewRadiusSq) continue;
+      const px = cx + prx;
+      const py = cy + pry;
       ctx.save();
       ctx.shadowColor = '#ff4141';
       ctx.shadowBlur = 6;
@@ -652,14 +731,34 @@ const loop = new GameLoop({
 
     // Render drones
     for (const drone of abilitySystem.drones) {
-      const droneX = cx + (drone.x - player.x);
-      const droneY = cy + (drone.y - player.y);
+      const drx = drone.x - player.x;
+      const dry = drone.y - player.y;
+      if (drx * drx + dry * dry > viewRadiusSq) continue;
+      const droneX = cx + drx;
+      const droneY = cy + dry;
       ctx.save();
       ctx.shadowColor = '#00ffff';
       ctx.shadowBlur = 8;
       ctx.beginPath();
       ctx.arc(droneX, droneY, 4, 0, Math.PI * 2);
       ctx.fillStyle = '#00ffff';
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Render missiles
+    for (const missile of abilitySystem.missiles) {
+      const mrx = missile.x - player.x;
+      const mry = missile.y - player.y;
+      if (mrx * mrx + mry * mry > viewRadiusSq) continue;
+      const mx = cx + mrx;
+      const my = cy + mry;
+      ctx.save();
+      ctx.shadowColor = '#ff8800';
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(mx, my, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#ff8800';
       ctx.fill();
       ctx.restore();
     }
@@ -732,7 +831,7 @@ const loop = new GameLoop({
     }
 
     // Minimap (bottom left)
-    minimap.render(ctx, player, world.entities, canvas.width, canvas.height);
+    minimap.render(ctx, player, world.entities, canvas.width, canvas.height, homeBase);
 
     // Objective progress
     if (currentLevelConfig && currentLevelConfig.objectives.length > 0) {

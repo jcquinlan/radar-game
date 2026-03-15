@@ -31,9 +31,22 @@ export interface Drone {
   friction: number;
 }
 
+export interface Missile {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  speed: number;
+  damage: number;
+  lifetime: number;
+  turnRate: number;
+  active: boolean;
+}
+
 export class AbilitySystem {
   abilities: Ability[];
   drones: Drone[] = [];
+  missiles: Missile[] = [];
   private player: Player;
 
   constructor(player: Player) {
@@ -87,6 +100,18 @@ export class AbilitySystem {
         maxCharges: 2,
         charges: 2,
       },
+      {
+        id: 'homing_missile',
+        name: 'Missile',
+        keybind: '5',
+        cooldown: 1, // TODO: restore to 8 after testing
+        cooldownRemaining: 0,
+        duration: 0,
+        durationRemaining: 0,
+        active: false,
+        maxCharges: 1,
+        charges: 1,
+      },
     ];
   }
 
@@ -126,6 +151,8 @@ export class AbilitySystem {
       this.activateDash();
       ability.active = true;
       ability.durationRemaining = ability.duration;
+    } else if (id === 'homing_missile') {
+      this.spawnMissile(entities);
     }
 
     return true;
@@ -167,6 +194,9 @@ export class AbilitySystem {
 
     // Update drones
     this.updateDrones(dt, entities, addFloatingText);
+
+    // Update missiles
+    this.updateMissiles(dt, entities, addFloatingText);
   }
 
   private activateBlast(
@@ -283,7 +313,130 @@ export class AbilitySystem {
       drone.y += drone.vy * dt;
     }
 
-    // Clean up dead drones
-    this.drones = this.drones.filter((d) => d.active);
+    // Clean up dead drones (backward splice avoids .filter() allocation)
+    for (let i = this.drones.length - 1; i >= 0; i--) {
+      if (!this.drones[i].active) this.drones.splice(i, 1);
+    }
+  }
+
+  private spawnMissile(entities: GameEntity[]): void {
+    // Check if any visible enemies exist to target
+    const hasTarget = entities.some(
+      (e) => e.active && e.type === 'enemy' && e.visible,
+    );
+
+    // With a target: random spread for arcing trajectory
+    // Without: fire straight ahead from the ship
+    const launchSpread = hasTarget
+      ? (Math.random() - 0.5) * Math.PI * 1.2 // ±108° spread
+      : 0;
+    const launchAngle = this.player.heading + launchSpread;
+    const launchSpeed = hasTarget ? 60 : 220; // Full speed ahead if no target
+
+    this.missiles.push({
+      x: this.player.x,
+      y: this.player.y,
+      vx: Math.cos(launchAngle) * launchSpeed,
+      vy: Math.sin(launchAngle) * launchSpeed,
+      speed: 220,
+      damage: 5, // TODO: restore to 25 after testing
+      lifetime: 4,
+      turnRate: 3.5, // radians/sec — slightly higher to compensate for random launch
+      active: true,
+    });
+  }
+
+  private updateMissiles(
+    dt: number,
+    entities: GameEntity[],
+    addFloatingText: FloatingTextCallback,
+  ): void {
+    for (const missile of this.missiles) {
+      if (!missile.active) continue;
+
+      missile.lifetime -= dt;
+      if (missile.lifetime <= 0) {
+        missile.active = false;
+        continue;
+      }
+
+      // Single pass: find nearest visible enemy to steer toward + check collision
+      let nearest: Enemy | null = null;
+      let nearestDistSq = 400 * 400; // 400px tracking range
+      let hitEnemy: Enemy | null = null;
+
+      for (const entity of entities) {
+        if (!entity.active || entity.type !== 'enemy') continue;
+        const enemy = entity as Enemy;
+        const dx = enemy.x - missile.x;
+        const dy = enemy.y - missile.y;
+        const distSq = dx * dx + dy * dy;
+
+        // Collision check (hit radius 15px)
+        if (distSq < 15 * 15) {
+          hitEnemy = enemy;
+          break;
+        }
+
+        // Steering: only track visible enemies
+        if (enemy.visible && distSq < nearestDistSq) {
+          nearestDistSq = distSq;
+          nearest = enemy;
+        }
+      }
+
+      // Handle collision
+      if (hitEnemy) {
+        hitEnemy.health -= missile.damage;
+        addFloatingText(`-${missile.damage}`, hitEnemy.x, hitEnemy.y, '#ff8800');
+        missile.active = false;
+
+        if (hitEnemy.health <= 0 && hitEnemy.active) {
+          hitEnemy.active = false;
+          this.player.addEnergy(hitEnemy.energyDrop);
+          this.player.kills++;
+          this.player.score += 50;
+          addFloatingText('+50', hitEnemy.x, hitEnemy.y - 15, '#ffaa00');
+        }
+        continue;
+      }
+
+      // Accelerate toward target speed (launches slow, ramps up)
+      const currentSpeed = Math.sqrt(missile.vx * missile.vx + missile.vy * missile.vy);
+      const currentAngle = Math.atan2(missile.vy, missile.vx);
+
+      // Steer toward target by rotating velocity vector
+      let newAngle = currentAngle;
+      if (nearest) {
+        const desiredAngle = Math.atan2(
+          nearest.y - missile.y,
+          nearest.x - missile.x,
+        );
+
+        // Shortest angular difference
+        let angleDiff = desiredAngle - currentAngle;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+        // Clamp turn to turnRate * dt
+        const maxTurn = missile.turnRate * dt;
+        const turn = Math.max(-maxTurn, Math.min(maxTurn, angleDiff));
+        newAngle = currentAngle + turn;
+      }
+
+      // Ramp speed toward target — accelerates at 400 px/s²
+      const newSpeed = Math.min(missile.speed, currentSpeed + 400 * dt);
+      missile.vx = Math.cos(newAngle) * newSpeed;
+      missile.vy = Math.sin(newAngle) * newSpeed;
+
+      // Move
+      missile.x += missile.vx * dt;
+      missile.y += missile.vy * dt;
+    }
+
+    // Clean up dead missiles (backward splice avoids .filter() allocation)
+    for (let i = this.missiles.length - 1; i >= 0; i--) {
+      if (!this.missiles[i].active) this.missiles.splice(i, 1);
+    }
   }
 }

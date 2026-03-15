@@ -2,6 +2,30 @@
 
 A browser-based radar-themed survival game built with TypeScript and Canvas 2D. The player navigates an infinite procedural world viewed through an expanding radar ping, collecting resources, fighting enemies, towing salvage to dropoff points, and upgrading their ship.
 
+## Indie Dev Philosophy
+
+This is a solo/small-team indie game. Every decision should optimize for **shipping playable builds fast** and **keeping the codebase small enough to hold in one person's head.** Guard against scope creep and over-architecture relentlessly.
+
+### Core Principles
+
+1. **Gameplay first, code second.** A janky feature that's fun beats a clean abstraction nobody plays. Always ask: "does this make the game more fun?" If the answer is "no, but it's cleaner code," it's not a priority.
+
+2. **Finish, don't polish prematurely.** Resist the urge to refactor working systems before the game has all its core loops. Refactoring is earned by shipping — if a system works and isn't blocking new features, leave it alone.
+
+3. **Scope is the enemy.** Before adding any feature, ask: "is this in the critical path to a playable, fun game?" New entity types, new abilities, new upgrade tiers — each one adds testing surface, balance complexity, and rendering work. Be ruthless about saying "not yet."
+
+4. **Playtest constantly.** After any gameplay change, play the game for 30+ seconds to feel the change. Numbers in code don't tell you if something feels good — only playing does.
+
+5. **One file should do one thing.** If a file is doing two unrelated jobs, split it. If two files are doing the same job, merge them. But don't split a file just because it's long — split it because its responsibilities are distinct.
+
+### What "Simple" Means Here
+
+- Flat data structures over nested hierarchies
+- Functions over classes (except Player, which is a genuine singleton with state)
+- Arrays and linear iteration over spatial data structures — until profiling proves otherwise
+- Direct property access over getters/setters unless access control is genuinely needed
+- Hardcoded constants in the file that uses them, not a shared config — until the same value appears in 3+ places
+
 ## Quick Reference
 
 ```bash
@@ -20,11 +44,15 @@ npm run lint         # (not configured — echoes a no-op)
 - **Rendering:** Canvas 2D API + optional WebGL2 post-processing (CRT shader)
 - **Dependencies:** Zero runtime dependencies. Only devDependencies: typescript, vite, vitest, jsdom.
 
+**Keep it zero-dep.** Do not add runtime dependencies. This game runs on Canvas 2D and math. If you think you need a library, you almost certainly don't — write the 20 lines of code instead.
+
 ## Architecture
 
 ### Systems pattern
 
 The game uses a lightweight entity-systems architecture. Entities are plain data objects (interfaces, no behavior). Systems operate on entities each frame. The main loop in `src/main.ts` orchestrates the update/render cycle.
+
+**This is not a full ECS framework and should not become one.** There is no component registry, no entity manager, no system scheduler. Systems are just functions/classes that take entity arrays and dt. This is intentional — the overhead of a "real" ECS is not justified at this scale.
 
 **Update order** (every frame at 60 Hz fixed timestep):
 
@@ -129,7 +157,63 @@ src/
 - **One ping per wave**: `pingedThisWave` flag on each entity prevents double-interaction until the next ping fires
 - **Difficulty scales with distance**: `1 + log2(1 + distFromOrigin / 1000)` — enemies get stronger the further you go from the origin
 
-### Game mechanics summary
+## Browser Game Performance Rules
+
+These rules are specific to this project: a 60 Hz Canvas 2D game running in the browser. Follow them to avoid the performance pitfalls that kill browser games.
+
+### Allocation & GC
+
+- **Never allocate in the hot path.** The update and render functions run 60 times per second. Creating objects, arrays, or closures inside them triggers garbage collection pauses that cause visible stuttering. Pre-allocate and reuse.
+- **Reuse arrays** instead of creating new ones each frame. Clear with `length = 0`, not `= []`.
+- **Avoid string concatenation in render loops.** Template literals and string concat create garbage. Cache formatted strings when the underlying value hasn't changed.
+- **Use `Math.hypot()` sparingly in hot loops.** It's slower than manual `sqrt(dx*dx + dy*dy)`. When you only need to *compare* distances (not compute exact values), use squared distances: `dx*dx + dy*dy < radius * radius`.
+
+### Canvas 2D
+
+- **Minimize state changes.** Group draws by `fillStyle`/`strokeStyle`/`globalAlpha` — switching these is cheap but not free. Don't alternate colors back and forth.
+- **`save()`/`restore()` are expensive in tight loops.** Use them for transform changes, but don't nest them unnecessarily. If you only change `fillStyle`, just set it back manually instead of save/restore.
+- **`shadowBlur` is very expensive.** Every draw call with a non-zero `shadowBlur` effectively renders twice. Use sparingly — one or two glowing elements per frame is fine, not every blip.
+- **Batch draw calls.** Instead of calling `fillRect()` per entity, batch with a single `beginPath()` + multiple `rect()` + one `fill()` where possible.
+- **Skip off-screen entities.** Before drawing any world-space entity, check if it's within the visible radar radius. A quick distance check is cheaper than an invisible draw call.
+
+### Frame Budget
+
+At 60 Hz you have **16.67ms per frame** for update + render combined. Profile with the browser's Performance tab, not `console.time`. Watch for:
+- GC pauses (yellow bars in Chrome DevTools)
+- Layout thrashing (don't read DOM properties in the game loop)
+- Long frames from `shadowBlur` or too many `save()`/`restore()` calls
+
+### When to Optimize
+
+Don't optimize speculatively. The current entity count (typically <100 on screen) does not need spatial partitioning. If profiling shows a bottleneck:
+1. First, skip unnecessary work (visibility culling, early returns)
+2. Then, reduce allocations (object pooling, pre-allocated arrays)
+3. Only then consider algorithmic changes (spatial grid, quadtree)
+
+## Game Balance & Tuning
+
+### How to Tune
+
+Game balance is best done by **playing, not by staring at spreadsheets.** When adjusting values:
+
+1. Change one variable at a time
+2. Play 2-3 runs to feel the difference
+3. Commit the change with a note about what felt different
+
+### Current Balance Anchors
+
+These values define the game's feel. Changing them has cascading effects — be intentional:
+
+- **Player speed (base 60)** — determines how fast the world scrolls. Changing this affects encounter pacing, resource collection rate, and how many chunks load per second.
+- **Ping cooldown (base 1.5s)** — the game's heartbeat. Shorter = more information, easier. Longer = more tension, harder. The entire game rhythm is built around this.
+- **Enemy spawn density** — controlled by POI weights and ambient spawn rates in `World.ts`. More enemies = more energy from kills but more damage taken. This is the primary difficulty lever.
+- **Energy economy** — resources give 5-15 energy; upgrades cost 20-200+. The ratio determines progression speed. Currently tuned for ~2-3 upgrades in the first 5 minutes.
+
+### Difficulty Curve
+
+The logarithmic scaling (`1 + log2(1 + dist/1000)`) is deliberately gentle. At 1000px from origin, difficulty is 2x. At 3000px, it's ~3x. This means early exploration feels safe but distant regions are genuinely dangerous. Don't change this formula without playing the full progression.
+
+## Game mechanics summary
 
 **Entities:**
 - **Resources** — green blips, 5-15 energy each, collected by ping sweep or magnet
@@ -199,6 +283,29 @@ npm run test:watch   # Watch mode
 - Systems are tested with deterministic inputs (mock entities, explicit dt values)
 - `performance.now()` and `requestAnimationFrame` are spied for game loop tests
 - Tests are behavioral — they assert on outputs and state changes, not implementation structure
+
+**What to test in a game:**
+- System logic (does the combat system apply damage correctly?)
+- State transitions (does game over trigger when HP reaches 0?)
+- Math-heavy code (physics, difficulty scaling, cost formulas)
+- Edge cases (max upgrades, empty entity lists, zero dt)
+
+**What NOT to test:**
+- Rendering output (canvas draw calls are not worth asserting on)
+- Exact pixel positions (these change constantly during development)
+- "Does the game feel fun" (that's playtesting, not unit testing)
+
+## Adding New Features — Checklist
+
+When adding a new entity type, ability, upgrade, or system:
+
+1. **Does this serve one of the core loops?** (explore → collect → upgrade → go further) If not, it's probably scope creep.
+2. **Can it reuse existing patterns?** New enemy subtypes reuse the enemy factory + combat system. New abilities reuse AbilitySystem's cooldown logic. Don't build new systems for things that fit existing ones.
+3. **Update the factory** in `Entity.ts` if adding entities
+4. **Update the relevant system** — not main.ts. Main.ts should only change if the update/render order needs a new phase.
+5. **Add tests** for the system logic, not for rendering
+6. **Play the game** and verify it feels right
+7. **Update this file** if the change affects architecture, update order, or game balance anchors
 
 ## Commit Convention
 
