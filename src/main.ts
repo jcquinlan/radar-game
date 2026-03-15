@@ -8,7 +8,7 @@ import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
 import { PingSystem } from './systems/PingSystem';
 import { CombatSystem } from './systems/CombatSystem';
-import { Ally, Enemy, Resource, Dropoff, HomeBase, createHomeBase } from './entities/Entity';
+import { Ally, Enemy, Resource, Dropoff, HomeBase, Defense, createHomeBase } from './entities/Entity';
 import { UpgradeSystem } from './systems/UpgradeSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
@@ -71,6 +71,7 @@ let motionTrail: MotionTrail;
 let towRopeSystem: TowRopeSystem;
 let minimap: Minimap;
 let homeBase: HomeBase;
+let defenses: Defense[] = [];
 let resolutionLevel: number;
 let prevHealth: number;
 let damageFlash: number;
@@ -107,6 +108,7 @@ function init() {
   floatingText = new FloatingText();
   screenShake = new ScreenShake();
   homeBase = createHomeBase(0, 0);
+  defenses = [];
   resolutionLevel = 0;
   prevHealth = player.health;
   damageFlash = 0;
@@ -609,6 +611,39 @@ const loop = new GameLoop({
         ctx.stroke();
 
         ctx.restore();
+      }
+    }
+
+    // Defense entities — turrets and repair stations
+    for (const def of defenses) {
+      if (!def.active) continue;
+      const ddx = def.x - player.x;
+      const ddy = def.y - player.y;
+      if (ddx * ddx + ddy * ddy > viewRadiusSq) continue;
+      const dsx = cx + ddx;
+      const dsy = cy + ddy;
+
+      if (def.type === 'turret') {
+        // Cyan square (6x6) with aim-direction line
+        ctx.fillStyle = '#00ddff';
+        ctx.fillRect(dsx - 3, dsy - 3, 6, 6);
+        // Aim direction line (8px long)
+        ctx.beginPath();
+        ctx.moveTo(dsx, dsy);
+        ctx.lineTo(dsx + Math.cos(def.aimDirection) * 8, dsy + Math.sin(def.aimDirection) * 8);
+        ctx.strokeStyle = '#00ddff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      } else {
+        // Repair station: green cross/plus with pulsing glow
+        const pulseAlpha = 0.5 + Math.sin(player.survivalTime * 3) * 0.3;
+        ctx.globalAlpha = pulseAlpha;
+        ctx.fillStyle = '#00ff41';
+        // Horizontal bar of cross
+        ctx.fillRect(dsx - 6, dsy - 1.5, 12, 3);
+        // Vertical bar of cross
+        ctx.fillRect(dsx - 1.5, dsy - 6, 3, 12);
+        ctx.globalAlpha = 1;
       }
     }
 
