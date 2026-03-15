@@ -50,8 +50,8 @@ export const LEVELS: LevelConfig[] = [
       { type: 'kill_enemies', target: 5, label: 'Destroy 5 enemies' },
     ],
     hints: [
-      'Your radar ping damages enemies on contact.',
-      'Red blips are enemies — fly close and let your ping hit them!',
+      'Your radar ping reveals enemy positions.',
+      'Red blips are enemies — use abilities to fight them!',
       'Blue blips are allies — healers, shields, and beacons.',
     ],
     playerOverrides: {

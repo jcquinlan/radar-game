@@ -364,14 +364,6 @@ const loop = new GameLoop({
         player.score += event.value;
         floatingText.add(`+${event.value}E`, event.entity.x, event.entity.y, theme.events.collect);
       }
-      if (event.type === 'damage') {
-        floatingText.add(`-${event.value}`, event.entity.x, event.entity.y, theme.events.damage);
-        if (!event.entity.active) {
-          player.kills++;
-          player.score += 50;
-          floatingText.add('+50', event.entity.x, event.entity.y - 15, theme.entities.salvage);
-        }
-      }
       if (event.type === 'heal') {
         floatingText.add(`+${event.value}HP`, player.x, player.y - 20, theme.events.heal);
       }

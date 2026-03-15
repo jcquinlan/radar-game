@@ -51,17 +51,6 @@ export class UpgradeSystem {
         },
       },
       {
-        id: 'sweep_damage',
-        name: 'Ping Damage',
-        description: 'More damage to enemies on ping',
-        level: 0,
-        maxLevel: 5,
-        cost: (lvl) => 25 + lvl * 35,
-        apply: (lvl) => {
-          player.sweepDamage = 10 + lvl * 8;
-        },
-      },
-      {
         id: 'radar_resolution',
         name: 'Radar Resolution',
         description: 'Show entity type details on blips',

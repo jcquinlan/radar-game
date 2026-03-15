@@ -3,7 +3,7 @@ import { Player } from '../entities/Player';
 
 export interface PingEvent {
   entity: GameEntity;
-  type: 'collect' | 'damage' | 'heal' | 'shield';
+  type: 'collect' | 'heal' | 'shield';
   value: number;
 }
 
@@ -159,7 +159,7 @@ export class PingSystem {
       case 'resource':
         return this.collectResource(entity as Resource, player);
       case 'enemy':
-        return this.damageEnemy(entity as Enemy, player);
+        return null; // Ping only reveals enemies, does not damage them
       case 'ally':
         return this.healFromAlly(entity as Ally, player);
       case 'salvage':
@@ -172,16 +172,6 @@ export class PingSystem {
     player.addEnergy(resource.energyValue);
     resource.active = false;
     return { entity: resource, type: 'collect', value: resource.energyValue };
-  }
-
-  private damageEnemy(enemy: Enemy, player: Player): PingEvent {
-    const damage = player.sweepDamage;
-    enemy.health -= damage;
-    if (enemy.health <= 0) {
-      enemy.active = false;
-      player.addEnergy(enemy.energyDrop);
-    }
-    return { entity: enemy, type: 'damage', value: damage };
   }
 
   private healFromAlly(ally: Ally, player: Player): PingEvent | null {
