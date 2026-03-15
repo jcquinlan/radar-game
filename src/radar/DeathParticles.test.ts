@@ -62,8 +62,8 @@ describe('DeathParticles', () => {
     dp.emit(0, 0, 1, 0, '#ff0000', 5);
     expect(dp.activeCount()).toBe(5);
 
-    // Advance well past the max lifetime (0.5s)
-    dp.update(0.6);
+    // Advance well past the max lifetime (0.65s)
+    dp.update(0.7);
     expect(dp.activeCount()).toBe(0);
   });
 
@@ -121,8 +121,8 @@ describe('DeathParticles', () => {
     const minSize = Math.min(...sizes);
     const maxSize = Math.max(...sizes);
 
-    expect(minSize).toBeGreaterThanOrEqual(1.5);
-    expect(maxSize).toBeLessThanOrEqual(3.5);
+    expect(minSize).toBeGreaterThanOrEqual(2.5);
+    expect(maxSize).toBeLessThanOrEqual(5.5);
     // Should have some variation (not all same size)
     expect(maxSize - minSize).toBeGreaterThan(0.1);
   });

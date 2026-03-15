@@ -12,10 +12,10 @@ interface Particle {
 
 const MIN_SPEED = 100;
 const MAX_SPEED = 250;
-const MIN_SIZE = 1.5;
-const MAX_SIZE = 3.5;
-const MIN_LIFE = 0.3;
-const MAX_LIFE = 0.5;
+const MIN_SIZE = 2.5;
+const MAX_SIZE = 5.5;
+const MIN_LIFE = 0.4;
+const MAX_LIFE = 0.65;
 const FRICTION = 3.0;
 const CONE_HALF_ANGLE = Math.PI / 4; // 45° half = 90° full cone
 
@@ -111,7 +111,7 @@ export class DeathParticles {
    * Convenience: emit particles flying away from the damage source.
    * Pass NaN for sourceX/sourceY to get omnidirectional spread.
    */
-  emitFromSource(x: number, y: number, sourceX: number, sourceY: number, color: string, count = 10): void {
+  emitFromSource(x: number, y: number, sourceX: number, sourceY: number, color: string, count = 14): void {
     const dirX = isNaN(sourceX) ? 0 : x - sourceX;
     const dirY = isNaN(sourceY) ? 0 : y - sourceY;
     this.emit(x, y, dirX, dirY, color, count);
