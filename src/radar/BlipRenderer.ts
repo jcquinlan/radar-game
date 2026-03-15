@@ -56,10 +56,9 @@ export class BlipRenderer {
       // Convert world position to radar position
       const relX = entity.x - playerX;
       const relY = entity.y - playerY;
-      const dist = Math.sqrt(relX * relX + relY * relY);
 
-      // Only render if within radar range
-      if (dist > radarRadius) continue;
+      // Only render if within radar range (squared distance comparison)
+      if (relX * relX + relY * relY > radarRadius * radarRadius) continue;
 
       const screenX = radarCenterX + relX;
       const screenY = radarCenterY + relY;
@@ -198,9 +197,8 @@ export class BlipRenderer {
   ): void {
     const relX = enemy.ghostX! - playerX;
     const relY = enemy.ghostY! - playerY;
-    const dist = Math.sqrt(relX * relX + relY * relY);
 
-    if (dist > radarRadius) return;
+    if (relX * relX + relY * relY > radarRadius * radarRadius) return;
 
     const screenX = radarCenterX + relX;
     const screenY = radarCenterY + relY;

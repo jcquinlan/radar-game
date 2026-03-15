@@ -376,14 +376,11 @@ const loop = new GameLoop({
       motionTrail.track(did, drone.x, drone.y, drone.vx, drone.vy, '#00ffff', dt);
       activeTrailIds.add(did);
     }
-    const missiles = (abilitySystem as any).missiles as Array<{x: number; y: number; vx: number; vy: number}> | undefined;
-    if (missiles) {
-      for (let i = 0; i < missiles.length; i++) {
-        const missile = missiles[i];
-        const mid = `m${i}`;
-        motionTrail.track(mid, missile.x, missile.y, missile.vx, missile.vy, '#ff8800', dt);
-        activeTrailIds.add(mid);
-      }
+    for (let i = 0; i < abilitySystem.missiles.length; i++) {
+      const missile = abilitySystem.missiles[i];
+      const mid = `m${i}`;
+      motionTrail.track(mid, missile.x, missile.y, missile.vx, missile.vy, '#ff8800', dt);
+      activeTrailIds.add(mid);
     }
     motionTrail.prune(activeTrailIds);
 
@@ -433,6 +430,7 @@ const loop = new GameLoop({
 
     // View radius covers the full screen (corner-to-corner distance)
     const viewRadius = Math.sqrt(canvas.width * canvas.width + canvas.height * canvas.height) / 2;
+    const viewRadiusSq = viewRadius * viewRadius;
 
     ambientParticles.renderDeep(ctx, cx, cy, viewRadius, player.x, player.y);
 
@@ -443,6 +441,9 @@ const loop = new GameLoop({
     for (const entity of world.entities) {
       if (!entity.active || entity.type !== 'dropoff') continue;
       const dropoff = entity as Dropoff;
+      const ddx = dropoff.x - player.x;
+      const ddy = dropoff.y - player.y;
+      if (ddx * ddx + ddy * ddy > viewRadiusSq) continue;
       const dsx = cx + (dropoff.x - player.x);
       const dsy = cy + (dropoff.y - player.y);
       const pulse = 1 + Math.sin(player.survivalTime * 2) * 0.08;
@@ -542,8 +543,11 @@ const loop = new GameLoop({
 
     // Render projectiles
     for (const p of combatSystem.projectiles) {
-      const px = cx + (p.x - player.x);
-      const py = cy + (p.y - player.y);
+      const prx = p.x - player.x;
+      const pry = p.y - player.y;
+      if (prx * prx + pry * pry > viewRadiusSq) continue;
+      const px = cx + prx;
+      const py = cy + pry;
       ctx.save();
       ctx.shadowColor = '#ff4141';
       ctx.shadowBlur = 6;
@@ -556,8 +560,11 @@ const loop = new GameLoop({
 
     // Render drones
     for (const drone of abilitySystem.drones) {
-      const droneX = cx + (drone.x - player.x);
-      const droneY = cy + (drone.y - player.y);
+      const drx = drone.x - player.x;
+      const dry = drone.y - player.y;
+      if (drx * drx + dry * dry > viewRadiusSq) continue;
+      const droneX = cx + drx;
+      const droneY = cy + dry;
       ctx.save();
       ctx.shadowColor = '#00ffff';
       ctx.shadowBlur = 8;
@@ -569,10 +576,12 @@ const loop = new GameLoop({
     }
 
     // Render missiles
-    const renderMissiles = (abilitySystem as any).missiles as Array<{x: number; y: number}> | undefined;
-    for (const missile of renderMissiles ?? []) {
-      const mx = cx + (missile.x - player.x);
-      const my = cy + (missile.y - player.y);
+    for (const missile of abilitySystem.missiles) {
+      const mrx = missile.x - player.x;
+      const mry = missile.y - player.y;
+      if (mrx * mrx + mry * mry > viewRadiusSq) continue;
+      const mx = cx + mrx;
+      const my = cy + mry;
       ctx.save();
       ctx.shadowColor = '#ff8800';
       ctx.shadowBlur = 10;
