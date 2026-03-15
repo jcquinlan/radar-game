@@ -3,6 +3,7 @@ import { Player } from '../entities/Player';
 import { getTheme } from '../themes/theme';
 
 type FloatingTextCallback = (text: string, x: number, y: number, color: string) => void;
+type DeathCallback = (x: number, y: number, sourceX: number, sourceY: number, color: string) => void;
 
 export class CombatSystem {
   projectiles: Projectile[] = [];
@@ -21,6 +22,7 @@ export class CombatSystem {
     ramActive: boolean = false,
     ramDamage: number = 15,
     addFloatingText: FloatingTextCallback = () => {},
+    onDeath: DeathCallback = () => {},
   ): boolean {
     this.gameTime += dt;
 
@@ -121,6 +123,8 @@ export class CombatSystem {
           }
           if (enemy.health <= 0 && enemy.active) {
             enemy.active = false;
+            const deathColor = enemy.subtype === 'ranged' ? getTheme().entities.enemyRanged : getTheme().entities.enemy;
+            onDeath(enemy.x, enemy.y, player.x, player.y, deathColor);
             player.addEnergy(enemy.energyDrop);
             player.kills++;
             player.score += 50;

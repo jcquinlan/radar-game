@@ -22,6 +22,7 @@ import { AbilityBar } from './ui/AbilityBar';
 import { KeyRemapScreen } from './ui/KeyRemapScreen';
 import { PauseMenu } from './ui/PauseMenu';
 import { MotionTrail } from './radar/MotionTrail';
+import { DeathParticles } from './radar/DeathParticles';
 import { TowRopeSystem } from './systems/TowRopeSystem';
 import { Minimap } from './ui/Minimap';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
@@ -68,6 +69,7 @@ let abilityEffects: AbilityEffects;
 let abilityBar: AbilityBar;
 let keyRemapScreen: KeyRemapScreen;
 let motionTrail: MotionTrail;
+let deathParticles: DeathParticles;
 let towRopeSystem: TowRopeSystem;
 let minimap: Minimap;
 let homeBase: HomeBase;
@@ -116,6 +118,7 @@ function init() {
   abilityEffects = new AbilityEffects();
   abilityBar = new AbilityBar();
   motionTrail = new MotionTrail();
+  deathParticles = new DeathParticles(200);
   towRopeSystem = new TowRopeSystem();
   minimap = new Minimap();
   keyRemapScreen = new KeyRemapScreen();
@@ -163,6 +166,7 @@ function cleanupCurrentGame() {
   if (upgradePanel) upgradePanel.detach(canvas);
   if (keyRemapScreen) keyRemapScreen.detach(canvas);
   if (towRopeSystem) towRopeSystem.clear();
+  if (deathParticles) deathParticles.reset();
   if (gameOverScreen) gameOverScreen.hide(canvas);
   if (levelCompleteScreen) levelCompleteScreen.hide(canvas);
 }
@@ -268,33 +272,38 @@ window.addEventListener('keydown', (e) => {
 
   const addText = (text: string, x: number, y: number, color: string) =>
     floatingText.add(text, x, y, color);
+  const onDeath = (x: number, y: number, srcX: number, srcY: number, color: string) => {
+    const dirX = srcX === 0 && srcY === 0 ? 0 : x - srcX;
+    const dirY = srcX === 0 && srcY === 0 ? 0 : y - srcY;
+    deathParticles.emit(x, y, dirX, dirY, color, 10);
+  };
 
   for (const ability of abilitySystem.abilities) {
     if (e.key === ability.keybind) {
       if (ability.id === 'damage_blast') {
-        if (abilitySystem.activate('damage_blast', world.entities, addText)) {
+        if (abilitySystem.activate('damage_blast', world.entities, addText, onDeath)) {
           abilityEffects.triggerBlast();
           screenShake.trigger(4);
         }
       } else if (ability.id === 'heal_over_time') {
-        if (abilitySystem.activate('heal_over_time', world.entities, addText)) {
+        if (abilitySystem.activate('heal_over_time', world.entities, addText, onDeath)) {
           const t = getTheme();
           floatingText.add('REGEN!', player.x, player.y - 25, t.abilities.heal_over_time);
         }
       } else if (ability.id === 'helper_drone') {
-        if (abilitySystem.activate('helper_drone', world.entities, addText)) {
+        if (abilitySystem.activate('helper_drone', world.entities, addText, onDeath)) {
           const t = getTheme();
           abilityEffects.triggerDroneSpawn(player.x, player.y);
           floatingText.add('DRONE!', player.x, player.y - 25, t.abilities.helper_drone);
         }
       } else if (ability.id === 'dash') {
-        if (abilitySystem.activate('dash', world.entities, addText)) {
+        if (abilitySystem.activate('dash', world.entities, addText, onDeath)) {
           const t = getTheme();
           floatingText.add('DASH!', player.x, player.y - 25, t.abilities.dash);
           screenShake.trigger(2);
         }
       } else if (ability.id === 'homing_missile') {
-        if (abilitySystem.activate('homing_missile', world.entities, addText)) {
+        if (abilitySystem.activate('homing_missile', world.entities, addText, onDeath)) {
           const t = getTheme();
           abilityEffects.triggerMissileLaunch(player.x, player.y);
           floatingText.add('MISSILE!', player.x, player.y - 25, t.abilities.homing_missile);
@@ -430,7 +439,12 @@ const loop = new GameLoop({
     if (features?.abilities !== false) {
       const addText = (text: string, x: number, y: number, color: string) =>
         floatingText.add(text, x, y, color);
-      abilitySystem.update(dt, world.entities, addText);
+      const onDeath = (x: number, y: number, srcX: number, srcY: number, color: string) => {
+        const dirX = srcX === 0 && srcY === 0 ? 0 : x - srcX;
+        const dirY = srcX === 0 && srcY === 0 ? 0 : y - srcY;
+        deathParticles.emit(x, y, dirX, dirY, color, 10);
+      };
+      abilitySystem.update(dt, world.entities, addText, onDeath);
 
       const hotAbility = abilitySystem.getAbility('heal_over_time');
       if (hotAbility) {
@@ -442,11 +456,20 @@ const loop = new GameLoop({
     // Combat — only if enabled
     let alive = true;
     if (features?.combat !== false) {
+      const onCombatDeath = (x: number, y: number, srcX: number, srcY: number, color: string) => {
+        const dirX = srcX === 0 && srcY === 0 ? 0 : x - srcX;
+        const dirY = srcX === 0 && srcY === 0 ? 0 : y - srcY;
+        deathParticles.emit(x, y, dirX, dirY, color, 10);
+      };
       alive = combatSystem.update(
         world.entities, player, dt, abilitySystem.isDashing(), 15,
         (text, x, y, color) => floatingText.add(text, x, y, color),
+        onCombatDeath,
       );
     }
+
+    // Death particles
+    deathParticles.update(dt);
 
     // Motion trails — track fast-moving entities
     motionTrail.track('player', player.x, player.y, player.vx, player.vy, theme.radar.primary, dt);
@@ -505,6 +528,7 @@ const loop = new GameLoop({
     if (!alive) {
       gameState = 'game_over';
       towRopeSystem.clear();
+      deathParticles.reset();
       gameOverScreen.show(canvas, player, () => {
         cleanupCurrentGame();
         showMainMenu();
@@ -719,6 +743,9 @@ const loop = new GameLoop({
 
     // Ability visual effects
     abilityEffects.render(ctx, cx, cy, player.x, player.y, player.survivalTime);
+
+    // Death particles
+    deathParticles.render(ctx, player.x, player.y, cx, cy, viewRadius);
 
     // Render projectiles
     for (const p of combatSystem.projectiles) {

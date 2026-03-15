@@ -3,6 +3,7 @@ import { GameEntity, Enemy } from '../entities/Entity';
 import { getTheme } from '../themes/theme';
 
 export type FloatingTextCallback = (text: string, x: number, y: number, color: string) => void;
+export type DeathCallback = (x: number, y: number, sourceX: number, sourceY: number, color: string) => void;
 
 export interface Ability {
   id: string;
@@ -129,6 +130,7 @@ export class AbilitySystem {
     id: string,
     entities: GameEntity[],
     addFloatingText: FloatingTextCallback,
+    onDeath: DeathCallback = () => {},
   ): boolean {
     const ability = this.getAbility(id);
     if (!ability || ability.charges <= 0) return false;
@@ -140,7 +142,7 @@ export class AbilitySystem {
     }
 
     if (id === 'damage_blast') {
-      this.activateBlast(entities, addFloatingText);
+      this.activateBlast(entities, addFloatingText, onDeath);
     } else if (id === 'heal_over_time') {
       ability.active = true;
       ability.durationRemaining = ability.duration;
@@ -163,6 +165,7 @@ export class AbilitySystem {
     dt: number,
     entities: GameEntity[],
     addFloatingText: FloatingTextCallback,
+    onDeath: DeathCallback = () => {},
   ): void {
     for (const ability of this.abilities) {
       if (ability.cooldownRemaining > 0) {
@@ -194,15 +197,16 @@ export class AbilitySystem {
     }
 
     // Update drones
-    this.updateDrones(dt, entities, addFloatingText);
+    this.updateDrones(dt, entities, addFloatingText, onDeath);
 
     // Update missiles
-    this.updateMissiles(dt, entities, addFloatingText);
+    this.updateMissiles(dt, entities, addFloatingText, onDeath);
   }
 
   private activateBlast(
     entities: GameEntity[],
     addFloatingText: FloatingTextCallback,
+    onDeath: DeathCallback,
   ): void {
     const blastRadius = 200;
     const blastDamage = 20;
@@ -221,6 +225,8 @@ export class AbilitySystem {
 
         if (enemy.health <= 0) {
           enemy.active = false;
+          const deathColor = enemy.subtype === 'ranged' ? getTheme().entities.enemyRanged : getTheme().entities.enemy;
+          onDeath(enemy.x, enemy.y, this.player.x, this.player.y, deathColor);
           this.player.addEnergy(enemy.energyDrop);
           this.player.kills++;
           this.player.score += 50;
@@ -255,6 +261,7 @@ export class AbilitySystem {
     dt: number,
     entities: GameEntity[],
     addFloatingText: FloatingTextCallback,
+    onDeath: DeathCallback,
   ): void {
     for (const drone of this.drones) {
       if (!drone.active) continue;
@@ -262,6 +269,7 @@ export class AbilitySystem {
       drone.lifetime -= dt;
       if (drone.lifetime <= 0) {
         drone.active = false;
+        onDeath(drone.x, drone.y, 0, 0, getTheme().effects.drone);
         continue;
       }
 
@@ -298,6 +306,8 @@ export class AbilitySystem {
           nearest.health -= dmg;
           if (nearest.health <= 0 && nearest.active) {
             nearest.active = false;
+            const deathColor = nearest.subtype === 'ranged' ? getTheme().entities.enemyRanged : getTheme().entities.enemy;
+            onDeath(nearest.x, nearest.y, drone.x, drone.y, deathColor);
             this.player.addEnergy(nearest.energyDrop);
             this.player.kills++;
             this.player.score += 50;
@@ -351,6 +361,7 @@ export class AbilitySystem {
     dt: number,
     entities: GameEntity[],
     addFloatingText: FloatingTextCallback,
+    onDeath: DeathCallback,
   ): void {
     for (const missile of this.missiles) {
       if (!missile.active) continue;
@@ -358,6 +369,7 @@ export class AbilitySystem {
       missile.lifetime -= dt;
       if (missile.lifetime <= 0) {
         missile.active = false;
+        onDeath(missile.x, missile.y, 0, 0, getTheme().effects.missile);
         continue;
       }
 
@@ -394,6 +406,8 @@ export class AbilitySystem {
 
         if (hitEnemy.health <= 0 && hitEnemy.active) {
           hitEnemy.active = false;
+          const deathColor = hitEnemy.subtype === 'ranged' ? getTheme().entities.enemyRanged : getTheme().entities.enemy;
+          onDeath(hitEnemy.x, hitEnemy.y, missile.x, missile.y, deathColor);
           this.player.addEnergy(hitEnemy.energyDrop);
           this.player.kills++;
           this.player.score += 50;
