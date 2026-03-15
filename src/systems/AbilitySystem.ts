@@ -313,8 +313,10 @@ export class AbilitySystem {
       drone.y += drone.vy * dt;
     }
 
-    // Clean up dead drones
-    this.drones = this.drones.filter((d) => d.active);
+    // Clean up dead drones (backward splice avoids .filter() allocation)
+    for (let i = this.drones.length - 1; i >= 0; i--) {
+      if (!this.drones[i].active) this.drones.splice(i, 1);
+    }
   }
 
   private spawnMissile(entities: GameEntity[]): void {
@@ -352,21 +354,45 @@ export class AbilitySystem {
         continue;
       }
 
-      // Find nearest visible enemy to steer toward — only track enemies
-      // the player knows about (revealed by ping), not hidden ones
+      // Single pass: find nearest visible enemy to steer toward + check collision
       let nearest: Enemy | null = null;
       let nearestDistSq = 400 * 400; // 400px tracking range
+      let hitEnemy: Enemy | null = null;
 
       for (const entity of entities) {
-        if (!entity.active || entity.type !== 'enemy' || !entity.visible) continue;
+        if (!entity.active || entity.type !== 'enemy') continue;
         const enemy = entity as Enemy;
         const dx = enemy.x - missile.x;
         const dy = enemy.y - missile.y;
         const distSq = dx * dx + dy * dy;
-        if (distSq < nearestDistSq) {
+
+        // Collision check (hit radius 15px)
+        if (distSq < 15 * 15) {
+          hitEnemy = enemy;
+          break;
+        }
+
+        // Steering: only track visible enemies
+        if (enemy.visible && distSq < nearestDistSq) {
           nearestDistSq = distSq;
           nearest = enemy;
         }
+      }
+
+      // Handle collision
+      if (hitEnemy) {
+        hitEnemy.health -= missile.damage;
+        addFloatingText(`-${missile.damage}`, hitEnemy.x, hitEnemy.y, '#ff8800');
+        missile.active = false;
+
+        if (hitEnemy.health <= 0 && hitEnemy.active) {
+          hitEnemy.active = false;
+          this.player.addEnergy(hitEnemy.energyDrop);
+          this.player.kills++;
+          this.player.score += 50;
+          addFloatingText('+50', hitEnemy.x, hitEnemy.y - 15, '#ffaa00');
+        }
+        continue;
       }
 
       // Accelerate toward target speed (launches slow, ramps up)
@@ -400,31 +426,11 @@ export class AbilitySystem {
       // Move
       missile.x += missile.vx * dt;
       missile.y += missile.vy * dt;
-
-      // Check collision with enemies (hit radius 15px)
-      for (const entity of entities) {
-        if (!entity.active || entity.type !== 'enemy') continue;
-        const enemy = entity as Enemy;
-        const dx = enemy.x - missile.x;
-        const dy = enemy.y - missile.y;
-        if (dx * dx + dy * dy < 15 * 15) {
-          enemy.health -= missile.damage;
-          addFloatingText(`-${missile.damage}`, enemy.x, enemy.y, '#ff8800');
-          missile.active = false;
-
-          if (enemy.health <= 0 && enemy.active) {
-            enemy.active = false;
-            this.player.addEnergy(enemy.energyDrop);
-            this.player.kills++;
-            this.player.score += 50;
-            addFloatingText('+50', enemy.x, enemy.y - 15, '#ffaa00');
-          }
-          break;
-        }
-      }
     }
 
-    // Clean up dead missiles
-    this.missiles = this.missiles.filter((m) => m.active);
+    // Clean up dead missiles (backward splice avoids .filter() allocation)
+    for (let i = this.missiles.length - 1; i >= 0; i--) {
+      if (!this.missiles[i].active) this.missiles.splice(i, 1);
+    }
   }
 }
