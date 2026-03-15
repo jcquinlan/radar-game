@@ -36,6 +36,10 @@ export interface Missile {
   y: number;
   vx: number;
   vy: number;
+  speed: number;
+  damage: number;
+  lifetime: number;
+  turnRate: number;
   active: boolean;
 }
 
@@ -96,6 +100,18 @@ export class AbilitySystem {
         maxCharges: 2,
         charges: 2,
       },
+      {
+        id: 'homing_missile',
+        name: 'Missile',
+        keybind: '5',
+        cooldown: 8,
+        cooldownRemaining: 0,
+        duration: 0,
+        durationRemaining: 0,
+        active: false,
+        maxCharges: 1,
+        charges: 1,
+      },
     ];
   }
 
@@ -135,6 +151,8 @@ export class AbilitySystem {
       this.activateDash();
       ability.active = true;
       ability.durationRemaining = ability.duration;
+    } else if (id === 'homing_missile') {
+      this.spawnMissile(entities);
     }
 
     return true;
@@ -176,6 +194,9 @@ export class AbilitySystem {
 
     // Update drones
     this.updateDrones(dt, entities, addFloatingText);
+
+    // Update missiles
+    this.updateMissiles(dt, entities, addFloatingText);
   }
 
   private activateBlast(
@@ -294,5 +315,118 @@ export class AbilitySystem {
 
     // Clean up dead drones
     this.drones = this.drones.filter((d) => d.active);
+  }
+
+  private spawnMissile(entities: GameEntity[]): void {
+    // Find nearest enemy to target
+    let nearestDistSq = Infinity;
+    let targetAngle = this.player.heading; // Default: fire forward if no enemies
+
+    for (const entity of entities) {
+      if (!entity.active || entity.type !== 'enemy') continue;
+      const dx = entity.x - this.player.x;
+      const dy = entity.y - this.player.y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq < nearestDistSq) {
+        nearestDistSq = distSq;
+        targetAngle = Math.atan2(dy, dx);
+      }
+    }
+
+    const speed = 200;
+    this.missiles.push({
+      x: this.player.x,
+      y: this.player.y,
+      vx: Math.cos(targetAngle) * speed,
+      vy: Math.sin(targetAngle) * speed,
+      speed,
+      damage: 25,
+      lifetime: 4,
+      turnRate: 3, // radians/sec — tracks well but can be dodged
+      active: true,
+    });
+  }
+
+  private updateMissiles(
+    dt: number,
+    entities: GameEntity[],
+    addFloatingText: FloatingTextCallback,
+  ): void {
+    for (const missile of this.missiles) {
+      if (!missile.active) continue;
+
+      missile.lifetime -= dt;
+      if (missile.lifetime <= 0) {
+        missile.active = false;
+        continue;
+      }
+
+      // Find nearest enemy to steer toward
+      let nearest: Enemy | null = null;
+      let nearestDistSq = 400 * 400; // 400px tracking range
+
+      for (const entity of entities) {
+        if (!entity.active || entity.type !== 'enemy') continue;
+        const enemy = entity as Enemy;
+        const dx = enemy.x - missile.x;
+        const dy = enemy.y - missile.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < nearestDistSq) {
+          nearestDistSq = distSq;
+          nearest = enemy;
+        }
+      }
+
+      // Steer toward target by rotating velocity vector
+      if (nearest) {
+        const desiredAngle = Math.atan2(
+          nearest.y - missile.y,
+          nearest.x - missile.x,
+        );
+        const currentAngle = Math.atan2(missile.vy, missile.vx);
+
+        // Shortest angular difference
+        let angleDiff = desiredAngle - currentAngle;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+        // Clamp turn to turnRate * dt
+        const maxTurn = missile.turnRate * dt;
+        const turn = Math.max(-maxTurn, Math.min(maxTurn, angleDiff));
+        const newAngle = currentAngle + turn;
+
+        missile.vx = Math.cos(newAngle) * missile.speed;
+        missile.vy = Math.sin(newAngle) * missile.speed;
+      }
+
+      // Move
+      missile.x += missile.vx * dt;
+      missile.y += missile.vy * dt;
+
+      // Check collision with enemies (hit radius 15px)
+      for (const entity of entities) {
+        if (!entity.active || entity.type !== 'enemy') continue;
+        const enemy = entity as Enemy;
+        const dx = enemy.x - missile.x;
+        const dy = enemy.y - missile.y;
+        if (dx * dx + dy * dy < 15 * 15) {
+          enemy.health -= missile.damage;
+          addFloatingText(`-${missile.damage}`, enemy.x, enemy.y, '#ff8800');
+          missile.active = false;
+
+          if (enemy.health <= 0 && enemy.active) {
+            enemy.active = false;
+            this.player.addEnergy(enemy.energyDrop);
+            this.player.kills++;
+            this.player.score += 50;
+            addFloatingText('+50', enemy.x, enemy.y - 15, '#ffaa00');
+          }
+          break;
+        }
+      }
+    }
+
+    // Clean up dead missiles
+    this.missiles = this.missiles.filter((m) => m.active);
   }
 }
