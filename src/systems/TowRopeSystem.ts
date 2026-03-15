@@ -21,6 +21,16 @@ export interface TowedItem {
 
 export class TowRopeSystem {
   private items: TowedItem[] = [];
+  private _maxTowed: number = MAX_TOWED;
+
+  /** Set the maximum number of towed items. Defaults to MAX_TOWED (8). */
+  setMaxTowed(value: number): void {
+    this._maxTowed = value;
+  }
+
+  getMaxTowed(): number {
+    return this._maxTowed;
+  }
 
   collect(salvage: Salvage): void {
     // If already towed, ignore
@@ -41,7 +51,7 @@ export class TowRopeSystem {
     this.items.push(item);
 
     // If over max, start fading the oldest non-fading item
-    if (this.items.length > MAX_TOWED) {
+    if (this.items.length > this._maxTowed) {
       const oldest = this.items.find(i => i.fadeOut === null);
       if (oldest) {
         oldest.fadeOut = FADE_OUT_DURATION;
