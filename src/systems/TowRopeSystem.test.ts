@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createSalvage, createDropoff } from '../entities/Entity';
+import { createSalvage, createDropoff, createHomeBase } from '../entities/Entity';
 import { Player } from '../entities/Player';
 import {
   TowRopeSystem,
@@ -259,6 +259,61 @@ describe('TowRopeSystem', () => {
 
       expect(deposited).toHaveLength(2);
       expect(system.getTowedItems()).toHaveLength(0);
+    });
+  });
+
+  describe('checkHomeDeposit', () => {
+    it('deposits salvage when it enters the home base radius', () => {
+      const homeBase = createHomeBase(0, 0);
+      const salvage = buildSalvage(10, 0); // Within 150px radius
+      system.collect(salvage);
+
+      const deposited = system.checkHomeDeposit(homeBase);
+
+      expect(deposited).toHaveLength(1);
+      expect(deposited[0]).toBe(salvage);
+      expect(system.getTowedItems()).toHaveLength(0);
+      expect(salvage.towedByPlayer).toBe(false);
+      expect(salvage.active).toBe(false);
+    });
+
+    it('does not deposit salvage outside the home base radius', () => {
+      const homeBase = createHomeBase(0, 0);
+      const salvage = buildSalvage(200, 0); // Beyond 150px radius
+      system.collect(salvage);
+
+      const deposited = system.checkHomeDeposit(homeBase);
+
+      expect(deposited).toHaveLength(0);
+      expect(system.getTowedItems()).toHaveLength(1);
+    });
+
+    it('ignores fading salvage', () => {
+      const homeBase = createHomeBase(0, 0);
+      const salvage = buildSalvage(10, 0);
+      system.collect(salvage);
+      system.getTowedItems()[0].fadeOut = 0.2;
+
+      const deposited = system.checkHomeDeposit(homeBase);
+
+      expect(deposited).toHaveLength(0);
+    });
+
+    it('deposits multiple salvage items at once', () => {
+      const homeBase = createHomeBase(0, 0);
+      const s1 = buildSalvage(10, 0);
+      const s2 = buildSalvage(0, 10);
+      system.collect(s1);
+      system.collect(s2);
+
+      const deposited = system.checkHomeDeposit(homeBase);
+
+      expect(deposited).toHaveLength(2);
+      expect(system.getTowedItems()).toHaveLength(0);
+    });
+
+    it('has a static HOME_DEPOSIT_REWARD of 50', () => {
+      expect(TowRopeSystem.HOME_DEPOSIT_REWARD).toBe(50);
     });
   });
 
