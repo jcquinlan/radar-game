@@ -334,6 +334,7 @@ describe('AbilitySystem', () => {
       player.x = 100;
       player.y = 200;
       const enemy = createEnemy(300, 200, 'scout');
+      enemy.visible = true;
       const entities: GameEntity[] = [enemy];
 
       system.activate('homing_missile', entities, () => {});
@@ -435,13 +436,14 @@ describe('AbilitySystem', () => {
       player.x = 0;
       player.y = 0;
       player.heading = 0; // facing right
-      const enemy = createEnemy(150, 0, 'brute');
+      // Place enemy off the firing line so straight-ahead missile misses
+      const enemy = createEnemy(0, 150, 'brute');
       enemy.visible = false; // Not revealed by ping
       enemy.health = 80;
       const entities: GameEntity[] = [enemy];
 
       system.activate('homing_missile', entities, () => {});
-      // Run full lifetime — missile should fly past without homing
+      // Run full lifetime — missile fires straight ahead, misses the enemy above
       for (let i = 0; i < 80; i++) system.update(0.05, entities, () => {});
 
       expect(enemy.health).toBe(80); // No damage — missile didn't track

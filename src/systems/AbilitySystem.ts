@@ -320,12 +320,18 @@ export class AbilitySystem {
   }
 
   private spawnMissile(entities: GameEntity[]): void {
-    // Launch in a pseudo-random direction offset from the player's heading,
-    // at low initial speed. The missile accelerates and steers toward the
-    // target over time, creating a satisfying arcing trajectory.
-    const launchSpread = (Math.random() - 0.5) * Math.PI * 1.2; // ±108° spread
+    // Check if any visible enemies exist to target
+    const hasTarget = entities.some(
+      (e) => e.active && e.type === 'enemy' && e.visible,
+    );
+
+    // With a target: random spread for arcing trajectory
+    // Without: fire straight ahead from the ship
+    const launchSpread = hasTarget
+      ? (Math.random() - 0.5) * Math.PI * 1.2 // ±108° spread
+      : 0;
     const launchAngle = this.player.heading + launchSpread;
-    const launchSpeed = 60; // Slow initial burst — accelerates to full speed
+    const launchSpeed = hasTarget ? 60 : 220; // Full speed ahead if no target
 
     this.missiles.push({
       x: this.player.x,
