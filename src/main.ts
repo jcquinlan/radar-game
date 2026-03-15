@@ -75,6 +75,8 @@ let resolutionLevel: number;
 let prevHealth: number;
 let damageFlash: number;
 let currentLevelConfig: LevelConfig | null = null;
+/** Pre-allocated Set for motion trail pruning — reused every frame to avoid GC pressure */
+const activeTrailIds = new Set<string>();
 
 function showMainMenu() {
   gameState = 'menu';
@@ -450,7 +452,8 @@ const loop = new GameLoop({
 
     // Motion trails — track fast-moving entities
     motionTrail.track('player', player.x, player.y, player.vx, player.vy, theme.radar.primary, dt);
-    const activeTrailIds = new Set(['player']);
+    activeTrailIds.clear();
+    activeTrailIds.add('player');
     for (let i = 0; i < world.entities.length; i++) {
       const entity = world.entities[i];
       if (!entity.active || entity.type !== 'enemy') continue;

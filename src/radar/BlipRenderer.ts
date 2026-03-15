@@ -10,6 +10,11 @@ const BLIP_SIZES: Record<string, number> = {
   dropoff: 6,
 };
 
+/** Glow radius multiplier — the faked glow circle is this much larger than the blip */
+const GLOW_RADIUS_MULT = 2.5;
+/** Glow alpha — the faked glow circle's opacity */
+const GLOW_ALPHA = 0.15;
+
 export class BlipRenderer {
   private time = 0;
 
@@ -30,6 +35,7 @@ export class BlipRenderer {
   ): void {
     const themeColors = getTheme().entities;
     const enemyRangedColor = themeColors.enemyRanged;
+    const radarRadiusSq = radarRadius * radarRadius;
 
     for (const entity of entities) {
       if (!entity.active) continue;
@@ -38,7 +44,7 @@ export class BlipRenderer {
       if (entity.type === 'enemy') {
         const enemy = entity as Enemy;
         if (!enemy.visible && enemy.ghostX !== null && enemy.ghostY !== null) {
-          this.renderGhostBlip(ctx, enemy, playerX, playerY, radarCenterX, radarCenterY, radarRadius);
+          this.renderGhostBlip(ctx, enemy, playerX, playerY, radarCenterX, radarCenterY, radarRadiusSq);
         }
       }
 
@@ -49,7 +55,7 @@ export class BlipRenderer {
       const relY = entity.y - playerY;
 
       // Only render if within radar range (squared distance comparison)
-      if (relX * relX + relY * relY > radarRadius * radarRadius) continue;
+      if (relX * relX + relY * relY > radarRadiusSq) continue;
 
       const screenX = radarCenterX + relX;
       const screenY = radarCenterY + relY;
@@ -69,12 +75,6 @@ export class BlipRenderer {
           : subtype === 'beacon' ? themeColors.allyBeacon
           : color;
       }
-
-      ctx.save();
-
-      // Glow effect
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 8;
 
       let currentSize = size;
 
@@ -115,18 +115,13 @@ export class BlipRenderer {
       }
 
       // Dropoffs are rendered in full by main.ts — skip blip
-      if (entity.type === 'dropoff') {
-        ctx.restore();
-        continue;
-      }
+      if (entity.type === 'dropoff') continue;
 
       // Salvage: pulsing diamond with aura (skip if already towed — rendered by tow rope system)
       if (entity.type === 'salvage') {
         const salvage = entity as Salvage;
-        if (salvage.towedByPlayer) {
-          ctx.restore();
-          continue;
-        }
+        if (salvage.towedByPlayer) continue;
+
         const pulse = 1 + Math.sin(this.time * 4) * 0.3;
         const auraSize = currentSize + 8 + Math.sin(this.time * 3) * 3;
         ctx.globalAlpha = 0.12 + Math.sin(this.time * 3) * 0.04;
@@ -136,7 +131,16 @@ export class BlipRenderer {
         ctx.fill();
         ctx.globalAlpha = 1;
 
-        // Diamond shape
+        // Faked glow behind the diamond
+        ctx.globalAlpha = GLOW_ALPHA;
+        ctx.beginPath();
+        const glowS = currentSize * pulse * GLOW_RADIUS_MULT;
+        ctx.arc(screenX, screenY, glowS, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Diamond shape — needs save/restore for translate+rotate
         ctx.save();
         ctx.translate(screenX, screenY);
         ctx.rotate(Math.PI / 4);
@@ -147,6 +151,15 @@ export class BlipRenderer {
         ctx.fill();
         ctx.restore();
       } else {
+        // Faked glow: larger, lower-alpha circle behind the blip
+        ctx.globalAlpha = GLOW_ALPHA;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, currentSize * GLOW_RADIUS_MULT, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Main blip
         ctx.beginPath();
         ctx.arc(screenX, screenY, currentSize, 0, Math.PI * 2);
         ctx.fillStyle = color;
@@ -155,8 +168,8 @@ export class BlipRenderer {
 
       // Resolution upgrade: show type-specific labels at level 2+
       if (resolutionLevel >= 2) {
+        // Labels need save/restore for counter-rotation
         ctx.save();
-        // Counter-rotate labels so they stay upright
         if (worldRotation) {
           ctx.translate(screenX, screenY);
           ctx.rotate(-worldRotation);
@@ -164,7 +177,7 @@ export class BlipRenderer {
         }
         ctx.font = '10px monospace';
         ctx.fillStyle = color;
-        ctx.shadowBlur = 3;
+        ctx.globalAlpha = 0.8;
         let label: string;
         if (entity.type === 'resource') {
           label = 'E';
@@ -179,9 +192,10 @@ export class BlipRenderer {
         ctx.fillText(label, screenX + size + 2, screenY + 3);
         ctx.restore();
       }
-
-      ctx.restore();
     }
+
+    // Reset any state we may have changed
+    ctx.globalAlpha = 1;
   }
 
   /** Render a faded ghost blip at the enemy's last-known position */
@@ -192,16 +206,17 @@ export class BlipRenderer {
     playerY: number,
     radarCenterX: number,
     radarCenterY: number,
-    radarRadius: number
+    radarRadiusSq: number
   ): void {
     const relX = enemy.ghostX! - playerX;
     const relY = enemy.ghostY! - playerY;
 
-    if (relX * relX + relY * relY > radarRadius * radarRadius) return;
+    if (relX * relX + relY * relY > radarRadiusSq) return;
 
     const screenX = radarCenterX + relX;
     const screenY = radarCenterY + relY;
 
+    // Ghost blips use save/restore because they change lineDash (no cheap reset)
     ctx.save();
     ctx.globalAlpha = 0.35;
 
@@ -227,9 +242,15 @@ export class BlipRenderer {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Faded blip fill
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 4;
+    // Faked glow behind ghost blip
+    ctx.globalAlpha = 0.12;
+    ctx.beginPath();
+    ctx.arc(screenX, screenY, ghostSize * GLOW_RADIUS_MULT, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    // Ghost blip fill
+    ctx.globalAlpha = 0.35;
     ctx.beginPath();
     ctx.arc(screenX, screenY, ghostSize, 0, Math.PI * 2);
     ctx.fillStyle = color;
@@ -238,7 +259,7 @@ export class BlipRenderer {
     // Ghost label "?"
     ctx.font = '10px monospace';
     ctx.fillStyle = color;
-    ctx.shadowBlur = 2;
+    ctx.globalAlpha = 0.3;
     ctx.fillText('?', screenX + ghostSize + 2, screenY + 3);
 
     ctx.restore();

@@ -35,15 +35,16 @@ export class MotionTrail {
     entry.color = color;
     entry.timer += dt;
 
-    if (speed < SPEED_THRESHOLD) {
-      // Below threshold — let trail fade out naturally
-      return;
-    }
-
     if (entry.timer >= SAMPLE_INTERVAL) {
       entry.timer = 0;
-      entry.points.push({ x, y });
-      if (entry.points.length > MAX_TRAIL_LENGTH) {
+      if (speed >= SPEED_THRESHOLD) {
+        // Moving fast — extend the trail
+        entry.points.push({ x, y });
+        if (entry.points.length > MAX_TRAIL_LENGTH) {
+          entry.points.shift();
+        }
+      } else if (entry.points.length > 0) {
+        // Slowed down — drain one point per sample interval so the trail fades out
         entry.points.shift();
       }
     }
