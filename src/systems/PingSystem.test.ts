@@ -33,15 +33,13 @@ describe('PingSystem', () => {
     expect(resource.active).toBe(false);
   });
 
-  it('damages an enemy when the ping reaches it', () => {
+  it('does not damage enemies when the ping reaches them', () => {
     const enemy = createEnemy(50, 0);
     enemy.health = 50;
-    player.sweepDamage = 10;
 
     const events = ping.update([enemy], player, 0.1);
-    expect(events).toHaveLength(1);
-    expect(events[0].type).toBe('damage');
-    expect(enemy.health).toBe(40);
+    expect(events).toHaveLength(0);
+    expect(enemy.health).toBe(50);
   });
 
   it('reveals enemies when the ping reaches them', () => {
@@ -177,15 +175,15 @@ describe('PingSystem', () => {
     expect(ally.visible).toBe(true);
   });
 
-  it('destroys an enemy and drops energy when health reaches 0', () => {
+  it('does not kill enemies or drop energy via ping', () => {
     const enemy = createEnemy(50, 0);
     enemy.health = 5;
     enemy.energyDrop = 20;
-    player.sweepDamage = 10;
 
     ping.update([enemy], player, 0.1);
-    expect(enemy.active).toBe(false);
-    expect(player.energy).toBe(20);
+    expect(enemy.active).toBe(true);
+    expect(enemy.health).toBe(5);
+    expect(player.energy).toBe(0);
   });
 
   it('ping resets to inactive after reaching max radius', () => {

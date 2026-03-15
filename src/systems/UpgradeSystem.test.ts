@@ -21,8 +21,8 @@ describe('UpgradeSystem', () => {
     }, pingSystem);
   });
 
-  it('initializes with 7 upgrades at level 0', () => {
-    expect(upgrades.upgrades).toHaveLength(7);
+  it('initializes with 6 upgrades at level 0', () => {
+    expect(upgrades.upgrades).toHaveLength(6);
     for (const u of upgrades.upgrades) {
       expect(u.level).toBe(0);
     }
@@ -80,13 +80,6 @@ describe('UpgradeSystem', () => {
     upgrades.purchase('sweep_range', player);
     expect(radar.getRadius()).toBeGreaterThan(initialRadius);
     expect(pingSystem.getConfig().maxRadius).toBe(radar.getRadius());
-  });
-
-  it('ping damage upgrade increases player sweep damage', () => {
-    const initialDamage = player.sweepDamage;
-    player.addEnergy(100);
-    upgrades.purchase('sweep_damage', player);
-    expect(player.sweepDamage).toBeGreaterThan(initialDamage);
   });
 
   it('radar resolution upgrade triggers the callback', () => {

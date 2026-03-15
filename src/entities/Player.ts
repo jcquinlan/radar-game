@@ -1,7 +1,6 @@
 export interface PlayerStats {
   maxHealth: number;
   speed: number;
-  sweepDamage: number;
 }
 
 export class Player {
@@ -14,7 +13,6 @@ export class Player {
   energy: number;
   speed: number;
   baseSpeed: number;
-  sweepDamage: number;
   armor: number;
   magnetRange: number;
   friction: number;
@@ -51,7 +49,6 @@ export class Player {
     this.energy = 0;
     this.baseSpeed = 80;
     this.speed = 80;
-    this.sweepDamage = 10;
     this.armor = 0;
     this.magnetRange = 0;
     this.shieldActive = false;
