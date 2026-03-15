@@ -6,6 +6,7 @@ import {
   EnemySubtype,
 } from '../entities/Entity';
 import { selectPOI, spawnResourceVein, scaleEnemy } from './POIGenerator';
+import { getTheme } from '../themes/theme';
 
 const CHUNK_SIZE = 400;
 /** Probability of a salvage item spawning in any given chunk */
@@ -21,11 +22,12 @@ function getDifficultyMultiplier(x: number, y: number): number {
 /** Returns a threat level label for HUD display */
 export function getThreatLevel(x: number, y: number): { level: number; label: string; color: string } {
   const mult = getDifficultyMultiplier(x, y);
-  if (mult < 1.3) return { level: 1, label: 'LOW', color: '#00ff41' };
-  if (mult < 1.8) return { level: 2, label: 'MODERATE', color: '#88ff41' };
-  if (mult < 2.5) return { level: 3, label: 'HIGH', color: '#ffaa00' };
-  if (mult < 3.2) return { level: 4, label: 'EXTREME', color: '#ff4141' };
-  return { level: 5, label: 'CRITICAL', color: '#ff00ff' };
+  const threats = getTheme().threats;
+  if (mult < 1.3) return { level: 1, label: 'LOW', color: threats.low };
+  if (mult < 1.8) return { level: 2, label: 'MODERATE', color: threats.moderate };
+  if (mult < 2.5) return { level: 3, label: 'HIGH', color: threats.high };
+  if (mult < 3.2) return { level: 4, label: 'EXTREME', color: threats.extreme };
+  return { level: 5, label: 'CRITICAL', color: threats.critical };
 }
 
 /** Chance of a solo enemy in non-POI chunks (per chunk) */

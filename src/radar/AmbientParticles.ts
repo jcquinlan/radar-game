@@ -1,3 +1,5 @@
+import { getTheme } from '../themes/theme';
+
 interface Particle {
   /** World-space position (large range, wraps around) */
   x: number;
@@ -128,7 +130,7 @@ export class AmbientParticles {
       const screenY = centerY + ry;
 
       ctx.globalAlpha = p.alpha;
-      ctx.fillStyle = '#00ff41';
+      ctx.fillStyle = getTheme().effects.particle;
       const s = p.size;
       ctx.fillRect(screenX - s / 2, screenY - s / 2, s, s);
     }
