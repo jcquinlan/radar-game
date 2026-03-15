@@ -306,6 +306,15 @@ When adding a new entity type, ability, upgrade, or system:
 6. **Play the game** and verify it feels right
 7. **Update this file** if the change affects architecture, update order, or game balance anchors
 
+## GitHub Issue Tracking
+
+When working on a task that originated from a GitHub issue (e.g., via `/autopilot` with a `github` source), **always post progress updates back to the issue**. At minimum:
+- Comment when work begins (link to the branch)
+- Comment when a PR is created (link to the PR)
+- Add/remove labels to reflect current status (`in-progress`, `shipped`, etc.)
+
+This keeps the issue timeline useful for anyone following along.
+
 ## Commit Convention
 
 Commits follow the pattern: `prd-NNN: <description>` for features, `review:` / `fix:` / `qa:` / `chore:` / `merge:` / `feat:` for other work.
