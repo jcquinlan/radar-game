@@ -8,7 +8,8 @@ import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
 import { PingSystem } from './systems/PingSystem';
 import { CombatSystem } from './systems/CombatSystem';
-import { Ally, Enemy, Resource, Dropoff, HomeBase, createHomeBase } from './entities/Entity';
+import { Ally, Enemy, GameEntity, Resource, Dropoff, HomeBase, createHomeBase } from './entities/Entity';
+import { spawnWave } from './systems/WaveSpawner';
 import { UpgradeSystem } from './systems/UpgradeSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
@@ -78,6 +79,8 @@ let prevHealth: number;
 let damageFlash: number;
 /** Countdown timer for timed runs (seconds). -1 means no active timer. */
 let runTimer: number = -1;
+/** Current run number (1-based). Controls wave size and difficulty scaling. */
+let runCount: number = 1;
 let currentLevelConfig: LevelConfig | null = null;
 /** Pre-allocated Set for motion trail pruning — reused every frame to avoid GC pressure */
 const activeTrailIds = new Set<string>();
@@ -406,12 +409,14 @@ const loop = new GameLoop({
       runTimer -= dt;
       if (runTimer <= 0) {
         runTimer = 0;
-        gameState = 'game_over';
-        towRopeSystem.clear();
-        gameOverScreen.show(canvas, player, () => {
-          cleanupCurrentGame();
-          showMainMenu();
-        });
+        // Spawn the final wave and transition to final_wave state
+        const waveEnemies = spawnWave(runCount);
+        // Clear non-wave entities from the world before adding wave enemies
+        world.entities.length = 0;
+        for (const enemy of waveEnemies) {
+          world.entities.push(enemy);
+        }
+        gameState = 'final_wave';
         return;
       }
     }
@@ -555,9 +560,14 @@ const loop = new GameLoop({
     // Combat — only if enabled
     let alive = true;
     if (features?.combat !== false) {
+      // During final_wave, enemies target the home base instead of the player
+      const targetPos = gameState === 'final_wave' ? { x: homeBase.x, y: homeBase.y } : undefined;
+      const baseTarget = gameState === 'final_wave' ? homeBase : undefined;
       alive = combatSystem.update(
         world.entities, player, dt, abilitySystem.isDashing(), 15,
         (text, x, y, color) => floatingText.add(text, x, y, color),
+        targetPos,
+        baseTarget,
       );
     }
 
@@ -623,10 +633,44 @@ const loop = new GameLoop({
         cleanupCurrentGame();
         showMainMenu();
       });
+      return;
     }
 
-    // Periodic cleanup
-    world.cleanup(player.x, player.y);
+    // Wave end conditions during final_wave
+    if (gameState === 'final_wave') {
+      // Base destroyed — game over
+      if (homeBase.health <= 0) {
+        homeBase.health = 0;
+        gameState = 'game_over';
+        towRopeSystem.clear();
+        gameOverScreen.show(canvas, player, () => {
+          cleanupCurrentGame();
+          showMainMenu();
+        });
+        return;
+      }
+
+      // All wave enemies dead — wave survived, transition to game_over for now
+      // (results screen will be added in a future PR)
+      const waveEnemiesAlive = world.entities.some(
+        (e: GameEntity) => e.active && e.type === 'enemy' && (e as Enemy).waveEnemy
+      );
+      if (!waveEnemiesAlive) {
+        runCount++;
+        gameState = 'game_over';
+        towRopeSystem.clear();
+        gameOverScreen.show(canvas, player, () => {
+          cleanupCurrentGame();
+          showMainMenu();
+        });
+        return;
+      }
+    }
+
+    // Periodic cleanup — preserve wave enemies during final_wave
+    if (gameState !== 'final_wave') {
+      world.cleanup(player.x, player.y);
+    }
   },
   render() {
     // Main menu render
