@@ -1,24 +1,16 @@
 import { PingState } from '../systems/PingSystem';
+import { getTheme } from '../themes/theme';
 
 export interface RadarConfig {
   /** Radar radius in pixels */
   radius: number;
   /** Number of range rings */
   ringCount: number;
-  /** Green color for the CRT aesthetic */
-  color: string;
-  /** Dim green for grid/rings */
-  dimColor: string;
-  /** Background color */
-  bgColor: string;
 }
 
 export const DEFAULT_RADAR_CONFIG: RadarConfig = {
   radius: 340,
   ringCount: 4,
-  color: '#00ff41',
-  dimColor: '#003b0f',
-  bgColor: '#0a0a0a',
 };
 
 export class RadarDisplay {
@@ -50,7 +42,10 @@ export class RadarDisplay {
   }
 
   render(ctx: CanvasRenderingContext2D, centerX: number, centerY: number): void {
-    const { radius, color } = this.config;
+    const { radius } = this.config;
+    const theme = getTheme();
+    const color = theme.radar.primary;
+    const pingRgb = theme.radar.pingRgb;
 
     // Ping ring (expanding circle with fade) — rendered without clip, can extend beyond radar
     if (this.pingState && this.pingState.active && this.pingState.radius > 0) {
@@ -61,7 +56,7 @@ export class RadarDisplay {
       ctx.save();
       ctx.beginPath();
       ctx.arc(centerX, centerY, pingRadius, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(0, 255, 65, ${alpha * 0.03})`;
+      ctx.fillStyle = `rgba(${pingRgb}, ${alpha * 0.03})`;
       ctx.fill();
       ctx.restore();
 
@@ -71,7 +66,7 @@ export class RadarDisplay {
       ctx.shadowBlur = 20;
       ctx.beginPath();
       ctx.arc(centerX, centerY, pingRadius, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(0, 255, 65, ${alpha * 0.9})`;
+      ctx.strokeStyle = `rgba(${pingRgb}, ${alpha * 0.9})`;
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.restore();
@@ -81,7 +76,7 @@ export class RadarDisplay {
         ctx.save();
         ctx.beginPath();
         ctx.arc(centerX, centerY, pingRadius - 10, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(0, 255, 65, ${alpha * 0.3})`;
+        ctx.strokeStyle = `rgba(${pingRgb}, ${alpha * 0.3})`;
         ctx.lineWidth = 1;
         ctx.stroke();
         ctx.restore();
@@ -117,9 +112,10 @@ export class RadarDisplay {
   ): void {
     const w = ctx.canvas.width;
     const h = ctx.canvas.height;
+    const theme = getTheme();
 
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+    ctx.fillStyle = theme.radar.scanline;
     for (let y = 0; y < h; y += 3) {
       ctx.fillRect(0, y, w, 1);
     }
