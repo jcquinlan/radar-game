@@ -75,6 +75,13 @@ describe('LevelManager', () => {
     expect(mgr.hasNextLevel()).toBe(false);
   });
 
+  it('advance returns null when called from menu state', () => {
+    const mgr = new LevelManager();
+    expect(mgr.isOnMenu()).toBe(true);
+    expect(mgr.advance()).toBeNull();
+    expect(mgr.isOnMenu()).toBe(true);
+  });
+
   it('getLevels returns all defined levels', () => {
     const mgr = new LevelManager();
     const levels = mgr.getLevels();

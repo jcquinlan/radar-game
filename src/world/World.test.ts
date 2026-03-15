@@ -117,18 +117,13 @@ describe('World with level config', () => {
       hints: [],
     });
 
-    // Spawning at origin loads a 5x5 grid = 25 chunks, but limited to 5
+    // Spawning at origin would normally load up to 25 chunks (5x5 grid), but limited to 5
     world.updateSpawning(0, 0);
-    // Moving far should not add more chunks
-    const countAfterFirst = world.entities.length;
+    expect(world.getChunkCount()).toBeLessThanOrEqual(5);
+
+    // Moving far should not add more chunks beyond the limit
     world.updateSpawning(5000, 5000);
-    // Some entities added from new chunks up to limit, but chunk count is capped
-    // The key assertion: with maxChunks=5, the world should have far fewer entities
-    // than an unconstrained world at the same location
-    const unconstrainedWorld = new World();
-    unconstrainedWorld.updateSpawning(0, 0);
-    unconstrainedWorld.updateSpawning(5000, 5000);
-    expect(world.entities.length).toBeLessThan(unconstrainedWorld.entities.length);
+    expect(world.getChunkCount()).toBeLessThanOrEqual(5);
   });
 
   it('does not spawn enemies when spawnEnemies is false', () => {

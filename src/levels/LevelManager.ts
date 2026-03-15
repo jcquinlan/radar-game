@@ -23,6 +23,7 @@ export class LevelManager {
 
   /** Advance to next level. Returns null if no more levels (back to menu). */
   advance(): LevelConfig | null {
+    if (this.currentIndex < 0) return null;
     this.currentIndex++;
     if (this.currentIndex >= LEVELS.length) {
       this.currentIndex = -1;

@@ -41,6 +41,10 @@ export class World {
     this.levelConfig = config;
   }
 
+  getChunkCount(): number {
+    return this.visitedChunks.size;
+  }
+
   /** Spawn entities around a position if new chunks are entered */
   updateSpawning(playerX: number, playerY: number): void {
     const cx = Math.floor(playerX / CHUNK_SIZE);

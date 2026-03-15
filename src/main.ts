@@ -179,7 +179,7 @@ function checkObjectives(): boolean {
         if (player.survivalTime < obj.target) return false;
         break;
       case 'deposit_salvage':
-        if (player.score < obj.target) return false; // approximate
+        if (player.salvageDeposited < obj.target) return false;
         break;
     }
   }
@@ -426,6 +426,7 @@ const loop = new GameLoop({
       for (const { salvage, dropoff } of deposited) {
         player.addEnergy(dropoff.rewardPerItem);
         player.score += dropoff.rewardPerItem;
+        player.salvageDeposited++;
         floatingText.add(`+${dropoff.rewardPerItem}E`, salvage.x, salvage.y, '#ffdd00');
         screenShake.trigger(2);
       }
