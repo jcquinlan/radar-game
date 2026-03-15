@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { CombatSystem } from './CombatSystem';
 import { Player } from '../entities/Player';
-import { createEnemy } from '../entities/Entity';
+import { createEnemy, createHomeBase } from '../entities/Entity';
 
 describe('CombatSystem', () => {
   let combat: CombatSystem;
@@ -234,5 +234,91 @@ describe('CombatSystem', () => {
 
     // Enemy should be chasing (moving toward player), not wandering away
     expect(enemy.x).toBeLessThan(initialX); // moved toward player at x=250
+  });
+
+  describe('targetPos override', () => {
+    it('enemies chase targetPos instead of player when provided', () => {
+      const enemy = createEnemy(100, 0, 'scout');
+      // Target is at 200, 0 — enemy should move toward it, away from player at 0,0
+      const initialX = enemy.x;
+      combat.update([enemy], player, 1, false, 15, () => {}, { x: 200, y: 0 });
+      expect(enemy.x).toBeGreaterThan(initialX);
+    });
+
+    it('ranged enemies fire at targetPos, not player', () => {
+      // Place ranged enemy between player and target
+      const enemy = createEnemy(100, 0, 'ranged');
+      enemy.fireRate = 0;
+      // Target is at 200, 0
+      combat.update([enemy], player, 1, false, 15, () => {}, { x: 200, y: 0 });
+      // Projectile should move toward x=200 (positive vx)
+      expect(combat.projectiles.length).toBeGreaterThan(0);
+      expect(combat.projectiles[0].vx).toBeGreaterThan(0);
+    });
+
+    it('enemies still deal contact damage to player even when targeting base', () => {
+      const enemy = createEnemy(5, 0, 'scout');
+      combat.update([enemy], player, 1, false, 15, () => {}, { x: 200, y: 0 });
+      expect(player.health).toBeLessThan(player.maxHealth);
+    });
+
+    it('wave enemies always chase regardless of distance to target', () => {
+      // Wave enemy at 2000px from target — beyond normal chaseRange
+      const enemy = createEnemy(2000, 0, 'scout');
+      enemy.waveEnemy = true;
+      enemy.chaseRange = 200; // normal range is tiny
+      const initialX = enemy.x;
+      combat.update([enemy], player, 1, false, 15, () => {}, { x: 0, y: 0 });
+      // Should still chase toward target at origin
+      expect(enemy.x).toBeLessThan(initialX);
+    });
+  });
+
+  describe('base damage', () => {
+    it('wave enemies deal contact damage to base when within 30px', () => {
+      const homeBase = createHomeBase(0, 0);
+      const enemy = createEnemy(10, 0, 'brute');
+      enemy.waveEnemy = true;
+      enemy.damage = 12;
+      const initialHP = homeBase.health;
+
+      combat.update([enemy], player, 1, false, 15, () => {}, undefined, homeBase);
+
+      expect(homeBase.health).toBeLessThan(initialHP);
+    });
+
+    it('non-wave enemies do not damage the base', () => {
+      const homeBase = createHomeBase(0, 0);
+      const enemy = createEnemy(10, 0, 'brute');
+      enemy.waveEnemy = false;
+      const initialHP = homeBase.health;
+
+      combat.update([enemy], player, 1, false, 15, () => {}, undefined, homeBase);
+
+      expect(homeBase.health).toBe(initialHP);
+    });
+
+    it('wave enemies outside 30px do not damage the base', () => {
+      const homeBase = createHomeBase(0, 0);
+      const enemy = createEnemy(50, 0, 'scout');
+      enemy.waveEnemy = true;
+      const initialHP = homeBase.health;
+
+      combat.update([enemy], player, 0.016, false, 15, () => {}, undefined, homeBase);
+
+      expect(homeBase.health).toBe(initialHP);
+    });
+
+    it('base damage is proportional to enemy damage and dt', () => {
+      const homeBase = createHomeBase(0, 0);
+      const enemy = createEnemy(10, 0, 'brute');
+      enemy.waveEnemy = true;
+      enemy.damage = 20;
+
+      combat.update([enemy], player, 0.5, false, 15, () => {}, undefined, homeBase);
+
+      // Damage = 20 * 0.5 = 10
+      expect(homeBase.health).toBe(490);
+    });
   });
 });
