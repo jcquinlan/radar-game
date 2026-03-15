@@ -23,6 +23,7 @@ import { KeyRemapScreen } from './ui/KeyRemapScreen';
 import { PauseMenu } from './ui/PauseMenu';
 import { MotionTrail } from './radar/MotionTrail';
 import { TowRopeSystem } from './systems/TowRopeSystem';
+import { Minimap } from './ui/Minimap';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
 import { CRTEffect } from './rendering/effects/CRTEffect';
 
@@ -58,6 +59,7 @@ let abilityBar: AbilityBar;
 let keyRemapScreen: KeyRemapScreen;
 let motionTrail: MotionTrail;
 let towRopeSystem: TowRopeSystem;
+let minimap: Minimap;
 let resolutionLevel: number;
 let gameOver: boolean;
 let prevHealth: number;
@@ -91,6 +93,7 @@ function init() {
   abilityBar = new AbilityBar();
   motionTrail = new MotionTrail();
   towRopeSystem = new TowRopeSystem();
+  minimap = new Minimap();
   keyRemapScreen = new KeyRemapScreen();
   keyRemapScreen.addExtraBinding({
     id: 'upgrades',
@@ -633,6 +636,9 @@ const loop = new GameLoop({
 
     // HUD
     hud.render(ctx, player, canvas.width, canvas.height);
+
+    // Minimap (bottom left)
+    minimap.render(ctx, player, world.entities, canvas.width, canvas.height);
 
     // Ability bar (bottom center)
     abilityBar.render(ctx, abilitySystem.abilities, canvas.width, canvas.height);
