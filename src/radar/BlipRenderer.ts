@@ -1,18 +1,6 @@
 import { GameEntity, Ally, Enemy, Salvage } from '../entities/Entity';
+import { getTheme } from '../themes/theme';
 
-const BLIP_COLORS: Record<string, string> = {
-  resource: '#00ff41',
-  enemy: '#ff4141',
-  ally: '#4488ff',
-  salvage: '#ffaa00',
-  dropoff: '#ffdd00',
-};
-
-const ALLY_SUBTYPE_COLORS = {
-  healer: '#4488ff',
-  shield: '#00ffff',
-  beacon: '#88ff41',
-};
 
 const BLIP_SIZES: Record<string, number> = {
   resource: 3,
@@ -40,6 +28,9 @@ export class BlipRenderer {
     resolutionLevel: number,
     worldRotation?: number
   ): void {
+    const themeColors = getTheme().entities;
+    const enemyRangedColor = themeColors.enemyRanged;
+
     for (const entity of entities) {
       if (!entity.active) continue;
 
@@ -63,12 +54,20 @@ export class BlipRenderer {
       const screenX = radarCenterX + relX;
       const screenY = radarCenterY + relY;
 
-      let color = BLIP_COLORS[entity.type];
+      let color = entity.type === 'resource' ? themeColors.resource
+        : entity.type === 'enemy' ? themeColors.enemy
+        : entity.type === 'ally' ? themeColors.ally
+        : entity.type === 'salvage' ? themeColors.salvage
+        : themeColors.dropoff;
       const size = BLIP_SIZES[entity.type];
 
       // Ally subtype colors
       if (entity.type === 'ally') {
-        color = ALLY_SUBTYPE_COLORS[(entity as Ally).subtype] ?? color;
+        const subtype = (entity as Ally).subtype;
+        color = subtype === 'healer' ? themeColors.allyHealer
+          : subtype === 'shield' ? themeColors.allyShield
+          : subtype === 'beacon' ? themeColors.allyBeacon
+          : color;
       }
 
       ctx.save();
@@ -89,7 +88,7 @@ export class BlipRenderer {
         } else {
           // ranged: steady medium with a different color tint
           currentSize = 4;
-          color = '#ff8841';
+          color = enemyRangedColor;
         }
       }
 
@@ -206,11 +205,12 @@ export class BlipRenderer {
     ctx.save();
     ctx.globalAlpha = 0.35;
 
-    let color = BLIP_COLORS.enemy;
+    const theme = getTheme();
+    let color = theme.entities.enemy;
     let ghostSize = BLIP_SIZES.enemy;
 
     if (enemy.subtype === 'ranged') {
-      color = '#ff8841';
+      color = theme.entities.enemyRanged;
       ghostSize = 4;
     } else if (enemy.subtype === 'brute') {
       ghostSize = 7;

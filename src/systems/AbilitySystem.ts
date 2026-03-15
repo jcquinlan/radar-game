@@ -1,5 +1,6 @@
 import { Player } from '../entities/Player';
 import { GameEntity, Enemy } from '../entities/Entity';
+import { getTheme } from '../themes/theme';
 
 export type FloatingTextCallback = (text: string, x: number, y: number, color: string) => void;
 
@@ -216,14 +217,14 @@ export class AbilitySystem {
 
       if (distSq < blastRadius * blastRadius) {
         enemy.health -= blastDamage;
-        addFloatingText(`-${blastDamage}`, enemy.x, enemy.y, '#ff4141');
+        addFloatingText(`-${blastDamage}`, enemy.x, enemy.y, getTheme().events.damage);
 
         if (enemy.health <= 0) {
           enemy.active = false;
           this.player.addEnergy(enemy.energyDrop);
           this.player.kills++;
           this.player.score += 50;
-          addFloatingText('+50', enemy.x, enemy.y - 15, '#ffaa00');
+          addFloatingText('+50', enemy.x, enemy.y - 15, getTheme().entities.salvage);
         }
       }
     }
@@ -300,7 +301,7 @@ export class AbilitySystem {
             this.player.addEnergy(nearest.energyDrop);
             this.player.kills++;
             this.player.score += 50;
-            addFloatingText('+50', nearest.x, nearest.y - 15, '#ffaa00');
+            addFloatingText('+50', nearest.x, nearest.y - 15, getTheme().entities.salvage);
           }
         }
       }
@@ -388,7 +389,7 @@ export class AbilitySystem {
       // Handle collision
       if (hitEnemy) {
         hitEnemy.health -= missile.damage;
-        addFloatingText(`-${missile.damage}`, hitEnemy.x, hitEnemy.y, '#ff8800');
+        addFloatingText(`-${missile.damage}`, hitEnemy.x, hitEnemy.y, getTheme().effects.missile);
         missile.active = false;
 
         if (hitEnemy.health <= 0 && hitEnemy.active) {
@@ -396,7 +397,7 @@ export class AbilitySystem {
           this.player.addEnergy(hitEnemy.energyDrop);
           this.player.kills++;
           this.player.score += 50;
-          addFloatingText('+50', hitEnemy.x, hitEnemy.y - 15, '#ffaa00');
+          addFloatingText('+50', hitEnemy.x, hitEnemy.y - 15, getTheme().entities.salvage);
         }
         continue;
       }

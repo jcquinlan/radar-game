@@ -26,6 +26,7 @@ import { TowRopeSystem } from './systems/TowRopeSystem';
 import { Minimap } from './ui/Minimap';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
 import { CRTEffect } from './rendering/effects/CRTEffect';
+import { getTheme, cycleTheme } from './themes/theme';
 import { LevelManager } from './levels/LevelManager';
 import { LevelConfig, checkAllObjectivesComplete, getObjectiveProgress } from './levels/LevelConfig';
 import { MainMenuScreen } from './ui/MainMenuScreen';
@@ -219,12 +220,14 @@ function togglePause() {
           radar.scanlineEnabled = !shaderPipeline.enabled;
         }
       },
+      onCycleTheme: () => cycleTheme(),
       onOpenKeybinds: () => {
         gameState = 'playing';
         pauseMenu.close(canvas);
         keyRemapScreen.toggle();
       },
       isShaderEnabled: () => shaderPipeline ? shaderPipeline.enabled : false,
+      getThemeName: () => getTheme().name,
     });
   }
 }
@@ -275,22 +278,26 @@ window.addEventListener('keydown', (e) => {
         }
       } else if (ability.id === 'heal_over_time') {
         if (abilitySystem.activate('heal_over_time', world.entities, addText)) {
-          floatingText.add('REGEN!', player.x, player.y - 25, '#00ff41');
+          const t = getTheme();
+          floatingText.add('REGEN!', player.x, player.y - 25, t.abilities.heal_over_time);
         }
       } else if (ability.id === 'helper_drone') {
         if (abilitySystem.activate('helper_drone', world.entities, addText)) {
+          const t = getTheme();
           abilityEffects.triggerDroneSpawn(player.x, player.y);
-          floatingText.add('DRONE!', player.x, player.y - 25, '#00ffff');
+          floatingText.add('DRONE!', player.x, player.y - 25, t.abilities.helper_drone);
         }
       } else if (ability.id === 'dash') {
         if (abilitySystem.activate('dash', world.entities, addText)) {
-          floatingText.add('DASH!', player.x, player.y - 25, '#ffff00');
+          const t = getTheme();
+          floatingText.add('DASH!', player.x, player.y - 25, t.abilities.dash);
           screenShake.trigger(2);
         }
       } else if (ability.id === 'homing_missile') {
         if (abilitySystem.activate('homing_missile', world.entities, addText)) {
+          const t = getTheme();
           abilityEffects.triggerMissileLaunch(player.x, player.y);
-          floatingText.add('MISSILE!', player.x, player.y - 25, '#ff8800');
+          floatingText.add('MISSILE!', player.x, player.y - 25, t.abilities.homing_missile);
           screenShake.trigger(3);
         }
       }
@@ -350,25 +357,26 @@ const loop = new GameLoop({
     radar.setPingState(pingSystem.getState());
 
     // Track score and floating text from ping events
+    const theme = getTheme();
     for (const event of events) {
       if (event.type === 'collect') {
         player.totalEnergyCollected += event.value;
         player.score += event.value;
-        floatingText.add(`+${event.value}E`, event.entity.x, event.entity.y, '#00ff41');
+        floatingText.add(`+${event.value}E`, event.entity.x, event.entity.y, theme.events.collect);
       }
       if (event.type === 'damage') {
-        floatingText.add(`-${event.value}`, event.entity.x, event.entity.y, '#ff4141');
+        floatingText.add(`-${event.value}`, event.entity.x, event.entity.y, theme.events.damage);
         if (!event.entity.active) {
           player.kills++;
           player.score += 50;
-          floatingText.add('+50', event.entity.x, event.entity.y - 15, '#ffaa00');
+          floatingText.add('+50', event.entity.x, event.entity.y - 15, theme.entities.salvage);
         }
       }
       if (event.type === 'heal') {
-        floatingText.add(`+${event.value}HP`, player.x, player.y - 20, '#4488ff');
+        floatingText.add(`+${event.value}HP`, player.x, player.y - 20, theme.events.heal);
       }
       if (event.type === 'shield') {
-        floatingText.add('SHIELD!', player.x, player.y - 20, '#00ffff');
+        floatingText.add('SHIELD!', player.x, player.y - 20, theme.events.shield);
       }
     }
 
@@ -388,7 +396,7 @@ const loop = new GameLoop({
           player.addEnergy(resource.energyValue);
           player.totalEnergyCollected += resource.energyValue;
           player.score += resource.energyValue;
-          floatingText.add(`+${resource.energyValue}E`, resource.x, resource.y, '#00ff41');
+          floatingText.add(`+${resource.energyValue}E`, resource.x, resource.y, theme.events.collect);
           resource.active = false;
         }
       }
@@ -398,7 +406,7 @@ const loop = new GameLoop({
     if (features?.towRope !== false) {
       const pickedUp = towRopeSystem.checkPickups(world.entities, player);
       for (const salvage of pickedUp) {
-        floatingText.add('SALVAGE!', salvage.x, salvage.y, '#ffaa00');
+        floatingText.add('SALVAGE!', salvage.x, salvage.y, theme.entities.salvage);
       }
       towRopeSystem.update(player, dt);
       const deposited = towRopeSystem.checkDropoffs(world.entities);
@@ -406,7 +414,7 @@ const loop = new GameLoop({
         player.addEnergy(dropoff.rewardPerItem);
         player.score += dropoff.rewardPerItem;
         player.salvageDeposited++;
-        floatingText.add(`+${dropoff.rewardPerItem}E`, salvage.x, salvage.y, '#ffdd00');
+        floatingText.add(`+${dropoff.rewardPerItem}E`, salvage.x, salvage.y, theme.entities.dropoff);
         screenShake.trigger(2);
       }
     }
@@ -449,14 +457,14 @@ const loop = new GameLoop({
     }
 
     // Motion trails — track fast-moving entities
-    motionTrail.track('player', player.x, player.y, player.vx, player.vy, '#00ff41', dt);
+    motionTrail.track('player', player.x, player.y, player.vx, player.vy, theme.radar.primary, dt);
     const activeTrailIds = new Set(['player']);
     for (let i = 0; i < world.entities.length; i++) {
       const entity = world.entities[i];
       if (!entity.active || entity.type !== 'enemy') continue;
       const enemy = entity as Enemy;
       const eid = `e${i}`;
-      motionTrail.track(eid, enemy.x, enemy.y, enemy.vx, enemy.vy, '#ff4141', dt);
+      motionTrail.track(eid, enemy.x, enemy.y, enemy.vx, enemy.vy, theme.entities.enemy, dt);
       activeTrailIds.add(eid);
     }
     if (features?.combat !== false) {
@@ -464,7 +472,7 @@ const loop = new GameLoop({
         const p = combatSystem.projectiles[i];
         if (!p.active) continue;
         const pid = `p${i}`;
-        motionTrail.track(pid, p.x, p.y, p.vx, p.vy, '#ff6641', dt);
+        motionTrail.track(pid, p.x, p.y, p.vx, p.vy, theme.effects.projectile, dt);
         activeTrailIds.add(pid);
       }
     }
@@ -472,13 +480,13 @@ const loop = new GameLoop({
       for (let i = 0; i < abilitySystem.drones.length; i++) {
         const drone = abilitySystem.drones[i];
         const did = `d${i}`;
-        motionTrail.track(did, drone.x, drone.y, drone.vx, drone.vy, '#00ffff', dt);
+        motionTrail.track(did, drone.x, drone.y, drone.vx, drone.vy, theme.effects.drone, dt);
         activeTrailIds.add(did);
       }
       for (let i = 0; i < abilitySystem.missiles.length; i++) {
         const missile = abilitySystem.missiles[i];
         const mid = `m${i}`;
-        motionTrail.track(mid, missile.x, missile.y, missile.vx, missile.vy, '#ff8800', dt);
+        motionTrail.track(mid, missile.x, missile.y, missile.vx, missile.vy, theme.effects.missile, dt);
         activeTrailIds.add(mid);
       }
     }
@@ -527,7 +535,8 @@ const loop = new GameLoop({
     const cx = canvas.width / 2 + screenShake.offsetX;
     const cy = canvas.height / 2 + screenShake.offsetY;
 
-    ctx.fillStyle = '#0a0a0a';
+    const theme = getTheme();
+    ctx.fillStyle = theme.radar.background;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Radar (drawn without rotation — rings/crosshair are fixed)
@@ -619,28 +628,32 @@ const loop = new GameLoop({
       const dsy = cy + (dropoff.y - player.y);
       const pulse = 1 + Math.sin(player.survivalTime * 2) * 0.08;
 
+      const dropoffColor = theme.entities.dropoff;
       ctx.save();
       // Outer ring
       ctx.beginPath();
       ctx.arc(dsx, dsy, dropoff.radius * pulse, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255, 221, 0, 0.3)';
+      ctx.strokeStyle = dropoffColor;
+      ctx.globalAlpha = 0.3;
       ctx.lineWidth = 2;
-      ctx.shadowColor = '#ffdd00';
+      ctx.shadowColor = dropoffColor;
       ctx.shadowBlur = 8;
       ctx.stroke();
 
       // Inner glow fill
+      ctx.globalAlpha = 0.04;
       ctx.beginPath();
       ctx.arc(dsx, dsy, dropoff.radius * pulse, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255, 221, 0, 0.04)';
+      ctx.fillStyle = dropoffColor;
       ctx.fill();
 
       // Center diamond marker
+      ctx.globalAlpha = 0.6;
       ctx.translate(dsx, dsy);
       ctx.rotate(Math.PI / 4);
       ctx.beginPath();
       ctx.rect(-5, -5, 10, 10);
-      ctx.strokeStyle = 'rgba(255, 221, 0, 0.6)';
+      ctx.strokeStyle = dropoffColor;
       ctx.lineWidth = 1.5;
       ctx.stroke();
       ctx.restore();
@@ -667,24 +680,27 @@ const loop = new GameLoop({
         const cpX = midX + (-dvy) * 0.3;
         const cpY = midY + dvx * 0.3;
 
-        // Draw rope (amber)
+        // Draw rope
+        const salvageColor = theme.entities.salvage;
         ctx.beginPath();
         ctx.moveTo(cx, cy);
         ctx.quadraticCurveTo(cpX, cpY, itemSX, itemSY);
-        ctx.strokeStyle = `rgba(255, 170, 0, ${0.5 * alpha})`;
+        ctx.strokeStyle = salvageColor;
+        ctx.globalAlpha = 0.5 * alpha;
         ctx.lineWidth = 1.5;
-        ctx.shadowColor = '#ffaa00';
+        ctx.shadowColor = salvageColor;
         ctx.shadowBlur = 4;
         ctx.stroke();
 
-        // Draw towed salvage blip (diamond shape, amber/gold)
+        // Draw towed salvage blip (diamond shape)
         ctx.save();
+        ctx.globalAlpha = alpha;
         ctx.translate(itemSX, itemSY);
         ctx.rotate(Math.PI / 4);
         ctx.beginPath();
         ctx.rect(-4.5, -4.5, 9, 9);
-        ctx.fillStyle = `rgba(255, 170, 0, ${alpha})`;
-        ctx.shadowColor = '#ffaa00';
+        ctx.fillStyle = salvageColor;
+        ctx.shadowColor = salvageColor;
         ctx.shadowBlur = 8;
         ctx.fill();
         ctx.restore();
@@ -720,11 +736,11 @@ const loop = new GameLoop({
       const px = cx + prx;
       const py = cy + pry;
       ctx.save();
-      ctx.shadowColor = '#ff4141';
+      ctx.shadowColor = theme.effects.projectileGlow;
       ctx.shadowBlur = 6;
       ctx.beginPath();
       ctx.arc(px, py, 2, 0, Math.PI * 2);
-      ctx.fillStyle = '#ff6641';
+      ctx.fillStyle = theme.effects.projectile;
       ctx.fill();
       ctx.restore();
     }
@@ -737,11 +753,11 @@ const loop = new GameLoop({
       const droneX = cx + drx;
       const droneY = cy + dry;
       ctx.save();
-      ctx.shadowColor = '#00ffff';
+      ctx.shadowColor = theme.effects.drone;
       ctx.shadowBlur = 8;
       ctx.beginPath();
       ctx.arc(droneX, droneY, 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#00ffff';
+      ctx.fillStyle = theme.effects.drone;
       ctx.fill();
       ctx.restore();
     }
@@ -754,11 +770,11 @@ const loop = new GameLoop({
       const mx = cx + mrx;
       const my = cy + mry;
       ctx.save();
-      ctx.shadowColor = '#ff8800';
+      ctx.shadowColor = theme.effects.missile;
       ctx.shadowBlur = 10;
       ctx.beginPath();
       ctx.arc(mx, my, 3, 0, Math.PI * 2);
-      ctx.fillStyle = '#ff8800';
+      ctx.fillStyle = theme.effects.missile;
       ctx.fill();
       ctx.restore();
     }
@@ -784,8 +800,8 @@ const loop = new GameLoop({
     // Player heading indicator (fixed to screen, always points up)
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.fillStyle = '#00ff41';
-    ctx.shadowColor = '#00ff41';
+    ctx.fillStyle = theme.radar.primary;
+    ctx.shadowColor = theme.radar.primary;
     ctx.shadowBlur = 6;
     ctx.beginPath();
     ctx.moveTo(0, -8);
@@ -800,15 +816,15 @@ const loop = new GameLoop({
       ctx.save();
       const vignetteRadius = Math.max(canvas.width, canvas.height) * 0.7;
       const gradient = ctx.createRadialGradient(cx, cy, vignetteRadius * 0.5, cx, cy, vignetteRadius);
-      gradient.addColorStop(0, 'rgba(255, 0, 0, 0)');
-      gradient.addColorStop(1, `rgba(255, 0, 0, ${damageFlash})`);
+      gradient.addColorStop(0, `rgba(${theme.effects.damageFlash}, 0)`);
+      gradient.addColorStop(1, `rgba(${theme.effects.damageFlash}, ${damageFlash})`);
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Red border glow at screen edges
+      // Border glow at screen edges
       const edgeGradient = ctx.createRadialGradient(cx, cy, vignetteRadius * 0.7, cx, cy, vignetteRadius);
-      edgeGradient.addColorStop(0, 'rgba(255, 65, 65, 0)');
-      edgeGradient.addColorStop(1, `rgba(255, 65, 65, ${damageFlash * 1.5})`);
+      edgeGradient.addColorStop(0, `rgba(${theme.effects.damageFlashEdge}, 0)`);
+      edgeGradient.addColorStop(1, `rgba(${theme.effects.damageFlashEdge}, ${damageFlash * 1.5})`);
       ctx.fillStyle = edgeGradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.restore();

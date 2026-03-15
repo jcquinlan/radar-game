@@ -1,4 +1,5 @@
 import type { Ability } from '../systems/AbilitySystem';
+import { getTheme } from '../themes/theme';
 
 const STORAGE_KEY = 'radar-game-keybindings';
 
@@ -145,6 +146,8 @@ export class KeyRemapScreen {
 
     const allBindings = this.getAllBindings(abilities);
 
+    const theme = getTheme();
+
     // Semi-transparent overlay
     ctx.save();
     ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
@@ -156,18 +159,18 @@ export class KeyRemapScreen {
     const panelY = (canvasHeight - panelHeight) / 2;
 
     // Panel background
-    ctx.fillStyle = 'rgba(0, 15, 0, 0.95)';
+    ctx.fillStyle = theme.ui.panelBackgroundSolid;
     ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
 
     // Border
-    ctx.strokeStyle = '#00ff41';
+    ctx.strokeStyle = theme.ui.border;
     ctx.lineWidth = 2;
     ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
 
     // Title
     ctx.font = 'bold 18px monospace';
-    ctx.fillStyle = '#00ff41';
-    ctx.shadowColor = '#00ff41';
+    ctx.fillStyle = theme.ui.textPrimary;
+    ctx.shadowColor = theme.ui.textPrimary;
     ctx.shadowBlur = 8;
     ctx.textAlign = 'center';
     ctx.fillText('KEY BINDINGS', panelX + panelWidth / 2, panelY + 30);
@@ -175,7 +178,7 @@ export class KeyRemapScreen {
 
     // Subtitle
     ctx.font = '11px monospace';
-    ctx.fillStyle = '#557755';
+    ctx.fillStyle = theme.ui.textSecondary;
     ctx.fillText('Click a binding to remap. Press K to close.', panelX + panelWidth / 2, panelY + 50);
 
     this.itemBounds = [];
@@ -193,22 +196,22 @@ export class KeyRemapScreen {
       this.itemBounds.push({ x: itemX, y, width: itemWidth, height: itemHeight });
 
       // Item background
-      ctx.fillStyle = isListening ? 'rgba(0, 255, 65, 0.15)' : 'rgba(0, 255, 65, 0.03)';
+      ctx.fillStyle = isListening ? theme.ui.highlight : theme.ui.highlightSubtle;
       ctx.fillRect(itemX, y, itemWidth, itemHeight);
 
       // Item border
-      ctx.strokeStyle = isListening ? '#00ff41' : '#335533';
+      ctx.strokeStyle = isListening ? theme.ui.border : theme.ui.borderDim;
       ctx.lineWidth = 1;
       ctx.strokeRect(itemX, y, itemWidth, itemHeight);
 
       // Binding name
       ctx.font = '14px monospace';
-      ctx.fillStyle = '#00ff41';
+      ctx.fillStyle = theme.ui.textPrimary;
       ctx.fillText(binding.name, itemX + 12, y + 22);
 
       // Description
       ctx.font = '10px monospace';
-      ctx.fillStyle = '#557755';
+      ctx.fillStyle = theme.ui.textSecondary;
       ctx.fillText(binding.description, itemX + 12, y + 40);
 
       // Key binding box (right side)
@@ -217,16 +220,16 @@ export class KeyRemapScreen {
       const keyBoxX = itemX + itemWidth - keyBoxWidth - 12;
       const keyBoxY = y + (itemHeight - keyBoxHeight) / 2;
 
-      ctx.fillStyle = isListening ? '#002200' : '#0a0a0a';
+      ctx.fillStyle = isListening ? theme.radar.dim : theme.radar.background;
       ctx.fillRect(keyBoxX, keyBoxY, keyBoxWidth, keyBoxHeight);
 
-      ctx.strokeStyle = isListening ? '#00ff41' : '#335533';
+      ctx.strokeStyle = isListening ? theme.ui.border : theme.ui.borderDim;
       ctx.lineWidth = isListening ? 2 : 1;
       ctx.strokeRect(keyBoxX, keyBoxY, keyBoxWidth, keyBoxHeight);
 
       // Key text
       ctx.font = 'bold 16px monospace';
-      ctx.fillStyle = isListening ? '#ffff00' : '#00ff41';
+      ctx.fillStyle = isListening ? theme.abilities.dash : theme.ui.textPrimary;
       ctx.textAlign = 'center';
       const displayKey = isListening ? '...' : this.formatKey(binding.key);
       ctx.fillText(displayKey, keyBoxX + keyBoxWidth / 2, keyBoxY + keyBoxHeight / 2 + 6);

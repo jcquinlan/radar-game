@@ -1,3 +1,5 @@
+import { getTheme } from '../themes/theme';
+
 interface BlastRing {
   remaining: number;
   maxDuration: number;
@@ -47,7 +49,7 @@ export class AbilityEffects {
       y: worldY,
       remaining: SPAWN_FLASH_DURATION,
       maxDuration: SPAWN_FLASH_DURATION,
-      color: '#00ffff',
+      color: getTheme().effects.drone,
     });
   }
 
@@ -57,7 +59,7 @@ export class AbilityEffects {
       y: worldY,
       remaining: SPAWN_FLASH_DURATION,
       maxDuration: SPAWN_FLASH_DURATION,
-      color: '#ff8800',
+      color: getTheme().effects.missile,
     });
   }
 
@@ -85,6 +87,8 @@ export class AbilityEffects {
     playerY: number,
     gameTime: number,
   ): void {
+    const theme = getTheme();
+
     // Blast ring: expanding red circle from player center
     for (const ring of this.blastRings) {
       const progress = 1 - ring.remaining / ring.maxDuration;
@@ -93,11 +97,11 @@ export class AbilityEffects {
 
       ctx.save();
       ctx.globalAlpha = alpha * 0.6;
-      ctx.shadowColor = '#ff4141';
+      ctx.shadowColor = theme.abilities.damage_blast;
       ctx.shadowBlur = 15;
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-      ctx.strokeStyle = '#ff4141';
+      ctx.strokeStyle = theme.abilities.damage_blast;
       ctx.lineWidth = 3 * alpha + 1;
       ctx.stroke();
       ctx.restore();
@@ -110,17 +114,17 @@ export class AbilityEffects {
 
       ctx.save();
       ctx.globalAlpha = 0.4 * pulse;
-      ctx.shadowColor = '#00ff41';
+      ctx.shadowColor = theme.abilities.heal_over_time;
       ctx.shadowBlur = 12;
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-      ctx.strokeStyle = '#00ff41';
+      ctx.strokeStyle = theme.abilities.heal_over_time;
       ctx.lineWidth = 2;
       ctx.stroke();
 
       // Inner fill with very low alpha
       ctx.globalAlpha = 0.08 * pulse;
-      ctx.fillStyle = '#00ff41';
+      ctx.fillStyle = theme.abilities.heal_over_time;
       ctx.fill();
       ctx.restore();
     }

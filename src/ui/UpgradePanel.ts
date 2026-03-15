@@ -1,5 +1,6 @@
 import { UpgradeSystem } from '../systems/UpgradeSystem';
 import { Player } from '../entities/Player';
+import { getTheme } from '../themes/theme';
 
 export class UpgradePanel {
   private visible = false;
@@ -59,21 +60,23 @@ export class UpgradePanel {
     const itemHeight = 80;
     const padding = 12;
 
+    const theme = getTheme();
+
     // Panel background
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 10, 0, 0.9)';
+    ctx.fillStyle = theme.ui.panelBackground;
     ctx.fillRect(panelX, panelY, panelWidth, upgradeSystem.upgrades.length * itemHeight + padding * 2 + 30);
 
     // Title
     ctx.font = 'bold 16px monospace';
-    ctx.fillStyle = '#00ff41';
-    ctx.shadowColor = '#00ff41';
+    ctx.fillStyle = theme.ui.textPrimary;
+    ctx.shadowColor = theme.ui.textPrimary;
     ctx.shadowBlur = 5;
     ctx.fillText('UPGRADES', panelX + padding, panelY + 22);
     ctx.shadowBlur = 0;
 
     // Border
-    ctx.strokeStyle = '#00ff41';
+    ctx.strokeStyle = theme.ui.border;
     ctx.lineWidth = 1;
     ctx.strokeRect(panelX, panelY, panelWidth, upgradeSystem.upgrades.length * itemHeight + padding * 2 + 30);
 
@@ -95,13 +98,13 @@ export class UpgradePanel {
 
       // Item background on hover possibility
       if (canBuy) {
-        ctx.fillStyle = 'rgba(0, 255, 65, 0.05)';
+        ctx.fillStyle = theme.ui.highlightSubtle;
         ctx.fillRect(panelX + padding, itemY, panelWidth - padding * 2, itemHeight - 5);
       }
 
       // Name
       ctx.font = '14px monospace';
-      ctx.fillStyle = canBuy ? '#00ff41' : maxed ? '#666' : '#335533';
+      ctx.fillStyle = canBuy ? theme.ui.textPrimary : maxed ? theme.ui.maxedText : theme.ui.textDisabled;
       ctx.fillText(upgrade.name, panelX + padding + 4, y + 18);
 
       // Level bar
@@ -110,20 +113,20 @@ export class UpgradePanel {
       const barWidth = panelWidth - padding * 2 - 8;
       const barHeight = 8;
 
-      ctx.fillStyle = '#1a1a1a';
+      ctx.fillStyle = theme.ui.barBackground;
       ctx.fillRect(barX, barY, barWidth, barHeight);
 
       const fillWidth = (upgrade.level / upgrade.maxLevel) * barWidth;
-      ctx.fillStyle = maxed ? '#666' : '#00ff41';
+      ctx.fillStyle = maxed ? theme.ui.maxedText : theme.ui.textPrimary;
       ctx.fillRect(barX, barY, fillWidth, barHeight);
 
-      ctx.strokeStyle = '#335533';
+      ctx.strokeStyle = theme.ui.borderDim;
       ctx.lineWidth = 1;
       ctx.strokeRect(barX, barY, barWidth, barHeight);
 
       // Level text
       ctx.font = '11px monospace';
-      ctx.fillStyle = '#888';
+      ctx.fillStyle = theme.ui.statsText;
       ctx.fillText(
         `Lv ${upgrade.level}/${upgrade.maxLevel}`,
         panelX + padding + 4,
@@ -133,16 +136,16 @@ export class UpgradePanel {
       // Cost
       if (!maxed) {
         const cost = upgradeSystem.getNextCost(upgrade.id);
-        ctx.fillStyle = canBuy ? '#00ff41' : '#663333';
+        ctx.fillStyle = canBuy ? theme.ui.textPrimary : theme.ui.cooldownText;
         ctx.fillText(`Cost: ${cost} E`, panelX + panelWidth - padding - 90, y + 50);
       } else {
-        ctx.fillStyle = '#666';
+        ctx.fillStyle = theme.ui.maxedText;
         ctx.fillText('MAXED', panelX + panelWidth - padding - 60, y + 50);
       }
 
       // Description
       ctx.font = '10px monospace';
-      ctx.fillStyle = '#556655';
+      ctx.fillStyle = theme.ui.labelText;
       ctx.fillText(upgrade.description, panelX + padding + 4, y + 65);
     }
 

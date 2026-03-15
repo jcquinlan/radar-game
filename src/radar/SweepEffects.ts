@@ -1,4 +1,5 @@
 import { PingEvent } from '../systems/PingSystem';
+import { getTheme } from '../themes/theme';
 
 interface FlashEffect {
   x: number;
@@ -8,24 +9,18 @@ interface FlashEffect {
   maxDuration: number;
 }
 
-const FLASH_COLORS: Record<string, string> = {
-  collect: '#00ff41',
-  damage: '#ff4141',
-  heal: '#4488ff',
-  shield: '#00ffff',
-};
-
 const FLASH_DURATION = 0.3; // seconds
 
 export class SweepEffects {
   private flashes: FlashEffect[] = [];
 
   addEvents(events: PingEvent[], playerX: number, playerY: number): void {
+    const flashColors = getTheme().events as Record<string, string>;
     for (const event of events) {
       this.flashes.push({
         x: event.entity.x - playerX,
         y: event.entity.y - playerY,
-        color: FLASH_COLORS[event.type],
+        color: flashColors[event.type],
         remaining: FLASH_DURATION,
         maxDuration: FLASH_DURATION,
       });
