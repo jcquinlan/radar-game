@@ -79,6 +79,10 @@ let damageFlash: number;
 let currentLevelConfig: LevelConfig | null = null;
 /** Pre-allocated Set for motion trail pruning — reused every frame to avoid GC pressure */
 const activeTrailIds = new Set<string>();
+/** Bounds for the START RUN button in base_mode (recalculated each render) */
+let startRunBounds: { x: number; y: number; width: number; height: number } | null = null;
+/** Click handler for base_mode START RUN button */
+let baseModeClickHandler: ((e: MouseEvent) => void) | null = null;
 
 function showMainMenu() {
   gameState = 'menu';
@@ -98,7 +102,7 @@ function showMainMenu() {
       // Start Game -> base_mode (free play)
       currentLevelConfig = null;
       init();
-      gameState = 'base_mode';
+      enterBaseMode();
     },
   );
 }
@@ -135,6 +139,30 @@ function startRun() {
   upgradePanel.attach(canvas, upgradeSystem, player);
   world.updateSpawning(player.x, player.y);
   gameState = 'run_active';
+}
+
+function enterBaseMode() {
+  gameState = 'base_mode';
+  baseModeClickHandler = (e: MouseEvent) => {
+    if (gameState !== 'base_mode' || !startRunBounds) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const b = startRunBounds;
+    if (mx >= b.x && mx <= b.x + b.width && my >= b.y && my <= b.y + b.height) {
+      leaveBaseMode();
+      startRun();
+    }
+  };
+  canvas.addEventListener('click', baseModeClickHandler);
+}
+
+function leaveBaseMode() {
+  if (baseModeClickHandler) {
+    canvas.removeEventListener('click', baseModeClickHandler);
+    baseModeClickHandler = null;
+  }
+  startRunBounds = null;
 }
 
 function init() {
@@ -213,6 +241,7 @@ function cleanupCurrentGame() {
   if (towRopeSystem) towRopeSystem.clear();
   if (gameOverScreen) gameOverScreen.hide(canvas);
   if (levelCompleteScreen) levelCompleteScreen.hide(canvas);
+  leaveBaseMode();
 }
 
 function onLevelComplete() {
@@ -281,19 +310,26 @@ function togglePause() {
   }
 }
 
+/** States where the game loop is actively running (gameplay states) */
+function isActiveGameplay(state: GameState): boolean {
+  return state === 'playing' || state === 'run_active' || state === 'final_wave';
+}
+
 // Toggle panels (registered once, outside init)
 window.addEventListener('keydown', (e) => {
-  // Only handle keys during gameplay or pause
-  if (gameState !== 'playing' && gameState !== 'paused') return;
+  // Escape toggles pause from any active gameplay state or base_mode
+  if (e.key === 'Escape') {
+    if (gameState === 'paused' || isActiveGameplay(gameState) || gameState === 'base_mode') {
+      togglePause();
+      return;
+    }
+  }
+
+  // Only handle remaining keys during active gameplay or pause
+  if (!isActiveGameplay(gameState) && gameState !== 'paused') return;
 
   // Key remap screen captures keys when listening — skip other handlers
   if (keyRemapScreen && keyRemapScreen.isListening()) return;
-
-  // Escape toggles pause menu
-  if (e.key === 'Escape') {
-    togglePause();
-    return;
-  }
 
   // Don't process other keys while paused
   if (gameState === 'paused') return;
@@ -303,16 +339,16 @@ window.addEventListener('keydown', (e) => {
   if (features?.upgrades !== false) {
     const upgradesBinding = keyRemapScreen.getExtraBinding('upgrades');
     const upgradesKey = upgradesBinding ? upgradesBinding.key : 'e';
-    if ((e.key === upgradesKey || e.key === upgradesKey.toUpperCase()) && gameState === 'playing' && !keyRemapScreen.isVisible()) {
+    if ((e.key === upgradesKey || e.key === upgradesKey.toUpperCase()) && isActiveGameplay(gameState) && !keyRemapScreen.isVisible()) {
       upgradePanel.toggle();
     }
   }
-  if ((e.key === 'k' || e.key === 'K') && gameState === 'playing') {
+  if ((e.key === 'k' || e.key === 'K') && isActiveGameplay(gameState)) {
     keyRemapScreen.toggle();
   }
 
   // Ability keybinds — only if abilities are enabled
-  if (gameState !== 'playing' || keyRemapScreen.isVisible()) return;
+  if (!isActiveGameplay(gameState) || keyRemapScreen.isVisible()) return;
   if (features?.abilities === false) return;
 
   const addText = (text: string, x: number, y: number, color: string) =>
@@ -360,7 +396,7 @@ showMainMenu();
 
 const loop = new GameLoop({
   update(dt) {
-    if (gameState !== 'playing') return;
+    if (!isActiveGameplay(gameState)) return;
 
     const features = currentLevelConfig?.features;
 
@@ -568,6 +604,105 @@ const loop = new GameLoop({
     // Main menu render
     if (gameState === 'menu') {
       mainMenuScreen.render(ctx, canvas.width, canvas.height);
+      if (shaderPipeline) {
+        shaderPipeline.render(performance.now() / 1000);
+      }
+      return;
+    }
+
+    // Base mode render — home base + START RUN button
+    if (gameState === 'base_mode') {
+      const theme = getTheme();
+      ctx.fillStyle = theme.radar.background;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const bcx = canvas.width / 2;
+      const bcy = canvas.height / 2;
+
+      // Radar background (static, no ping)
+      radar.render(ctx, bcx, bcy);
+
+      // Home base at center — boundary ring and hexagon
+      ctx.save();
+      const pulse = 1 + Math.sin(performance.now() / 1000 * 1.5) * 0.05;
+
+      // Outer boundary ring
+      ctx.beginPath();
+      ctx.arc(bcx, bcy, 150 * pulse, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(100, 220, 255, 0.25)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Inner glow fill
+      ctx.beginPath();
+      ctx.arc(bcx, bcy, 150 * pulse, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(100, 220, 255, 0.03)';
+      ctx.fill();
+
+      // Inner ring
+      ctx.beginPath();
+      ctx.arc(bcx, bcy, 90 * pulse, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(100, 220, 255, 0.12)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Center hexagon
+      const hexRadius = 14;
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i - Math.PI / 6;
+        const hxp = bcx + Math.cos(angle) * hexRadius;
+        const hyp = bcy + Math.sin(angle) * hexRadius;
+        if (i === 0) ctx.moveTo(hxp, hyp);
+        else ctx.lineTo(hxp, hyp);
+      }
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(100, 220, 255, 0.4)';
+      ctx.strokeStyle = 'rgba(100, 220, 255, 0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.fill();
+      ctx.stroke();
+
+      // Player ship indicator at center
+      ctx.fillStyle = theme.radar.primary;
+      ctx.beginPath();
+      ctx.moveTo(bcx, bcy - 10);
+      ctx.lineTo(bcx - 6, bcy + 6);
+      ctx.lineTo(bcx + 6, bcy + 6);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
+
+      // "HOME BASE" label
+      ctx.save();
+      ctx.font = '14px monospace';
+      ctx.fillStyle = 'rgba(100, 220, 255, 0.6)';
+      ctx.textAlign = 'center';
+      ctx.fillText('HOME BASE', bcx, bcy - 170);
+
+      // START RUN button
+      const btnWidth = 280;
+      const btnHeight = 50;
+      const btnX = bcx - btnWidth / 2;
+      const btnY = bcy + 200;
+      startRunBounds = { x: btnX, y: btnY, width: btnWidth, height: btnHeight };
+
+      ctx.fillStyle = 'rgba(0, 255, 65, 0.08)';
+      ctx.fillRect(btnX, btnY, btnWidth, btnHeight);
+      ctx.strokeStyle = '#00ff41';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(btnX, btnY, btnWidth, btnHeight);
+
+      ctx.font = 'bold 20px monospace';
+      ctx.fillStyle = '#00ff41';
+      ctx.textAlign = 'center';
+      ctx.fillText('START RUN', bcx, btnY + 32);
+      ctx.restore();
+
+      // Pause menu (if paused from base_mode — shows on top)
+      pauseMenu.render(ctx, canvas.width, canvas.height);
+
       if (shaderPipeline) {
         shaderPipeline.render(performance.now() / 1000);
       }
