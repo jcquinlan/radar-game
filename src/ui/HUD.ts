@@ -1,4 +1,5 @@
 import { Player } from '../entities/Player';
+import { HomeBase } from '../entities/Entity';
 import { getThreatLevel } from '../world/World';
 import { getTheme } from '../themes/theme';
 
@@ -22,6 +23,7 @@ export class HUD {
     player: Player,
     canvasWidth: number,
     canvasHeight: number,
+    homeBase?: HomeBase,
   ): void {
     const padding = 20;
     const barWidth = 200;
@@ -45,24 +47,48 @@ export class HUD {
       `HP: ${Math.ceil(player.health)}/${player.maxHealth}${player.shieldActive ? ' [SHIELD]' : ''}`
     );
 
+    // Base HP bar (below player HP bar)
+    if (homeBase) {
+      const baseBarY = y + barHeight + 4;
+      const baseRatio = homeBase.health / homeBase.maxHealth;
+      // Interpolate color from cyan to red based on damage
+      const r = Math.round(100 + (255 - 100) * (1 - baseRatio));
+      const g = Math.round(220 * baseRatio + 60 * (1 - baseRatio));
+      const b = Math.round(255 * baseRatio + 60 * (1 - baseRatio));
+      const baseColor = `rgb(${r}, ${g}, ${b})`;
+      this.renderBar(
+        ctx,
+        padding,
+        baseBarY,
+        barWidth,
+        barHeight,
+        baseRatio,
+        baseColor,
+        `BASE: ${Math.ceil(homeBase.health)}/${homeBase.maxHealth}`
+      );
+    }
+
+    // Offset subsequent elements when base bar is present
+    const baseBarOffset = homeBase ? barHeight + 4 : 0;
+
     // Energy counter
     ctx.fillStyle = theme.ui.textPrimary;
     ctx.shadowColor = theme.ui.textPrimary;
     ctx.shadowBlur = 5;
-    ctx.fillText(`Energy: ${Math.floor(player.energy)}`, padding, y + barHeight + 24);
+    ctx.fillText(`Energy: ${Math.floor(player.energy)}`, padding, y + barHeight + baseBarOffset + 24);
     ctx.shadowBlur = 0;
 
     // Distance from origin
     const dist = Math.floor(Math.sqrt(player.x * player.x + player.y * player.y));
     ctx.fillStyle = theme.ui.textSecondary;
-    ctx.fillText(`RANGE: ${dist}m`, padding, y + barHeight + 44);
+    ctx.fillText(`RANGE: ${dist}m`, padding, y + barHeight + baseBarOffset + 44);
 
     // Threat level
     const threat = getThreatLevel(player.x, player.y);
     ctx.fillStyle = threat.color;
     ctx.shadowColor = threat.color;
     ctx.shadowBlur = 3;
-    ctx.fillText(`THREAT: ${threat.label}`, padding, y + barHeight + 64);
+    ctx.fillText(`THREAT: ${threat.label}`, padding, y + barHeight + baseBarOffset + 64);
     ctx.shadowBlur = 0;
 
     // Coordinates
@@ -71,7 +97,7 @@ export class HUD {
     ctx.fillText(
       `POS: ${Math.floor(player.x)}, ${Math.floor(player.y)}`,
       padding,
-      y + barHeight + 82
+      y + barHeight + baseBarOffset + 82
     );
 
     // Score (top right)

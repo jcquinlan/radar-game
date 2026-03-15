@@ -411,6 +411,16 @@ const loop = new GameLoop({
         floatingText.add(`+${dropoff.rewardPerItem}E`, salvage.x, salvage.y, theme.entities.dropoff);
         screenShake.trigger(2);
       }
+      // Home base also acts as a salvage deposit point
+      const homeDeposited = towRopeSystem.checkHomeDeposit(homeBase);
+      for (const salvage of homeDeposited) {
+        const reward = TowRopeSystem.HOME_DEPOSIT_REWARD;
+        player.addEnergy(reward);
+        player.score += reward;
+        player.salvageDeposited++;
+        floatingText.add(`+${reward}E`, salvage.x, salvage.y, theme.entities.dropoff);
+        screenShake.trigger(2);
+      }
     }
 
     // Shield buff countdown
@@ -554,7 +564,7 @@ const loop = new GameLoop({
     // Motion trails (rendered behind blips)
     motionTrail.render(ctx, player.x, player.y, cx, cy);
 
-    // Home base — boundary ring and center marker
+    // Home base — boundary ring and center marker (tints toward red when damaged)
     {
       const hbx = homeBase.x - player.x;
       const hby = homeBase.y - player.y;
@@ -563,27 +573,34 @@ const loop = new GameLoop({
         const hsy = cy + hby;
         const pulse = 1 + Math.sin(player.survivalTime * 1.5) * 0.05;
 
+        // Interpolate color from cyan (100,220,255) to red (255,60,60) based on damage
+        const hpRatio = homeBase.maxHealth > 0 ? homeBase.health / homeBase.maxHealth : 1;
+        const hbR = Math.round(100 + (255 - 100) * (1 - hpRatio));
+        const hbG = Math.round(220 * hpRatio + 60 * (1 - hpRatio));
+        const hbB = Math.round(255 * hpRatio + 60 * (1 - hpRatio));
+        const hbHex = `#${hbR.toString(16).padStart(2, '0')}${hbG.toString(16).padStart(2, '0')}${hbB.toString(16).padStart(2, '0')}`;
+
         ctx.save();
 
         // Outer boundary ring
         ctx.beginPath();
         ctx.arc(hsx, hsy, homeBase.radius * pulse, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(100, 220, 255, 0.25)';
+        ctx.strokeStyle = `rgba(${hbR}, ${hbG}, ${hbB}, 0.25)`;
         ctx.lineWidth = 2;
-        ctx.shadowColor = '#64dcff';
+        ctx.shadowColor = hbHex;
         ctx.shadowBlur = 10;
         ctx.stroke();
 
         // Inner glow fill
         ctx.beginPath();
         ctx.arc(hsx, hsy, homeBase.radius * pulse, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(100, 220, 255, 0.03)';
+        ctx.fillStyle = `rgba(${hbR}, ${hbG}, ${hbB}, 0.03)`;
         ctx.fill();
 
         // Inner ring (second boundary line for depth)
         ctx.beginPath();
         ctx.arc(hsx, hsy, homeBase.radius * 0.6 * pulse, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(100, 220, 255, 0.12)';
+        ctx.strokeStyle = `rgba(${hbR}, ${hbG}, ${hbB}, 0.12)`;
         ctx.lineWidth = 1;
         ctx.shadowBlur = 0;
         ctx.stroke();
@@ -600,10 +617,10 @@ const loop = new GameLoop({
           else ctx.lineTo(hxp, hyp);
         }
         ctx.closePath();
-        ctx.fillStyle = 'rgba(100, 220, 255, 0.4)';
-        ctx.strokeStyle = 'rgba(100, 220, 255, 0.7)';
+        ctx.fillStyle = `rgba(${hbR}, ${hbG}, ${hbB}, 0.4)`;
+        ctx.strokeStyle = `rgba(${hbR}, ${hbG}, ${hbB}, 0.7)`;
         ctx.lineWidth = 1.5;
-        ctx.shadowColor = '#64dcff';
+        ctx.shadowColor = hbHex;
         ctx.shadowBlur = 8;
         ctx.fill();
         ctx.stroke();
@@ -826,7 +843,7 @@ const loop = new GameLoop({
     }
 
     // HUD
-    hud.render(ctx, player, canvas.width, canvas.height);
+    hud.render(ctx, player, canvas.width, canvas.height, homeBase);
 
     // Tutorial hints
     if (currentLevelConfig && currentLevelConfig.hints.length > 0) {
