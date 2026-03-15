@@ -63,6 +63,27 @@ describe('TowRopeSystem', () => {
       expect(salvage.x).toBe(200);
       expect(salvage.y).toBe(300);
     });
+
+    it('respects custom maxTowed set via setMaxTowed', () => {
+      system.setMaxTowed(3);
+      for (let i = 0; i < 4; i++) {
+        system.collect(buildSalvage(i * 20, i * 20));
+      }
+      // 4th item exceeds maxTowed of 3, so oldest should fade
+      expect(system.getTowedItems()).toHaveLength(4);
+      expect(system.getTowedItems()[0].fadeOut).toBe(FADE_OUT_DURATION);
+    });
+  });
+
+  describe('setMaxTowed / getMaxTowed', () => {
+    it('defaults to MAX_TOWED constant', () => {
+      expect(system.getMaxTowed()).toBe(MAX_TOWED);
+    });
+
+    it('updates the max towed limit', () => {
+      system.setMaxTowed(12);
+      expect(system.getMaxTowed()).toBe(12);
+    });
   });
 
   describe('checkPickups', () => {
