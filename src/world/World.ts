@@ -47,6 +47,12 @@ export class World {
     return this.visitedChunks.size;
   }
 
+  /** Clear all entities and visited chunks so the world can be re-populated from scratch */
+  reset(): void {
+    this.entities.length = 0;
+    this.visitedChunks.clear();
+  }
+
   /** Spawn entities around a position if new chunks are entered */
   updateSpawning(playerX: number, playerY: number): void {
     const cx = Math.floor(playerX / CHUNK_SIZE);
