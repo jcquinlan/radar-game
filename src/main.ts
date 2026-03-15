@@ -10,6 +10,7 @@ import { PingSystem } from './systems/PingSystem';
 import { CombatSystem } from './systems/CombatSystem';
 import { Ally, Enemy, GameEntity, Resource, Dropoff, HomeBase, Defense, createHomeBase } from './entities/Entity';
 import { spawnWave } from './systems/WaveSpawner';
+import { tryPlaceDefense, TURRET_COST, REPAIR_STATION_COST } from './systems/DefensePlacement';
 import { UpgradeSystem } from './systems/UpgradeSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
@@ -80,6 +81,8 @@ let towRopeSystem: TowRopeSystem;
 let minimap: Minimap;
 let homeBase: HomeBase;
 let defenses: Defense[] = [];
+/** Maximum number of defenses the player can place (upgradeable later) */
+let maxDefenses = 3;
 let resolutionLevel: number;
 let prevHealth: number;
 let damageFlash: number;
@@ -381,6 +384,30 @@ window.addEventListener('keydown', (e) => {
       togglePause();
       return;
     }
+  }
+
+  // Defense placement — T/R keys during run_active or base_mode, near home base
+  if ((gameState === 'run_active' || gameState === 'base_mode') && (e.key === 't' || e.key === 'T')) {
+    const result = tryPlaceDefense('turret', player.energy, defenses, maxDefenses, homeBase.radius, player.x, player.y);
+    if (result.success) {
+      player.energy -= result.cost;
+      defenses.push(result.defense);
+      floatingText.add('TURRET PLACED', result.defense.x, result.defense.y - 15, '#00ddff');
+    } else {
+      floatingText.add(result.reason, player.x, player.y - 15, '#ff6666');
+    }
+    return;
+  }
+  if ((gameState === 'run_active' || gameState === 'base_mode') && (e.key === 'r' || e.key === 'R')) {
+    const result = tryPlaceDefense('repair_station', player.energy, defenses, maxDefenses, homeBase.radius, player.x, player.y);
+    if (result.success) {
+      player.energy -= result.cost;
+      defenses.push(result.defense);
+      floatingText.add('REPAIR STATION PLACED', result.defense.x, result.defense.y - 15, '#00ff41');
+    } else {
+      floatingText.add(result.reason, player.x, player.y - 15, '#ff6666');
+    }
+    return;
   }
 
   // Only handle remaining keys during active gameplay or pause
@@ -835,6 +862,42 @@ const loop = new GameLoop({
         ctx.fillText(`Runs completed: ${saveData.runCount}`, bcx, bcy + 190);
       }
 
+      // Defense placement hint in base mode
+      if (defenses.length < maxDefenses && player.energy >= 75) {
+        ctx.font = '13px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(170, 220, 170, 0.85)';
+        const hintY = canvas.height - 35;
+        ctx.fillText('[T] Turret (100)  |  [R] Repair (75)', bcx, hintY);
+        ctx.font = '10px monospace';
+        ctx.fillStyle = 'rgba(136, 170, 136, 0.6)';
+        ctx.fillText(`Defenses: ${defenses.length}/${maxDefenses}`, bcx, hintY + 14);
+      }
+
+      // Render existing defenses in base mode
+      for (const def of defenses) {
+        if (!def.active) continue;
+        const dsx = bcx + def.x;
+        const dsy = bcy + def.y;
+        if (def.type === 'turret') {
+          ctx.fillStyle = '#00ddff';
+          ctx.fillRect(dsx - 3, dsy - 3, 6, 6);
+          ctx.beginPath();
+          ctx.moveTo(dsx, dsy);
+          ctx.lineTo(dsx + Math.cos(def.aimDirection) * 8, dsy + Math.sin(def.aimDirection) * 8);
+          ctx.strokeStyle = '#00ddff';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        } else {
+          const pulseAlpha = 0.5 + Math.sin(performance.now() / 333) * 0.3;
+          ctx.globalAlpha = pulseAlpha;
+          ctx.fillStyle = '#00ff41';
+          ctx.fillRect(dsx - 6, dsy - 1.5, 12, 3);
+          ctx.fillRect(dsx - 1.5, dsy - 6, 3, 12);
+          ctx.globalAlpha = 1;
+        }
+      }
+
       ctx.restore();
 
       // Pause menu (if paused from base_mode — shows on top)
@@ -1185,7 +1248,10 @@ const loop = new GameLoop({
     }
 
     // HUD
-    hud.render(ctx, player, canvas.width, canvas.height, runTimer, homeBase);
+    const nearBase = gameState === 'run_active'
+      && player.x * player.x + player.y * player.y < homeBase.radius * homeBase.radius;
+    hud.render(ctx, player, canvas.width, canvas.height, runTimer, homeBase,
+      { show: nearBase, defenseCount: defenses.length, maxDefenses });
 
     // Tutorial hints
     if (currentLevelConfig && currentLevelConfig.hints.length > 0) {

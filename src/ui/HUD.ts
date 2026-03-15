@@ -33,6 +33,7 @@ export class HUD {
     canvasHeight: number,
     runTimer: number = -1,
     homeBase?: HomeBase,
+    defenseHint?: { show: boolean; defenseCount: number; maxDefenses: number },
   ): void {
     const padding = 20;
     const barWidth = 200;
@@ -158,6 +159,19 @@ export class HUD {
     ctx.globalAlpha = 0.5;
     ctx.fillText(`${this.fps} FPS`, padding, canvasHeight - 10);
     ctx.globalAlpha = 1;
+
+    // Defense placement hint — shown when near base with room for more defenses
+    if (defenseHint && defenseHint.show && defenseHint.defenseCount < defenseHint.maxDefenses
+        && (player.energy >= 75)) {
+      ctx.font = '13px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(170, 220, 170, 0.85)';
+      const hintY = canvasHeight - 35;
+      ctx.fillText('[T] Turret (100)  |  [R] Repair (75)', canvasWidth / 2, hintY);
+      ctx.font = '10px monospace';
+      ctx.fillStyle = 'rgba(136, 170, 136, 0.6)';
+      ctx.fillText(`Defenses: ${defenseHint.defenseCount}/${defenseHint.maxDefenses}`, canvasWidth / 2, hintY + 14);
+    }
 
     ctx.restore();
   }
