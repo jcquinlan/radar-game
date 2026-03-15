@@ -2,6 +2,14 @@ import { Player } from '../entities/Player';
 import { getThreatLevel } from '../world/World';
 import { getTheme } from '../themes/theme';
 
+/** Format seconds into MM:SS string. Exported for testing. */
+export function formatTime(seconds: number): string {
+  const clamped = Math.max(0, seconds);
+  const m = Math.floor(clamped / 60);
+  const s = Math.floor(clamped % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 export class HUD {
   private fps = 0;
   private frameCount = 0;
@@ -22,6 +30,7 @@ export class HUD {
     player: Player,
     canvasWidth: number,
     canvasHeight: number,
+    runTimer: number = -1,
   ): void {
     const padding = 20;
     const barWidth = 200;
@@ -73,6 +82,27 @@ export class HUD {
       padding,
       y + barHeight + 82
     );
+
+    // Run timer (top center) — only shown during timed runs
+    if (runTimer >= 0) {
+      ctx.save();
+      ctx.font = 'bold 20px monospace';
+      ctx.textAlign = 'center';
+      if (runTimer <= 60) {
+        // Pulsing red in the final 60 seconds
+        const pulse = Math.sin(performance.now() / 500) * 0.5 + 0.5; // 0..1
+        const alpha = 0.5 + pulse * 0.5; // 0.5..1.0
+        ctx.fillStyle = `rgba(255, 60, 60, ${alpha})`;
+        ctx.shadowColor = 'rgba(255, 60, 60, 0.8)';
+        ctx.shadowBlur = 6;
+      } else {
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 4;
+      }
+      ctx.fillText(formatTime(runTimer), canvasWidth / 2, y + 20);
+      ctx.restore();
+    }
 
     // Score (top right)
     ctx.font = '16px monospace';
