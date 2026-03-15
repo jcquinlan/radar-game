@@ -144,16 +144,20 @@ export class World {
     }
   }
 
-  /** Remove inactive entities that are far from the player */
+  /** Remove inactive entities that are far from the player (in-place compaction, no allocation) */
   cleanup(playerX: number, playerY: number, maxDist: number = 2000): void {
-    this.entities = this.entities.filter((e) => {
-      // Keep towed salvage regardless of distance
-      if (e.type === 'salvage' && (e as Salvage).towedByPlayer) return true;
-      if (!e.active) return false;
-      const dx = e.x - playerX;
-      const dy = e.y - playerY;
-      return dx * dx + dy * dy < maxDist * maxDist;
-    });
+    const maxDistSq = maxDist * maxDist;
+    let write = 0;
+    for (let i = 0; i < this.entities.length; i++) {
+      const e = this.entities[i];
+      const keep =
+        (e.type === 'salvage' && (e as Salvage).towedByPlayer) ||
+        (e.active && (e.x - playerX) * (e.x - playerX) + (e.y - playerY) * (e.y - playerY) < maxDistSq);
+      if (keep) {
+        this.entities[write++] = e;
+      }
+    }
+    this.entities.length = write;
   }
 
   getActiveEntities(): GameEntity[] {
