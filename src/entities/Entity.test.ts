@@ -76,6 +76,12 @@ describe('Entity factories', () => {
     expect(hb.maxHealth).toBe(500);
   });
 
+  it('creates enemies with waveEnemy and isBoss defaulting to false', () => {
+    const e = createEnemy(50, 75, 'scout');
+    expect(e.waveEnemy).toBe(false);
+    expect(e.isBoss).toBe(false);
+  });
+
   it('creates enemies with ghost marker and wander fields initialized', () => {
     const e = createEnemy(50, 75, 'scout');
     expect(e.ghostX).toBeNull();
