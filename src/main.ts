@@ -27,9 +27,11 @@ import { Minimap } from './ui/Minimap';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
 import { CRTEffect } from './rendering/effects/CRTEffect';
 import { LevelManager } from './levels/LevelManager';
-import { LevelConfig } from './levels/LevelConfig';
+import { LevelConfig, checkAllObjectivesComplete, getObjectiveProgress } from './levels/LevelConfig';
 import { MainMenuScreen } from './ui/MainMenuScreen';
 import { LevelCompleteScreen } from './ui/LevelCompleteScreen';
+
+type GameState = 'menu' | 'playing' | 'level_complete' | 'game_over' | 'paused';
 
 const canvas = createCanvas('game-canvas');
 const ctx = canvas.getContext('2d')!;
@@ -43,9 +45,7 @@ const pauseMenu = new PauseMenu();
 const levelManager = new LevelManager();
 const mainMenuScreen = new MainMenuScreen();
 const levelCompleteScreen = new LevelCompleteScreen();
-let paused = false;
-let onMainMenu = true;
-let levelComplete = false;
+let gameState: GameState = 'menu';
 
 let radar: RadarDisplay;
 let blipRenderer: BlipRenderer;
@@ -70,21 +70,18 @@ let motionTrail: MotionTrail;
 let towRopeSystem: TowRopeSystem;
 let minimap: Minimap;
 let resolutionLevel: number;
-let gameOver: boolean;
 let prevHealth: number;
 let damageFlash: number;
 let currentLevelConfig: LevelConfig | null = null;
 
 function showMainMenu() {
-  onMainMenu = true;
-  levelComplete = false;
-  gameOver = false;
+  gameState = 'menu';
   levelManager.returnToMenu();
   mainMenuScreen.show(canvas, levelManager.getLevels(), (index) => {
     const config = levelManager.selectLevel(index);
     if (config) {
-      onMainMenu = false;
       currentLevelConfig = config;
+      gameState = 'playing';
       init();
     }
   });
@@ -106,8 +103,6 @@ function init() {
   floatingText = new FloatingText();
   screenShake = new ScreenShake();
   resolutionLevel = 0;
-  gameOver = false;
-  levelComplete = false;
   prevHealth = player.health;
   damageFlash = 0;
 
@@ -165,32 +160,12 @@ function cleanupCurrentGame() {
   if (upgradePanel) upgradePanel.detach(canvas);
   if (keyRemapScreen) keyRemapScreen.detach(canvas);
   if (towRopeSystem) towRopeSystem.clear();
-}
-
-function checkObjectives(): boolean {
-  if (!currentLevelConfig || currentLevelConfig.objectives.length === 0) return false;
-
-  for (const obj of currentLevelConfig.objectives) {
-    switch (obj.type) {
-      case 'collect_energy':
-        if (player.totalEnergyCollected < obj.target) return false;
-        break;
-      case 'kill_enemies':
-        if (player.kills < obj.target) return false;
-        break;
-      case 'survive_seconds':
-        if (player.survivalTime < obj.target) return false;
-        break;
-      case 'deposit_salvage':
-        if (player.salvageDeposited < obj.target) return false;
-        break;
-    }
-  }
-  return true;
+  if (gameOverScreen) gameOverScreen.hide(canvas);
+  if (levelCompleteScreen) levelCompleteScreen.hide(canvas);
 }
 
 function onLevelComplete() {
-  levelComplete = true;
+  gameState = 'level_complete';
   const hasNext = levelManager.hasNextLevel();
   levelCompleteScreen.show(
     canvas,
@@ -199,12 +174,12 @@ function onLevelComplete() {
     () => {
       // Next level
       const nextConfig = levelManager.advance();
+      cleanupCurrentGame();
       if (nextConfig) {
-        cleanupCurrentGame();
         currentLevelConfig = nextConfig;
+        gameState = 'playing';
         init();
       } else {
-        cleanupCurrentGame();
         showMainMenu();
       }
     },
@@ -217,20 +192,20 @@ function onLevelComplete() {
 }
 
 function togglePause() {
-  if (paused) {
-    paused = false;
+  if (gameState === 'paused') {
+    gameState = 'playing';
     pauseMenu.close(canvas);
   } else {
-    paused = true;
+    gameState = 'paused';
     // Close other panels when pausing
     if (keyRemapScreen && keyRemapScreen.isVisible()) keyRemapScreen.toggle();
     pauseMenu.open(canvas, {
       onResume: () => togglePause(),
       onRestart: () => {
-        paused = false;
         pauseMenu.close(canvas);
         cleanupCurrentGame();
         if (currentLevelConfig) {
+          gameState = 'playing';
           init();
         } else {
           showMainMenu();
@@ -243,7 +218,7 @@ function togglePause() {
         }
       },
       onOpenKeybinds: () => {
-        paused = false;
+        gameState = 'playing';
         pauseMenu.close(canvas);
         keyRemapScreen.toggle();
       },
@@ -254,37 +229,36 @@ function togglePause() {
 
 // Toggle panels (registered once, outside init)
 window.addEventListener('keydown', (e) => {
-  // Skip everything on main menu or level complete
-  if (onMainMenu || levelComplete) return;
+  // Only handle keys during gameplay or pause
+  if (gameState !== 'playing' && gameState !== 'paused') return;
 
   // Key remap screen captures keys when listening — skip other handlers
   if (keyRemapScreen && keyRemapScreen.isListening()) return;
 
   // Escape toggles pause menu
   if (e.key === 'Escape') {
-    if (gameOver) return;
     togglePause();
     return;
   }
 
   // Don't process other keys while paused
-  if (paused) return;
+  if (gameState === 'paused') return;
 
   // Only show upgrades panel if upgrades are enabled
   const features = currentLevelConfig?.features;
   if (features?.upgrades !== false) {
     const upgradesBinding = keyRemapScreen.getExtraBinding('upgrades');
     const upgradesKey = upgradesBinding ? upgradesBinding.key : 'e';
-    if ((e.key === upgradesKey || e.key === upgradesKey.toUpperCase()) && !gameOver && !keyRemapScreen.isVisible()) {
+    if ((e.key === upgradesKey || e.key === upgradesKey.toUpperCase()) && gameState === 'playing' && !keyRemapScreen.isVisible()) {
       upgradePanel.toggle();
     }
   }
-  if ((e.key === 'k' || e.key === 'K') && !gameOver) {
+  if ((e.key === 'k' || e.key === 'K') && gameState === 'playing') {
     keyRemapScreen.toggle();
   }
 
   // Ability keybinds — only if abilities are enabled
-  if (gameOver || keyRemapScreen.isVisible()) return;
+  if (gameState !== 'playing' || keyRemapScreen.isVisible()) return;
   if (features?.abilities === false) return;
 
   const addText = (text: string, x: number, y: number, color: string) =>
@@ -311,12 +285,6 @@ window.addEventListener('keydown', (e) => {
           floatingText.add('DASH!', player.x, player.y - 25, '#ffff00');
           screenShake.trigger(2);
         }
-      } else if (ability.id === 'homing_missile') {
-        if (abilitySystem.activate('homing_missile', world.entities, addText)) {
-          abilityEffects.triggerMissileLaunch(player.x, player.y);
-          floatingText.add('MISSILE!', player.x, player.y - 25, '#ff8800');
-          screenShake.trigger(3);
-        }
       }
       break;
     }
@@ -328,7 +296,7 @@ showMainMenu();
 
 const loop = new GameLoop({
   update(dt) {
-    if (onMainMenu || gameOver || paused || levelComplete) return;
+    if (gameState !== 'playing') return;
 
     const features = currentLevelConfig?.features;
 
@@ -499,15 +467,6 @@ const loop = new GameLoop({
         motionTrail.track(did, drone.x, drone.y, drone.vx, drone.vy, '#00ffff', dt);
         activeTrailIds.add(did);
       }
-      const missiles = (abilitySystem as any).missiles as Array<{x: number; y: number; vx: number; vy: number}> | undefined;
-      if (missiles) {
-        for (let i = 0; i < missiles.length; i++) {
-          const missile = missiles[i];
-          const mid = `m${i}`;
-          motionTrail.track(mid, missile.x, missile.y, missile.vx, missile.vy, '#ff8800', dt);
-          activeTrailIds.add(mid);
-        }
-      }
     }
     motionTrail.prune(activeTrailIds);
 
@@ -524,13 +483,13 @@ const loop = new GameLoop({
     }
 
     // Check level objectives
-    if (!levelComplete && checkObjectives()) {
+    if (currentLevelConfig && checkAllObjectivesComplete(currentLevelConfig.objectives, player)) {
       onLevelComplete();
       return;
     }
 
     if (!alive) {
-      gameOver = true;
+      gameState = 'game_over';
       towRopeSystem.clear();
       gameOverScreen.show(canvas, player, () => {
         cleanupCurrentGame();
@@ -543,7 +502,7 @@ const loop = new GameLoop({
   },
   render() {
     // Main menu render
-    if (onMainMenu) {
+    if (gameState === 'menu') {
       mainMenuScreen.render(ctx, canvas.width, canvas.height);
       if (shaderPipeline) {
         shaderPipeline.render(performance.now() / 1000);
@@ -705,21 +664,6 @@ const loop = new GameLoop({
       ctx.restore();
     }
 
-    // Render missiles
-    const renderMissiles = (abilitySystem as any).missiles as Array<{x: number; y: number}> | undefined;
-    for (const missile of renderMissiles ?? []) {
-      const mx = cx + (missile.x - player.x);
-      const my = cy + (missile.y - player.y);
-      ctx.save();
-      ctx.shadowColor = '#ff8800';
-      ctx.shadowBlur = 10;
-      ctx.beginPath();
-      ctx.arc(mx, my, 3, 0, Math.PI * 2);
-      ctx.fillStyle = '#ff8800';
-      ctx.fill();
-      ctx.restore();
-    }
-
     // Floating text (counter-rotated so text stays upright)
     const worldRotation = -player.heading - Math.PI / 2;
     floatingText.render(ctx, player.x, player.y, cx, cy, worldRotation);
@@ -776,7 +720,6 @@ const loop = new GameLoop({
 
     // Tutorial hints
     if (currentLevelConfig && currentLevelConfig.hints.length > 0) {
-      ctx.save();
       ctx.font = '14px monospace';
       ctx.fillStyle = 'rgba(136, 170, 136, 0.8)';
       ctx.textAlign = 'left';
@@ -786,7 +729,6 @@ const loop = new GameLoop({
         ctx.fillText(hint, hintX, hintY);
         hintY += 22;
       }
-      ctx.restore();
     }
 
     // Minimap (bottom left)
@@ -794,24 +736,16 @@ const loop = new GameLoop({
 
     // Objective progress
     if (currentLevelConfig && currentLevelConfig.objectives.length > 0) {
-      ctx.save();
+      const progress = getObjectiveProgress(currentLevelConfig.objectives, player);
       ctx.font = '14px monospace';
       ctx.textAlign = 'right';
       const objX = canvas.width - 20;
       let objY = 100;
-      for (const obj of currentLevelConfig.objectives) {
-        let current = 0;
-        switch (obj.type) {
-          case 'collect_energy': current = Math.floor(player.totalEnergyCollected); break;
-          case 'kill_enemies': current = player.kills; break;
-          case 'survive_seconds': current = Math.floor(player.survivalTime); break;
-        }
-        const done = current >= obj.target;
-        ctx.fillStyle = done ? '#00ff41' : 'rgba(255, 255, 255, 0.7)';
-        ctx.fillText(`${obj.label}: ${current}/${obj.target}${done ? ' ✓' : ''}`, objX, objY);
+      for (const p of progress) {
+        ctx.fillStyle = p.complete ? '#00ff41' : 'rgba(255, 255, 255, 0.7)';
+        ctx.fillText(`${p.label}: ${p.current}/${p.target}${p.complete ? ' ✓' : ''}`, objX, objY);
         objY += 24;
       }
-      ctx.restore();
     }
 
     // Ability bar (bottom center) — only if abilities enabled

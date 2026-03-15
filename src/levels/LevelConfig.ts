@@ -44,3 +44,47 @@ export interface LevelConfig {
     energy?: number;
   };
 }
+
+/** Stats needed for objective evaluation — avoids coupling to the Player class */
+export interface ObjectiveStats {
+  totalEnergyCollected: number;
+  kills: number;
+  survivalTime: number;
+  salvageDeposited: number;
+}
+
+export interface ObjectiveProgress {
+  label: string;
+  current: number;
+  target: number;
+  complete: boolean;
+}
+
+/** Returns the current value for an objective type given player stats */
+export function getObjectiveValue(type: LevelObjective['type'], stats: ObjectiveStats): number {
+  switch (type) {
+    case 'collect_energy': return Math.floor(stats.totalEnergyCollected);
+    case 'kill_enemies': return stats.kills;
+    case 'survive_seconds': return Math.floor(stats.survivalTime);
+    case 'deposit_salvage': return stats.salvageDeposited;
+  }
+}
+
+/** Check if all objectives in a level are complete */
+export function checkAllObjectivesComplete(objectives: LevelObjective[], stats: ObjectiveStats): boolean {
+  if (objectives.length === 0) return false;
+  return objectives.every(obj => getObjectiveValue(obj.type, stats) >= obj.target);
+}
+
+/** Get progress for each objective */
+export function getObjectiveProgress(objectives: LevelObjective[], stats: ObjectiveStats): ObjectiveProgress[] {
+  return objectives.map(obj => {
+    const current = getObjectiveValue(obj.type, stats);
+    return {
+      label: obj.label,
+      current,
+      target: obj.target,
+      complete: current >= obj.target,
+    };
+  });
+}
