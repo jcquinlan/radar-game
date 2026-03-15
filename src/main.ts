@@ -32,7 +32,7 @@ import { LevelConfig, checkAllObjectivesComplete, getObjectiveProgress } from '.
 import { MainMenuScreen } from './ui/MainMenuScreen';
 import { LevelCompleteScreen } from './ui/LevelCompleteScreen';
 
-type GameState = 'menu' | 'playing' | 'level_complete' | 'game_over' | 'paused';
+type GameState = 'menu' | 'playing' | 'level_complete' | 'base_mode' | 'run_active' | 'final_wave' | 'results' | 'game_over' | 'paused';
 
 const canvas = createCanvas('game-canvas');
 const ctx = canvas.getContext('2d')!;
@@ -47,6 +47,8 @@ const levelManager = new LevelManager();
 const mainMenuScreen = new MainMenuScreen();
 const levelCompleteScreen = new LevelCompleteScreen();
 let gameState: GameState = 'menu';
+/** Tracks the state before pausing so we can restore it on unpause */
+let previousState: GameState = 'menu';
 
 let radar: RadarDisplay;
 let blipRenderer: BlipRenderer;
@@ -198,9 +200,10 @@ function onLevelComplete() {
 
 function togglePause() {
   if (gameState === 'paused') {
-    gameState = 'playing';
+    gameState = previousState;
     pauseMenu.close(canvas);
   } else {
+    previousState = gameState;
     gameState = 'paused';
     // Close other panels when pausing
     if (keyRemapScreen && keyRemapScreen.isVisible()) keyRemapScreen.toggle();
@@ -224,7 +227,7 @@ function togglePause() {
       },
       onCycleTheme: () => cycleTheme(),
       onOpenKeybinds: () => {
-        gameState = 'playing';
+        gameState = previousState;
         pauseMenu.close(canvas);
         keyRemapScreen.toggle();
       },
