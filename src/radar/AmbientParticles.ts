@@ -118,7 +118,9 @@ export class AmbientParticles {
     const offsetY = -playerY * parallax;
     const half = SPAWN_RANGE / 2;
 
+    const particleColor = getTheme().effects.particle;
     ctx.save();
+    ctx.fillStyle = particleColor;
     for (const p of particles) {
       // Wrap particle position relative to the parallax-shifted view
       let rx = ((p.x + offsetX + half) % SPAWN_RANGE + SPAWN_RANGE) % SPAWN_RANGE - half;
@@ -130,7 +132,6 @@ export class AmbientParticles {
       const screenY = centerY + ry;
 
       ctx.globalAlpha = p.alpha;
-      ctx.fillStyle = getTheme().effects.particle;
       const s = p.size;
       ctx.fillRect(screenX - s / 2, screenY - s / 2, s, s);
     }

@@ -1,25 +1,6 @@
 import { GameEntity, Ally, Enemy, Salvage } from '../entities/Entity';
 import { getTheme } from '../themes/theme';
 
-function getBlipColors(): Record<string, string> {
-  const t = getTheme().entities;
-  return {
-    resource: t.resource,
-    enemy: t.enemy,
-    ally: t.ally,
-    salvage: t.salvage,
-    dropoff: t.dropoff,
-  };
-}
-
-function getAllySubtypeColors(): Record<string, string> {
-  const t = getTheme().entities;
-  return {
-    healer: t.allyHealer,
-    shield: t.allyShield,
-    beacon: t.allyBeacon,
-  };
-}
 
 const BLIP_SIZES: Record<string, number> = {
   resource: 3,
@@ -47,9 +28,8 @@ export class BlipRenderer {
     resolutionLevel: number,
     worldRotation?: number
   ): void {
-    const BLIP_COLORS = getBlipColors();
-    const ALLY_SUBTYPE_COLORS = getAllySubtypeColors();
-    const enemyRangedColor = getTheme().entities.enemyRanged;
+    const themeColors = getTheme().entities;
+    const enemyRangedColor = themeColors.enemyRanged;
 
     for (const entity of entities) {
       if (!entity.active) continue;
@@ -74,12 +54,20 @@ export class BlipRenderer {
       const screenX = radarCenterX + relX;
       const screenY = radarCenterY + relY;
 
-      let color = BLIP_COLORS[entity.type];
+      let color = entity.type === 'resource' ? themeColors.resource
+        : entity.type === 'enemy' ? themeColors.enemy
+        : entity.type === 'ally' ? themeColors.ally
+        : entity.type === 'salvage' ? themeColors.salvage
+        : themeColors.dropoff;
       const size = BLIP_SIZES[entity.type];
 
       // Ally subtype colors
       if (entity.type === 'ally') {
-        color = ALLY_SUBTYPE_COLORS[(entity as Ally).subtype] ?? color;
+        const subtype = (entity as Ally).subtype;
+        color = subtype === 'healer' ? themeColors.allyHealer
+          : subtype === 'shield' ? themeColors.allyShield
+          : subtype === 'beacon' ? themeColors.allyBeacon
+          : color;
       }
 
       ctx.save();

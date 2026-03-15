@@ -126,7 +126,7 @@ export class UpgradePanel {
 
       // Level text
       ctx.font = '11px monospace';
-      ctx.fillStyle = '#888';
+      ctx.fillStyle = theme.ui.statsText;
       ctx.fillText(
         `Lv ${upgrade.level}/${upgrade.maxLevel}`,
         panelX + padding + 4,

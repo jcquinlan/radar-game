@@ -9,15 +9,6 @@ const DOT_RADIUS = 3;
 const PLAYER_DOT_RADIUS = 4;
 const HEADING_LINE_LENGTH = 12;
 
-function getEntityColors(): Record<string, string> {
-  const t = getTheme().entities;
-  return {
-    dropoff: t.dropoff,
-    ally: t.ally,
-    enemy: t.enemy,
-    salvage: t.salvage,
-  };
-}
 
 export class Minimap {
   getSize(): number {
@@ -32,7 +23,12 @@ export class Minimap {
   }
 
   getEntityColor(entity: GameEntity): string {
-    return getEntityColors()[entity.type] ?? '#ffffff';
+    const e = getTheme().entities;
+    return entity.type === 'dropoff' ? e.dropoff
+      : entity.type === 'ally' ? e.ally
+      : entity.type === 'enemy' ? e.enemy
+      : entity.type === 'salvage' ? e.salvage
+      : '#ffffff';
   }
 
   worldToMinimap(
