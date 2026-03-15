@@ -79,6 +79,13 @@ export interface Dropoff extends Entity {
   rewardPerItem: number;
 }
 
+export interface HomeBase {
+  x: number;
+  y: number;
+  /** Radius of the base boundary */
+  radius: number;
+}
+
 export interface Projectile {
   x: number;
   y: number;
@@ -188,5 +195,13 @@ export function createDropoff(x: number, y: number): Dropoff {
     pingedThisWave: false,
     radius: 60,
     rewardPerItem: 50,
+  };
+}
+
+export function createHomeBase(x: number, y: number): HomeBase {
+  return {
+    x,
+    y,
+    radius: 150,
   };
 }
