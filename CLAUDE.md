@@ -236,13 +236,12 @@ The logarithmic scaling (`1 + log2(1 + dist/1000)`) is deliberately gentle. At 1
 - Corridors activate 800px+ from origin along 8 cardinal/diagonal axes (±15° cones)
 - Safe zone: no enemies spawn in the inner 3x3 chunks around the player's start position
 
-**Upgrades** (7 total, energy currency, purchased via E key panel):
+**Upgrades** (6 total, energy currency, purchased via E key panel):
 
 | ID | Max Level | Cost Formula | Effect per Level |
 |----|-----------|-------------|------------------|
 | sweep_speed | 5 | 20 + lvl*30 | -12% ping cooldown |
 | sweep_range | 5 | 30 + lvl*40 | +40px ping radius |
-| sweep_damage | 5 | 25 + lvl*35 | +8 ping damage |
 | radar_resolution | 3 | 50 + lvl*50 | Shows entity type labels at level 2+ |
 | hull_armor | 5 | 35 + lvl*40 | +2 flat damage reduction |
 | engine_speed | 5 | 25 + lvl*30 | +15 movement speed |
