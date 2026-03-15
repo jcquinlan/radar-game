@@ -273,8 +273,8 @@ window.addEventListener('keydown', (e) => {
   const addText = (text: string, x: number, y: number, color: string) =>
     floatingText.add(text, x, y, color);
   const onDeath = (x: number, y: number, srcX: number, srcY: number, color: string) => {
-    const dirX = srcX === 0 && srcY === 0 ? 0 : x - srcX;
-    const dirY = srcX === 0 && srcY === 0 ? 0 : y - srcY;
+    const dirX = isNaN(srcX) ? 0 : x - srcX;
+    const dirY = isNaN(srcX) ? 0 : y - srcY;
     deathParticles.emit(x, y, dirX, dirY, color, 10);
   };
 
@@ -440,8 +440,8 @@ const loop = new GameLoop({
       const addText = (text: string, x: number, y: number, color: string) =>
         floatingText.add(text, x, y, color);
       const onDeath = (x: number, y: number, srcX: number, srcY: number, color: string) => {
-        const dirX = srcX === 0 && srcY === 0 ? 0 : x - srcX;
-        const dirY = srcX === 0 && srcY === 0 ? 0 : y - srcY;
+        const dirX = isNaN(srcX) ? 0 : x - srcX;
+        const dirY = isNaN(srcX) ? 0 : y - srcY;
         deathParticles.emit(x, y, dirX, dirY, color, 10);
       };
       abilitySystem.update(dt, world.entities, addText, onDeath);
@@ -457,8 +457,8 @@ const loop = new GameLoop({
     let alive = true;
     if (features?.combat !== false) {
       const onCombatDeath = (x: number, y: number, srcX: number, srcY: number, color: string) => {
-        const dirX = srcX === 0 && srcY === 0 ? 0 : x - srcX;
-        const dirY = srcX === 0 && srcY === 0 ? 0 : y - srcY;
+        const dirX = isNaN(srcX) ? 0 : x - srcX;
+        const dirY = isNaN(srcX) ? 0 : y - srcY;
         deathParticles.emit(x, y, dirX, dirY, color, 10);
       };
       alive = combatSystem.update(

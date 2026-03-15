@@ -269,7 +269,7 @@ export class AbilitySystem {
       drone.lifetime -= dt;
       if (drone.lifetime <= 0) {
         drone.active = false;
-        onDeath(drone.x, drone.y, 0, 0, getTheme().effects.drone);
+        onDeath(drone.x, drone.y, NaN, NaN, getTheme().effects.drone);
         continue;
       }
 
@@ -369,7 +369,7 @@ export class AbilitySystem {
       missile.lifetime -= dt;
       if (missile.lifetime <= 0) {
         missile.active = false;
-        onDeath(missile.x, missile.y, 0, 0, getTheme().effects.missile);
+        onDeath(missile.x, missile.y, NaN, NaN, getTheme().effects.missile);
         continue;
       }
 
