@@ -1,4 +1,4 @@
-import { Salvage, Dropoff } from '../entities/Entity';
+import { Salvage, Dropoff, HomeBase } from '../entities/Entity';
 import { Player } from '../entities/Player';
 
 // Tuning constants — exported for tests and future adjustment
@@ -169,6 +169,30 @@ export class TowRopeSystem {
           item.salvage.active = false;
           this.items.splice(i, 1);
         }
+      }
+    }
+
+    return deposited;
+  }
+
+  /** Energy reward per salvage item deposited at the home base */
+  static readonly HOME_DEPOSIT_REWARD = 50;
+
+  /** Check if any towed salvage has entered the home base radius. Returns deposited salvage items. */
+  checkHomeDeposit(homeBase: HomeBase): Salvage[] {
+    const deposited: Salvage[] = [];
+
+    for (let i = this.items.length - 1; i >= 0; i--) {
+      const item = this.items[i];
+      if (item.fadeOut !== null) continue; // Already fading
+
+      const dx = item.salvage.x - homeBase.x;
+      const dy = item.salvage.y - homeBase.y;
+      if (dx * dx + dy * dy < homeBase.radius * homeBase.radius) {
+        deposited.push(item.salvage);
+        item.salvage.towedByPlayer = false;
+        item.salvage.active = false;
+        this.items.splice(i, 1);
       }
     }
 
