@@ -18,24 +18,15 @@ describe('Minimap', () => {
       expect(result[0].type).toBe('dropoff');
     });
 
-    it('includes ally entities', () => {
+    it('excludes ally entities', () => {
       const ally = createAlly(100, 200, 'healer');
       const result = minimap.getVisibleEntities([ally]);
-      expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('ally');
+      expect(result).toHaveLength(0);
     });
 
-    it('includes visible enemy entities', () => {
+    it('excludes enemy entities', () => {
       const enemy = createEnemy(100, 200, 'scout');
       enemy.visible = true;
-      const result = minimap.getVisibleEntities([enemy]);
-      expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('enemy');
-    });
-
-    it('excludes invisible enemy entities', () => {
-      const enemy = createEnemy(100, 200, 'scout');
-      enemy.visible = false;
       const result = minimap.getVisibleEntities([enemy]);
       expect(result).toHaveLength(0);
     });
@@ -61,7 +52,7 @@ describe('Minimap', () => {
         createEnemy(300, 300, 'brute'),  // invisible by default
       ];
       const result = minimap.getVisibleEntities(entities);
-      expect(result).toHaveLength(2); // dropoff + ally
+      expect(result).toHaveLength(1); // dropoff only
     });
   });
 

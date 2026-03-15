@@ -1,7 +1,7 @@
 import { Player } from '../entities/Player';
 import { GameEntity } from '../entities/Entity';
 
-const SIZE = 120;
+const SIZE = 160;
 const PADDING = 20;
 const WORLD_RADIUS = 2000;
 const DOT_RADIUS = 3;
@@ -25,10 +25,7 @@ export class Minimap {
   getVisibleEntities(entities: GameEntity[]): GameEntity[] {
     return entities.filter((e) => {
       if (!e.active) return false;
-      if (e.type === 'resource') return false;
-      if (e.type === 'enemy' && !e.visible) return false;
-      if (e.type === 'salvage') return false;
-      return true;
+      return e.type === 'dropoff';
     });
   }
 
