@@ -6,6 +6,7 @@ import {
   EnemySubtype,
 } from '../entities/Entity';
 import { selectPOI, spawnResourceVein, scaleEnemy } from './POIGenerator';
+import { LevelConfig } from '../levels/LevelConfig';
 
 const CHUNK_SIZE = 400;
 /** Probability of a salvage item spawning in any given chunk */
@@ -34,6 +35,11 @@ const AMBIENT_SOLO_ENEMY_CHANCE = 0.3;
 export class World {
   entities: GameEntity[] = [];
   private visitedChunks = new Set<string>();
+  private levelConfig: LevelConfig | null = null;
+
+  setLevelConfig(config: LevelConfig | null): void {
+    this.levelConfig = config;
+  }
 
   /** Spawn entities around a position if new chunks are entered */
   updateSpawning(playerX: number, playerY: number): void {
@@ -44,31 +50,53 @@ export class World {
       for (let dy = -2; dy <= 2; dy++) {
         const key = `${cx + dx},${cy + dy}`;
         if (this.visitedChunks.has(key)) continue;
+
+        // Respect level chunk limit
+        if (this.levelConfig?.world.maxChunks != null &&
+            this.visitedChunks.size >= this.levelConfig.world.maxChunks) {
+          continue;
+        }
+
         this.visitedChunks.add(key);
 
         const chunkX = (cx + dx) * CHUNK_SIZE;
         const chunkY = (cy + dy) * CHUNK_SIZE;
         const chunkCenterX = chunkX + CHUNK_SIZE / 2;
         const chunkCenterY = chunkY + CHUNK_SIZE / 2;
-        const difficulty = getDifficultyMultiplier(chunkCenterX, chunkCenterY);
+
+        let difficulty = getDifficultyMultiplier(chunkCenterX, chunkCenterY);
+        if (this.levelConfig?.world.difficultyMultiplier != null) {
+          difficulty = this.levelConfig.world.difficultyMultiplier;
+        }
 
         // Safe zone: no enemies in the inner 3x3 chunks around the player
         const isNearPlayer = Math.abs(dx) <= 1 && Math.abs(dy) <= 1;
 
+        // Skip enemy/ally spawning based on level config
+        const spawnEnemies = this.levelConfig?.world.spawnEnemies ?? true;
+        const spawnAllies = this.levelConfig?.world.spawnAllies ?? true;
+
         // Try to place a POI in this chunk
-        const poi = isNearPlayer ? null : selectPOI(chunkCenterX, chunkCenterY);
+        const poi = (isNearPlayer || (!spawnEnemies && !spawnAllies)) ? null : selectPOI(chunkCenterX, chunkCenterY);
 
         if (poi) {
           // POI chunk — use structured spawning
           const poiEntities = poi.spawn(chunkCenterX, chunkCenterY, difficulty);
-          this.entities.push(...poiEntities);
+          // Filter out enemies/allies if level config disables them
+          const filtered = poiEntities.filter(e => {
+            if (e.type === 'enemy' && !spawnEnemies) return false;
+            if (e.type === 'ally' && !spawnAllies) return false;
+            return true;
+          });
+          this.entities.push(...filtered);
         } else {
           // Non-POI chunk — ambient resources as veins + occasional solo enemies
-          this.spawnAmbient(chunkX, chunkY, difficulty, isNearPlayer);
+          this.spawnAmbient(chunkX, chunkY, difficulty, isNearPlayer || !spawnEnemies);
         }
 
-        // Salvage (rare towable items)
-        if (Math.random() < SALVAGE_CHANCE_PER_CHUNK) {
+        // Salvage (rare towable items) — only if level enables salvage
+        const spawnSalvage = this.levelConfig?.features.salvage ?? true;
+        if (spawnSalvage && Math.random() < SALVAGE_CHANCE_PER_CHUNK) {
           this.entities.push(
             createSalvage(
               chunkX + Math.random() * CHUNK_SIZE,

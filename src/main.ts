@@ -25,6 +25,10 @@ import { MotionTrail } from './radar/MotionTrail';
 import { TowRopeSystem } from './systems/TowRopeSystem';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
 import { CRTEffect } from './rendering/effects/CRTEffect';
+import { LevelManager } from './levels/LevelManager';
+import { LevelConfig } from './levels/LevelConfig';
+import { MainMenuScreen } from './ui/MainMenuScreen';
+import { LevelCompleteScreen } from './ui/LevelCompleteScreen';
 
 const canvas = createCanvas('game-canvas');
 const ctx = canvas.getContext('2d')!;
@@ -35,7 +39,12 @@ if (shaderPipeline) {
   shaderPipeline.addEffect(new CRTEffect());
 }
 const pauseMenu = new PauseMenu();
+const levelManager = new LevelManager();
+const mainMenuScreen = new MainMenuScreen();
+const levelCompleteScreen = new LevelCompleteScreen();
 let paused = false;
+let onMainMenu = true;
+let levelComplete = false;
 
 let radar: RadarDisplay;
 let blipRenderer: BlipRenderer;
@@ -62,6 +71,22 @@ let resolutionLevel: number;
 let gameOver: boolean;
 let prevHealth: number;
 let damageFlash: number;
+let currentLevelConfig: LevelConfig | null = null;
+
+function showMainMenu() {
+  onMainMenu = true;
+  levelComplete = false;
+  gameOver = false;
+  levelManager.returnToMenu();
+  mainMenuScreen.show(canvas, levelManager.getLevels(), (index) => {
+    const config = levelManager.selectLevel(index);
+    if (config) {
+      onMainMenu = false;
+      currentLevelConfig = config;
+      init();
+    }
+  });
+}
 
 function init() {
   radar = new RadarDisplay();
@@ -80,6 +105,7 @@ function init() {
   screenShake = new ScreenShake();
   resolutionLevel = 0;
   gameOver = false;
+  levelComplete = false;
   prevHealth = player.health;
   damageFlash = 0;
 
@@ -100,6 +126,28 @@ function init() {
   });
   keyRemapScreen.load(abilitySystem.abilities);
 
+  // Apply level config to world
+  if (currentLevelConfig) {
+    world.setLevelConfig(currentLevelConfig);
+
+    // Apply player overrides
+    const overrides = currentLevelConfig.playerOverrides;
+    if (overrides) {
+      if (overrides.maxHealth != null) {
+        player.maxHealth = overrides.maxHealth;
+        player.health = overrides.maxHealth;
+      }
+      if (overrides.health != null) player.health = overrides.health;
+      if (overrides.speed != null) {
+        player.speed = overrides.speed;
+        player.baseSpeed = overrides.speed;
+      }
+      if (overrides.energy != null) player.energy = overrides.energy;
+    }
+  }
+
+  prevHealth = player.health;
+
   // Disable Canvas 2D scanlines when shader pipeline is active
   radar.scanlineEnabled = !shaderPipeline || !shaderPipeline.enabled;
 
@@ -107,6 +155,62 @@ function init() {
   keyRemapScreen.attach(canvas, abilitySystem.abilities);
   upgradePanel.attach(canvas, upgradeSystem, player);
   world.updateSpawning(player.x, player.y);
+}
+
+function cleanupCurrentGame() {
+  if (input) input.detach();
+  if (upgradePanel) upgradePanel.detach(canvas);
+  if (keyRemapScreen) keyRemapScreen.detach(canvas);
+  if (towRopeSystem) towRopeSystem.clear();
+}
+
+function checkObjectives(): boolean {
+  if (!currentLevelConfig || currentLevelConfig.objectives.length === 0) return false;
+
+  for (const obj of currentLevelConfig.objectives) {
+    switch (obj.type) {
+      case 'collect_energy':
+        if (player.totalEnergyCollected < obj.target) return false;
+        break;
+      case 'kill_enemies':
+        if (player.kills < obj.target) return false;
+        break;
+      case 'survive_seconds':
+        if (player.survivalTime < obj.target) return false;
+        break;
+      case 'deposit_salvage':
+        if (player.score < obj.target) return false; // approximate
+        break;
+    }
+  }
+  return true;
+}
+
+function onLevelComplete() {
+  levelComplete = true;
+  const hasNext = levelManager.hasNextLevel();
+  levelCompleteScreen.show(
+    canvas,
+    currentLevelConfig!,
+    hasNext,
+    () => {
+      // Next level
+      const nextConfig = levelManager.advance();
+      if (nextConfig) {
+        cleanupCurrentGame();
+        currentLevelConfig = nextConfig;
+        init();
+      } else {
+        cleanupCurrentGame();
+        showMainMenu();
+      }
+    },
+    () => {
+      // Back to menu
+      cleanupCurrentGame();
+      showMainMenu();
+    },
+  );
 }
 
 function togglePause() {
@@ -122,10 +226,12 @@ function togglePause() {
       onRestart: () => {
         paused = false;
         pauseMenu.close(canvas);
-        input.detach();
-        upgradePanel.detach(canvas);
-        keyRemapScreen.detach(canvas);
-        init();
+        cleanupCurrentGame();
+        if (currentLevelConfig) {
+          init();
+        } else {
+          showMainMenu();
+        }
       },
       onToggleShaders: () => {
         if (shaderPipeline) {
@@ -145,6 +251,9 @@ function togglePause() {
 
 // Toggle panels (registered once, outside init)
 window.addEventListener('keydown', (e) => {
+  // Skip everything on main menu or level complete
+  if (onMainMenu || levelComplete) return;
+
   // Key remap screen captures keys when listening — skip other handlers
   if (keyRemapScreen && keyRemapScreen.isListening()) return;
 
@@ -158,17 +267,22 @@ window.addEventListener('keydown', (e) => {
   // Don't process other keys while paused
   if (paused) return;
 
-  const upgradesBinding = keyRemapScreen.getExtraBinding('upgrades');
-  const upgradesKey = upgradesBinding ? upgradesBinding.key : 'e';
-  if ((e.key === upgradesKey || e.key === upgradesKey.toUpperCase()) && !gameOver && !keyRemapScreen.isVisible()) {
-    upgradePanel.toggle();
+  // Only show upgrades panel if upgrades are enabled
+  const features = currentLevelConfig?.features;
+  if (features?.upgrades !== false) {
+    const upgradesBinding = keyRemapScreen.getExtraBinding('upgrades');
+    const upgradesKey = upgradesBinding ? upgradesBinding.key : 'e';
+    if ((e.key === upgradesKey || e.key === upgradesKey.toUpperCase()) && !gameOver && !keyRemapScreen.isVisible()) {
+      upgradePanel.toggle();
+    }
   }
   if ((e.key === 'k' || e.key === 'K') && !gameOver) {
     keyRemapScreen.toggle();
   }
 
-  // Ability keybinds (dynamic from ability.keybind)
+  // Ability keybinds — only if abilities are enabled
   if (gameOver || keyRemapScreen.isVisible()) return;
+  if (features?.abilities === false) return;
 
   const addText = (text: string, x: number, y: number, color: string) =>
     floatingText.add(text, x, y, color);
@@ -206,11 +320,14 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-init();
+// Start on main menu
+showMainMenu();
 
 const loop = new GameLoop({
   update(dt) {
-    if (gameOver || paused) return;
+    if (onMainMenu || gameOver || paused || levelComplete) return;
+
+    const features = currentLevelConfig?.features;
 
     // Tank-style movement: A/D turn, W/S thrust along heading
     const { turn, thrust } = input.getTankInput();
@@ -298,22 +415,20 @@ const loop = new GameLoop({
       }
     }
 
-    // Salvage proximity pickup — player must fly close to attach
-    const pickedUp = towRopeSystem.checkPickups(world.entities, player);
-    for (const salvage of pickedUp) {
-      floatingText.add('SALVAGE!', salvage.x, salvage.y, '#ffaa00');
-    }
-
-    // Update tow rope physics
-    towRopeSystem.update(player, dt);
-
-    // Check if towed salvage entered a dropoff zone
-    const deposited = towRopeSystem.checkDropoffs(world.entities);
-    for (const { salvage, dropoff } of deposited) {
-      player.addEnergy(dropoff.rewardPerItem);
-      player.score += dropoff.rewardPerItem;
-      floatingText.add(`+${dropoff.rewardPerItem}E`, salvage.x, salvage.y, '#ffdd00');
-      screenShake.trigger(2);
+    // Salvage & tow rope — only if enabled
+    if (features?.towRope !== false) {
+      const pickedUp = towRopeSystem.checkPickups(world.entities, player);
+      for (const salvage of pickedUp) {
+        floatingText.add('SALVAGE!', salvage.x, salvage.y, '#ffaa00');
+      }
+      towRopeSystem.update(player, dt);
+      const deposited = towRopeSystem.checkDropoffs(world.entities);
+      for (const { salvage, dropoff } of deposited) {
+        player.addEnergy(dropoff.rewardPerItem);
+        player.score += dropoff.rewardPerItem;
+        floatingText.add(`+${dropoff.rewardPerItem}E`, salvage.x, salvage.y, '#ffdd00');
+        screenShake.trigger(2);
+      }
     }
 
     // Shield buff countdown
@@ -331,23 +446,27 @@ const loop = new GameLoop({
       }
     }
 
-    // Abilities
-    const addText = (text: string, x: number, y: number, color: string) =>
-      floatingText.add(text, x, y, color);
-    abilitySystem.update(dt, world.entities, addText);
+    // Abilities — only if enabled
+    if (features?.abilities !== false) {
+      const addText = (text: string, x: number, y: number, color: string) =>
+        floatingText.add(text, x, y, color);
+      abilitySystem.update(dt, world.entities, addText);
 
-    // Ability visual effects
-    const hotAbility = abilitySystem.getAbility('heal_over_time');
-    if (hotAbility) {
-      abilityEffects.setRegenActive(hotAbility.active, hotAbility.durationRemaining);
+      const hotAbility = abilitySystem.getAbility('heal_over_time');
+      if (hotAbility) {
+        abilityEffects.setRegenActive(hotAbility.active, hotAbility.durationRemaining);
+      }
+      abilityEffects.update(dt);
     }
-    abilityEffects.update(dt);
 
-    // Combat
-    const alive = combatSystem.update(
-      world.entities, player, dt, abilitySystem.isDashing(), 15,
-      (text, x, y, color) => floatingText.add(text, x, y, color),
-    );
+    // Combat — only if enabled
+    let alive = true;
+    if (features?.combat !== false) {
+      alive = combatSystem.update(
+        world.entities, player, dt, abilitySystem.isDashing(), 15,
+        (text, x, y, color) => floatingText.add(text, x, y, color),
+      );
+    }
 
     // Motion trails — track fast-moving entities
     motionTrail.track('player', player.x, player.y, player.vx, player.vy, '#00ff41', dt);
@@ -360,26 +479,30 @@ const loop = new GameLoop({
       motionTrail.track(eid, enemy.x, enemy.y, enemy.vx, enemy.vy, '#ff4141', dt);
       activeTrailIds.add(eid);
     }
-    for (let i = 0; i < combatSystem.projectiles.length; i++) {
-      const p = combatSystem.projectiles[i];
-      if (!p.active) continue;
-      const pid = `p${i}`;
-      motionTrail.track(pid, p.x, p.y, p.vx, p.vy, '#ff6641', dt);
-      activeTrailIds.add(pid);
+    if (features?.combat !== false) {
+      for (let i = 0; i < combatSystem.projectiles.length; i++) {
+        const p = combatSystem.projectiles[i];
+        if (!p.active) continue;
+        const pid = `p${i}`;
+        motionTrail.track(pid, p.x, p.y, p.vx, p.vy, '#ff6641', dt);
+        activeTrailIds.add(pid);
+      }
     }
-    for (let i = 0; i < abilitySystem.drones.length; i++) {
-      const drone = abilitySystem.drones[i];
-      const did = `d${i}`;
-      motionTrail.track(did, drone.x, drone.y, drone.vx, drone.vy, '#00ffff', dt);
-      activeTrailIds.add(did);
-    }
-    const missiles = (abilitySystem as any).missiles as Array<{x: number; y: number; vx: number; vy: number}> | undefined;
-    if (missiles) {
-      for (let i = 0; i < missiles.length; i++) {
-        const missile = missiles[i];
-        const mid = `m${i}`;
-        motionTrail.track(mid, missile.x, missile.y, missile.vx, missile.vy, '#ff8800', dt);
-        activeTrailIds.add(mid);
+    if (features?.abilities !== false) {
+      for (let i = 0; i < abilitySystem.drones.length; i++) {
+        const drone = abilitySystem.drones[i];
+        const did = `d${i}`;
+        motionTrail.track(did, drone.x, drone.y, drone.vx, drone.vy, '#00ffff', dt);
+        activeTrailIds.add(did);
+      }
+      const missiles = (abilitySystem as any).missiles as Array<{x: number; y: number; vx: number; vy: number}> | undefined;
+      if (missiles) {
+        for (let i = 0; i < missiles.length; i++) {
+          const missile = missiles[i];
+          const mid = `m${i}`;
+          motionTrail.track(mid, missile.x, missile.y, missile.vx, missile.vy, '#ff8800', dt);
+          activeTrailIds.add(mid);
+        }
       }
     }
     motionTrail.prune(activeTrailIds);
@@ -396,14 +519,18 @@ const loop = new GameLoop({
       damageFlash = Math.max(0, damageFlash - dt * 2);
     }
 
+    // Check level objectives
+    if (!levelComplete && checkObjectives()) {
+      onLevelComplete();
+      return;
+    }
+
     if (!alive) {
       gameOver = true;
       towRopeSystem.clear();
       gameOverScreen.show(canvas, player, () => {
-        input.detach();
-        upgradePanel.detach(canvas);
-        keyRemapScreen.detach(canvas);
-        init();
+        cleanupCurrentGame();
+        showMainMenu();
       });
     }
 
@@ -411,6 +538,15 @@ const loop = new GameLoop({
     world.cleanup(player.x, player.y);
   },
   render() {
+    // Main menu render
+    if (onMainMenu) {
+      mainMenuScreen.render(ctx, canvas.width, canvas.height);
+      if (shaderPipeline) {
+        shaderPipeline.render(performance.now() / 1000);
+      }
+      return;
+    }
+
     const cx = canvas.width / 2 + screenShake.offsetX;
     const cy = canvas.height / 2 + screenShake.offsetY;
 
@@ -634,14 +770,58 @@ const loop = new GameLoop({
     // HUD
     hud.render(ctx, player, canvas.width, canvas.height);
 
-    // Ability bar (bottom center)
-    abilityBar.render(ctx, abilitySystem.abilities, canvas.width, canvas.height);
+    // Tutorial hints
+    if (currentLevelConfig && currentLevelConfig.hints.length > 0) {
+      ctx.save();
+      ctx.font = '14px monospace';
+      ctx.fillStyle = 'rgba(136, 170, 136, 0.8)';
+      ctx.textAlign = 'left';
+      const hintX = 20;
+      let hintY = canvas.height - 20 - (currentLevelConfig.hints.length - 1) * 22;
+      for (const hint of currentLevelConfig.hints) {
+        ctx.fillText(hint, hintX, hintY);
+        hintY += 22;
+      }
+      ctx.restore();
+    }
 
-    // Upgrade panel
-    upgradePanel.render(ctx, upgradeSystem, player, canvas.width, canvas.height);
+    // Objective progress
+    if (currentLevelConfig && currentLevelConfig.objectives.length > 0) {
+      ctx.save();
+      ctx.font = '14px monospace';
+      ctx.textAlign = 'right';
+      const objX = canvas.width - 20;
+      let objY = 100;
+      for (const obj of currentLevelConfig.objectives) {
+        let current = 0;
+        switch (obj.type) {
+          case 'collect_energy': current = Math.floor(player.totalEnergyCollected); break;
+          case 'kill_enemies': current = player.kills; break;
+          case 'survive_seconds': current = Math.floor(player.survivalTime); break;
+        }
+        const done = current >= obj.target;
+        ctx.fillStyle = done ? '#00ff41' : 'rgba(255, 255, 255, 0.7)';
+        ctx.fillText(`${obj.label}: ${current}/${obj.target}${done ? ' ✓' : ''}`, objX, objY);
+        objY += 24;
+      }
+      ctx.restore();
+    }
+
+    // Ability bar (bottom center) — only if abilities enabled
+    if (currentLevelConfig?.features.abilities !== false) {
+      abilityBar.render(ctx, abilitySystem.abilities, canvas.width, canvas.height);
+    }
+
+    // Upgrade panel — only if upgrades enabled
+    if (currentLevelConfig?.features.upgrades !== false) {
+      upgradePanel.render(ctx, upgradeSystem, player, canvas.width, canvas.height);
+    }
 
     // Game over overlay
     gameOverScreen.render(ctx, canvas.width, canvas.height);
+
+    // Level complete overlay
+    levelCompleteScreen.render(ctx, canvas.width, canvas.height);
 
     // Key remap screen (on top of everything)
     keyRemapScreen.render(ctx, abilitySystem.abilities, canvas.width, canvas.height);
