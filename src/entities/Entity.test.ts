@@ -8,7 +8,7 @@ describe('Entity factories', () => {
     expect(r.y).toBe(200);
     expect(r.type).toBe('resource');
     expect(r.active).toBe(true);
-    expect(r.visible).toBe(true);
+    expect(r.visible).toBe(false);
     expect(r.pingedThisWave).toBe(false);
     expect(r.energyValue).toBeGreaterThan(0);
   });

@@ -380,7 +380,7 @@ const loop = new GameLoop({
     // Energy magnet: auto-collect nearby resources
     if (player.magnetRange > 0) {
       for (const entity of world.entities) {
-        if (!entity.active || entity.type !== 'resource') continue;
+        if (!entity.active || entity.type !== 'resource' || !entity.visible) continue;
         const resource = entity as Resource;
         const mdx = entity.x - player.x;
         const mdy = entity.y - player.y;

@@ -104,7 +104,7 @@ export function createResource(x: number, y: number): Resource {
     y,
     type: 'resource',
     active: true,
-    visible: true,
+    visible: false,
     pingedThisWave: false,
     energyValue: 5 + Math.floor(Math.random() * 10),
   };

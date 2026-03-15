@@ -160,19 +160,43 @@ describe('PingSystem', () => {
     expect(alpha2).toBeLessThan(alpha1);
   });
 
-  it('resources and allies remain visible (not affected by ping visibility)', () => {
-    const resource = createResource(50, 0);
+  it('allies remain visible (not affected by ping visibility reset)', () => {
     const ally = createAlly(80, 0, 'healer');
 
-    expect(resource.visible).toBe(true);
     expect(ally.visible).toBe(true);
 
     // Fire ping and let it pass
-    ping.update([resource, ally], player, 0.5);
+    ping.update([ally], player, 0.5);
 
-    // Resources and allies visibility is not toggled off by new pings
-    // (only enemies get hidden)
+    // Allies visibility is not toggled off by new pings (only enemies get hidden)
     expect(ally.visible).toBe(true);
+  });
+
+  it('resources start invisible and become visible when pinged', () => {
+    const resource = createResource(50, 0);
+
+    expect(resource.visible).toBe(false);
+
+    // Ping reaches the resource at 50px (speed=600, dt=0.1 => radius=60)
+    ping.update([resource], player, 0.1);
+    expect(resource.visible).toBe(true);
+  });
+
+  it('resources remain visible across ping cycles (not reset like enemies)', () => {
+    // Place resource beyond initial ping reach so it survives collection
+    const resource = createResource(250, 0);
+    resource.energyValue = 10;
+
+    // First ping — expand enough to reveal resource
+    ping.update([resource], player, 0.5);
+    expect(resource.visible).toBe(true);
+
+    // Complete the ping cycle
+    ping.update([resource], player, 0.5);
+
+    // Fire a new ping — resource should NOT be hidden (unlike enemies)
+    ping.update([resource], player, 0.016);
+    expect(resource.visible).toBe(true);
   });
 
   it('does not kill enemies or drop energy via ping', () => {

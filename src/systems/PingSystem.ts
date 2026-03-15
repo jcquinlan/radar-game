@@ -127,7 +127,9 @@ export class PingSystem {
         if (distSq <= this.state.radius * this.state.radius) {
           entity.pingedThisWave = true;
 
-          if (entity.type === 'enemy') {
+          if (entity.type === 'resource') {
+            entity.visible = true;
+          } else if (entity.type === 'enemy') {
             entity.visible = true;
             // Clear ghost marker — live position is now visible
             (entity as Enemy).ghostX = null;
