@@ -318,31 +318,22 @@ export class AbilitySystem {
   }
 
   private spawnMissile(entities: GameEntity[]): void {
-    // Find nearest enemy to target
-    let nearestDistSq = Infinity;
-    let targetAngle = this.player.heading; // Default: fire forward if no enemies
+    // Launch in a pseudo-random direction offset from the player's heading,
+    // at low initial speed. The missile accelerates and steers toward the
+    // target over time, creating a satisfying arcing trajectory.
+    const launchSpread = (Math.random() - 0.5) * Math.PI * 1.2; // ±108° spread
+    const launchAngle = this.player.heading + launchSpread;
+    const launchSpeed = 60; // Slow initial burst — accelerates to full speed
 
-    for (const entity of entities) {
-      if (!entity.active || entity.type !== 'enemy') continue;
-      const dx = entity.x - this.player.x;
-      const dy = entity.y - this.player.y;
-      const distSq = dx * dx + dy * dy;
-      if (distSq < nearestDistSq) {
-        nearestDistSq = distSq;
-        targetAngle = Math.atan2(dy, dx);
-      }
-    }
-
-    const speed = 200;
     this.missiles.push({
       x: this.player.x,
       y: this.player.y,
-      vx: Math.cos(targetAngle) * speed,
-      vy: Math.sin(targetAngle) * speed,
-      speed,
+      vx: Math.cos(launchAngle) * launchSpeed,
+      vy: Math.sin(launchAngle) * launchSpeed,
+      speed: 220,
       damage: 25,
       lifetime: 4,
-      turnRate: 3, // radians/sec — tracks well but can be dodged
+      turnRate: 3.5, // radians/sec — slightly higher to compensate for random launch
       active: true,
     });
   }
@@ -377,13 +368,17 @@ export class AbilitySystem {
         }
       }
 
+      // Accelerate toward target speed (launches slow, ramps up)
+      const currentSpeed = Math.sqrt(missile.vx * missile.vx + missile.vy * missile.vy);
+      const currentAngle = Math.atan2(missile.vy, missile.vx);
+
       // Steer toward target by rotating velocity vector
+      let newAngle = currentAngle;
       if (nearest) {
         const desiredAngle = Math.atan2(
           nearest.y - missile.y,
           nearest.x - missile.x,
         );
-        const currentAngle = Math.atan2(missile.vy, missile.vx);
 
         // Shortest angular difference
         let angleDiff = desiredAngle - currentAngle;
@@ -393,11 +388,13 @@ export class AbilitySystem {
         // Clamp turn to turnRate * dt
         const maxTurn = missile.turnRate * dt;
         const turn = Math.max(-maxTurn, Math.min(maxTurn, angleDiff));
-        const newAngle = currentAngle + turn;
-
-        missile.vx = Math.cos(newAngle) * missile.speed;
-        missile.vy = Math.sin(newAngle) * missile.speed;
+        newAngle = currentAngle + turn;
       }
+
+      // Ramp speed toward target — accelerates at 400 px/s²
+      const newSpeed = Math.min(missile.speed, currentSpeed + 400 * dt);
+      missile.vx = Math.cos(newAngle) * newSpeed;
+      missile.vy = Math.sin(newAngle) * newSpeed;
 
       // Move
       missile.x += missile.vx * dt;
