@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { getTheme, setTheme, getThemeNames } from './theme';
+import { getTheme, setTheme, getThemeNames, cycleTheme } from './theme';
 
 describe('theme system', () => {
   beforeEach(() => {
@@ -115,6 +115,16 @@ describe('theme system', () => {
     const a = getTheme();
     const b = getTheme();
     expect(a).toBe(b);
+  });
+
+  it('cycleTheme advances to the next theme and wraps around', () => {
+    expect(getTheme().name).toBe('classic');
+    cycleTheme();
+    expect(getTheme().name).toBe('ocean');
+    cycleTheme();
+    expect(getTheme().name).toBe('ember');
+    cycleTheme();
+    expect(getTheme().name).toBe('classic');
   });
 
   it('classic theme matches the original hardcoded neon green palette', () => {

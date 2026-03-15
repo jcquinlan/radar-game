@@ -93,3 +93,10 @@ export function setTheme(name: string): void {
 export function getThemeNames(): string[] {
   return Object.keys(THEMES);
 }
+
+export function cycleTheme(): void {
+  const names = getThemeNames();
+  const idx = names.indexOf(currentTheme.name);
+  const next = names[(idx + 1) % names.length];
+  setTheme(next);
+}

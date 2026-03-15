@@ -26,7 +26,7 @@ import { TowRopeSystem } from './systems/TowRopeSystem';
 import { Minimap } from './ui/Minimap';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
 import { CRTEffect } from './rendering/effects/CRTEffect';
-import { getTheme } from './themes/theme';
+import { getTheme, cycleTheme } from './themes/theme';
 
 const canvas = createCanvas('game-canvas');
 const ctx = canvas.getContext('2d')!;
@@ -137,12 +137,14 @@ function togglePause() {
           radar.scanlineEnabled = !shaderPipeline.enabled;
         }
       },
+      onCycleTheme: () => cycleTheme(),
       onOpenKeybinds: () => {
         paused = false;
         pauseMenu.close(canvas);
         keyRemapScreen.toggle();
       },
       isShaderEnabled: () => shaderPipeline ? shaderPipeline.enabled : false,
+      getThemeName: () => getTheme().name,
     });
   }
 }

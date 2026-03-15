@@ -4,8 +4,10 @@ export interface PauseMenuCallbacks {
   onResume: () => void;
   onRestart: () => void;
   onToggleShaders: () => void;
+  onCycleTheme: () => void;
   onOpenKeybinds: () => void;
   isShaderEnabled: () => boolean;
+  getThemeName: () => string;
 }
 
 interface ButtonDef {
@@ -65,6 +67,11 @@ export class PauseMenu {
         label: '',
         dynamicLabel: () => `SHADERS: ${cb.isShaderEnabled() ? 'ON' : 'OFF'}`,
         action: () => cb.onToggleShaders(),
+      },
+      {
+        label: '',
+        dynamicLabel: () => `THEME: ${cb.getThemeName().toUpperCase()}`,
+        action: () => cb.onCycleTheme(),
       },
       { label: 'KEY BINDINGS', action: () => cb.onOpenKeybinds() },
       { label: 'RESTART', action: () => cb.onRestart() },
