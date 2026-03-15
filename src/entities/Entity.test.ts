@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createResource, createEnemy, createAlly } from './Entity';
+import { createResource, createEnemy, createAlly, createHomeBase } from './Entity';
 
 describe('Entity factories', () => {
   it('creates a resource at the given position', () => {
@@ -65,6 +65,15 @@ describe('Entity factories', () => {
   it('creates a random ally subtype when none specified', () => {
     const a = createAlly(300, 400);
     expect(['healer', 'shield', 'beacon']).toContain(a.subtype);
+  });
+
+  it('creates a home base with health and maxHealth', () => {
+    const hb = createHomeBase(100, 200);
+    expect(hb.x).toBe(100);
+    expect(hb.y).toBe(200);
+    expect(hb.radius).toBe(150);
+    expect(hb.health).toBe(500);
+    expect(hb.maxHealth).toBe(500);
   });
 
   it('creates enemies with ghost marker and wander fields initialized', () => {
