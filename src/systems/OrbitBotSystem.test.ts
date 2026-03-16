@@ -143,10 +143,12 @@ describe('OrbitBotSystem', () => {
       expect(system.bot.state).toBe(OrbitBotState.OrbitingEnemy);
     });
 
-    it('orbits faster around enemies than around player', () => {
-      // The angular speed around enemies (4 rad/s) should be higher than player (2 rad/s)
-      // We verify this indirectly: the bot's ENEMY_ANGULAR_SPEED > PLAYER_ANGULAR_SPEED
-      expect(OrbitBotSystem.ENEMY_ANGULAR_SPEED).toBeGreaterThan(OrbitBotSystem.PLAYER_ANGULAR_SPEED);
+    it('enemy angular speed is tuned to 2.8 rad/s', () => {
+      expect(OrbitBotSystem.ENEMY_ANGULAR_SPEED).toBe(2.8);
+    });
+
+    it('player angular speed remains at 2 rad/s', () => {
+      expect(OrbitBotSystem.PLAYER_ANGULAR_SPEED).toBe(2);
     });
   });
 
@@ -194,26 +196,46 @@ describe('OrbitBotSystem', () => {
     });
   });
 
-  describe('combat', () => {
-    it('deals damage to target enemy while orbiting it', () => {
+  describe('projectile combat', () => {
+    it('deals damage to target enemy via projectiles while orbiting it', () => {
       const enemy = makeEnemy(80, 0, 100);
       const entities: GameEntity[] = [enemy];
       const initialHealth = enemy.health;
 
-      // Let bot reach and orbit enemy, dealing damage
-      for (let i = 0; i < 180; i++) {
+      // Let bot reach and orbit enemy, firing projectiles
+      for (let i = 0; i < 300; i++) {
         system.update(1 / 60, entities, addFloatingText, onDeath);
       }
 
       expect(enemy.health).toBeLessThan(initialHealth);
     });
 
-    it('returns to player when target enemy dies', () => {
+    it('fires projectiles that become active during OrbitingEnemy state', () => {
+      const enemy = makeEnemy(80, 0, 100);
+      const entities: GameEntity[] = [enemy];
+
+      // Let bot reach enemy
+      for (let i = 0; i < 120; i++) {
+        system.update(1 / 60, entities, addFloatingText, onDeath);
+      }
+      expect(system.bot.state).toBe(OrbitBotState.OrbitingEnemy);
+
+      // Run a few more frames to let a projectile fire
+      for (let i = 0; i < 60; i++) {
+        system.update(1 / 60, entities, addFloatingText, onDeath);
+      }
+
+      // At least one projectile should have been active at some point
+      // (it may have hit already, so check if damage was dealt)
+      expect(enemy.health).toBeLessThan(100);
+    });
+
+    it('returns to player when target enemy dies from projectiles', () => {
       const enemy = makeEnemy(80, 0, 5); // Low HP, will die quickly
       const entities: GameEntity[] = [enemy];
 
-      // Let bot kill the enemy
-      for (let i = 0; i < 300; i++) {
+      // Let bot kill the enemy via projectiles
+      for (let i = 0; i < 600; i++) {
         system.update(1 / 60, entities, addFloatingText, onDeath);
         if (!enemy.active) break;
       }
@@ -230,7 +252,7 @@ describe('OrbitBotSystem', () => {
       const enemy = makeEnemy(80, 0, 100);
       const entities: GameEntity[] = [enemy];
 
-      for (let i = 0; i < 180; i++) {
+      for (let i = 0; i < 300; i++) {
         system.update(1 / 60, entities, addFloatingText, onDeath);
       }
 
@@ -243,13 +265,48 @@ describe('OrbitBotSystem', () => {
       const initialScore = player.score;
       const initialKills = player.kills;
 
-      for (let i = 0; i < 300; i++) {
+      for (let i = 0; i < 600; i++) {
         system.update(1 / 60, entities, addFloatingText, onDeath);
         if (!enemy.active) break;
       }
 
       expect(player.score).toBeGreaterThan(initialScore);
       expect(player.kills).toBeGreaterThan(initialKills);
+    });
+
+    it('projectiles deactivate after their lifetime expires', () => {
+      const enemy = makeEnemy(500, 0, 100); // Far away — projectiles won't hit
+      const entities: GameEntity[] = [enemy];
+
+      // Move bot manually to orbiting state with a far target
+      // We'll put an enemy at 80 to trigger chase, then move it far
+      const closeEnemy = makeEnemy(80, 0, 100);
+      const closeEntities: GameEntity[] = [closeEnemy];
+
+      // Let bot reach and orbit
+      for (let i = 0; i < 120; i++) {
+        system.update(1 / 60, closeEntities, addFloatingText, onDeath);
+      }
+      expect(system.bot.state).toBe(OrbitBotState.OrbitingEnemy);
+
+      // Now move enemy far so projectiles can't hit
+      closeEnemy.x = 500;
+      closeEnemy.y = 0;
+
+      // Fire some projectiles
+      for (let i = 0; i < 60; i++) {
+        system.update(1 / 60, closeEntities, addFloatingText, onDeath);
+      }
+
+      // Wait for projectiles to expire (0.5s lifetime)
+      // After enough time, all projectiles should be inactive
+      for (let i = 0; i < 60; i++) {
+        system.update(1 / 60, closeEntities, addFloatingText, onDeath);
+      }
+
+      const activeCount = system.botProjectiles.filter(p => p.active).length;
+      // Some may still be active if recently fired, but most should have expired
+      expect(activeCount).toBeLessThanOrEqual(2);
     });
   });
 
@@ -287,6 +344,22 @@ describe('OrbitBotSystem', () => {
       const dy = system.bot.y - player.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       expect(dist).toBeLessThan(100);
+    });
+
+    it('clears all projectiles and fire timer on reset', () => {
+      const enemy = makeEnemy(80, 0, 100);
+      const entities: GameEntity[] = [enemy];
+
+      // Let bot orbit and fire
+      for (let i = 0; i < 180; i++) {
+        system.update(1 / 60, entities, addFloatingText, onDeath);
+      }
+
+      system.reset();
+
+      expect(system.bot.fireTimer).toBe(0);
+      const activeCount = system.botProjectiles.filter(p => p.active).length;
+      expect(activeCount).toBe(0);
     });
   });
 });

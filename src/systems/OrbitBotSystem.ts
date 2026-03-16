@@ -23,11 +23,23 @@ export interface OrbitBot {
   /** Accumulated damage for batched floating text */
   damageAccum: number;
   damageTextTimer: number;
+  /** Timer for projectile firing cadence */
+  fireTimer: number;
+}
+
+export interface BotProjectile {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  damage: number;
+  lifetime: number;
+  active: boolean;
 }
 
 // Orbit radii
 const PLAYER_ORBIT_RADIUS = 50;
-const ENEMY_ORBIT_RADIUS = 30;
+const ENEMY_ORBIT_RADIUS = 42;
 
 // Detection / leash
 const DETECTION_RANGE = 250;
@@ -44,17 +56,22 @@ const BOT_ACCEL = BOT_SPEED * BOT_FRICTION;
 const ORBIT_ARRIVAL_THRESHOLD = 15;
 const PLAYER_ORBIT_ARRIVAL = PLAYER_ORBIT_RADIUS + ORBIT_ARRIVAL_THRESHOLD;
 
-// Combat
-const DAMAGE_PER_SECOND = 4;
-const CONTACT_RANGE = 35;
-const CONTACT_RANGE_SQ = CONTACT_RANGE * CONTACT_RANGE;
+// Projectile combat
+const FIRE_INTERVAL = 0.5; // seconds between shots (~2 shots/sec)
+const PROJECTILE_SPEED = 200;
+const PROJECTILE_DAMAGE = 2;
+const PROJECTILE_LIFETIME = 0.5;
+const PROJECTILE_HIT_RANGE = 10;
+const PROJECTILE_HIT_RANGE_SQ = PROJECTILE_HIT_RANGE * PROJECTILE_HIT_RANGE;
 const DAMAGE_TEXT_INTERVAL = 0.5; // batch damage text every 0.5s
+const MAX_BOT_PROJECTILES = 8; // pool size (2 shots/sec * 0.5s lifetime = ~1 active, but allow headroom)
 
 export class OrbitBotSystem {
   static readonly PLAYER_ANGULAR_SPEED = 2;
-  static readonly ENEMY_ANGULAR_SPEED = 4;
+  static readonly ENEMY_ANGULAR_SPEED = 2.8;
 
   bot: OrbitBot;
+  botProjectiles: BotProjectile[];
   private player: Player;
 
   constructor(player: Player) {
@@ -69,7 +86,13 @@ export class OrbitBotSystem {
       targetEnemy: null,
       damageAccum: 0,
       damageTextTimer: 0,
+      fireTimer: 0,
     };
+    // Pre-allocate projectile pool
+    this.botProjectiles = [];
+    for (let i = 0; i < MAX_BOT_PROJECTILES; i++) {
+      this.botProjectiles.push({ x: 0, y: 0, vx: 0, vy: 0, damage: 0, lifetime: 0, active: false });
+    }
   }
 
   reset(): void {
@@ -82,6 +105,11 @@ export class OrbitBotSystem {
     this.bot.targetEnemy = null;
     this.bot.damageAccum = 0;
     this.bot.damageTextTimer = 0;
+    this.bot.fireTimer = 0;
+    // Deactivate all projectiles
+    for (let i = 0; i < this.botProjectiles.length; i++) {
+      this.botProjectiles[i].active = false;
+    }
   }
 
   update(
@@ -127,7 +155,7 @@ export class OrbitBotSystem {
           break;
         }
         this.orbitAround(dt, bot.targetEnemy.x, bot.targetEnemy.y, ENEMY_ORBIT_RADIUS, OrbitBotSystem.ENEMY_ANGULAR_SPEED);
-        this.dealDamage(dt, addFloatingText, onDeath);
+        this.fireProjectile(dt);
         break;
 
       case OrbitBotState.Returning:
@@ -141,6 +169,9 @@ export class OrbitBotSystem {
     bot.vy *= decay;
     bot.x += bot.vx * dt;
     bot.y += bot.vy * dt;
+
+    // Update projectiles
+    this.updateProjectiles(dt, addFloatingText, onDeath);
   }
 
   private findTarget(entities: GameEntity[]): void {
@@ -239,47 +270,104 @@ export class OrbitBotSystem {
     return dx * dx + dy * dy > LEASH_DISTANCE_SQ;
   }
 
-  private dealDamage(
+  private fireProjectile(dt: number): void {
+    const bot = this.bot;
+    const target = bot.targetEnemy;
+    if (!target || !target.active) return;
+
+    bot.fireTimer -= dt;
+    if (bot.fireTimer > 0) return;
+
+    bot.fireTimer = FIRE_INTERVAL;
+
+    // Find an inactive projectile slot
+    let slot: BotProjectile | null = null;
+    for (let i = 0; i < this.botProjectiles.length; i++) {
+      if (!this.botProjectiles[i].active) {
+        slot = this.botProjectiles[i];
+        break;
+      }
+    }
+    if (!slot) return; // All slots full, skip this shot
+
+    // Compute direction from bot to enemy
+    const dx = target.x - bot.x;
+    const dy = target.y - bot.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 1) return; // Too close, skip
+
+    const dirX = dx / dist;
+    const dirY = dy / dist;
+
+    // Initialize projectile
+    slot.x = bot.x;
+    slot.y = bot.y;
+    slot.vx = dirX * PROJECTILE_SPEED;
+    slot.vy = dirY * PROJECTILE_SPEED;
+    slot.damage = PROJECTILE_DAMAGE;
+    slot.lifetime = PROJECTILE_LIFETIME;
+    slot.active = true;
+  }
+
+  private updateProjectiles(
     dt: number,
     addFloatingText: FloatingTextCallback,
     onDeath: DeathCallback,
   ): void {
     const bot = this.bot;
     const target = bot.targetEnemy;
-    if (!target || !target.active) return;
 
-    const dx = bot.x - target.x;
-    const dy = bot.y - target.y;
-    const distSq = dx * dx + dy * dy;
+    for (let i = 0; i < this.botProjectiles.length; i++) {
+      const p = this.botProjectiles[i];
+      if (!p.active) continue;
 
-    if (distSq < CONTACT_RANGE_SQ) {
-      const dmg = DAMAGE_PER_SECOND * dt;
-      target.health -= dmg;
-      target.aggro = true;
+      // Move
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
 
-      // Batch floating text
-      bot.damageAccum += dmg;
-      bot.damageTextTimer -= dt;
-      if (bot.damageTextTimer <= 0) {
-        const shown = Math.round(bot.damageAccum);
-        if (shown > 0) {
-          addFloatingText(`-${shown}`, target.x, target.y, getTheme().events.damage);
-        }
-        bot.damageAccum = 0;
-        bot.damageTextTimer = DAMAGE_TEXT_INTERVAL;
+      // Decrement lifetime
+      p.lifetime -= dt;
+      if (p.lifetime <= 0) {
+        p.active = false;
+        continue;
       }
 
-      if (target.health <= 0 && target.active) {
-        target.active = false;
-        const deathColor = target.subtype === 'ranged' ? getTheme().entities.enemyRanged : getTheme().entities.enemy;
-        onDeath(target.x, target.y, bot.x, bot.y, deathColor);
-        this.player.addEnergy(target.energyDrop);
-        this.player.kills++;
-        this.player.score += 50;
-        addFloatingText('+50', target.x, target.y - 15, getTheme().entities.salvage);
+      // Check collision with target enemy
+      if (target && target.active) {
+        const dx = p.x - target.x;
+        const dy = p.y - target.y;
+        if (dx * dx + dy * dy < PROJECTILE_HIT_RANGE_SQ) {
+          // Hit!
+          target.health -= p.damage;
+          target.aggro = true;
+          p.active = false;
 
-        bot.targetEnemy = null;
-        bot.state = OrbitBotState.Returning;
+          // Batch floating text
+          bot.damageAccum += p.damage;
+          bot.damageTextTimer -= dt;
+          if (bot.damageTextTimer <= 0) {
+            const shown = Math.round(bot.damageAccum);
+            if (shown > 0) {
+              addFloatingText(`-${shown}`, target.x, target.y, getTheme().events.damage);
+            }
+            bot.damageAccum = 0;
+            bot.damageTextTimer = DAMAGE_TEXT_INTERVAL;
+          }
+
+          // Check kill
+          if (target.health <= 0 && target.active) {
+            target.active = false;
+            const deathColor = target.subtype === 'ranged' ? getTheme().entities.enemyRanged : getTheme().entities.enemy;
+            onDeath(target.x, target.y, bot.x, bot.y, deathColor);
+            this.player.addEnergy(target.energyDrop);
+            this.player.kills++;
+            this.player.score += 50;
+            addFloatingText('+50', target.x, target.y - 15, getTheme().entities.salvage);
+
+            bot.targetEnemy = null;
+            bot.state = OrbitBotState.Returning;
+          }
+        }
       }
     }
   }

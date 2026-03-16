@@ -1327,6 +1327,35 @@ const loop = new GameLoop({
       }
     }
 
+    // Render orbit bot projectiles
+    {
+      const projs = orbitBotSystem.botProjectiles;
+      let hasActive = false;
+      for (let i = 0; i < projs.length; i++) {
+        if (projs[i].active) { hasActive = true; break; }
+      }
+      if (hasActive) {
+        ctx.save();
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur = 6;
+        ctx.fillStyle = '#00ffff';
+        ctx.beginPath();
+        for (let i = 0; i < projs.length; i++) {
+          const p = projs[i];
+          if (!p.active) continue;
+          const prx = p.x - player.x;
+          const pry = p.y - player.y;
+          if (prx * prx + pry * pry > viewRadiusSq) continue;
+          const px = cx + prx;
+          const py = cy + pry;
+          ctx.moveTo(px + 2, py);
+          ctx.arc(px, py, 2, 0, Math.PI * 2);
+        }
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
     // Render missiles
     for (const missile of abilitySystem.missiles) {
       const mrx = missile.x - player.x;
