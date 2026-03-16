@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CombatSystem } from './CombatSystem';
 import { Player } from '../entities/Player';
-import { createEnemy, createHomeBase, createTurret, createRepairStation, Defense } from '../entities/Entity';
+import { createEnemy, createHomeBase, createTurret, createRepairStation, createSalvage, Defense } from '../entities/Entity';
 
 describe('CombatSystem', () => {
   let combat: CombatSystem;
@@ -700,6 +700,168 @@ describe('CombatSystem', () => {
       combat.update([enemy], player, 0.016);
 
       expect(onShake).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('salvage damage from projectiles', () => {
+    it('enemy projectile within 15px damages salvage', () => {
+      const salvage = createSalvage(100, 0);
+      combat.projectiles.push({
+        x: 100, y: 0,
+        vx: 0, vy: 0,
+        damage: 8,
+        active: true,
+        lifetime: 3,
+      });
+
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+
+      expect(salvage.hp).toBe(22); // 30 - 8
+      expect(combat.projectiles).toHaveLength(0); // projectile consumed
+    });
+
+    it('enemy projectile sets damageFlash on salvage', () => {
+      const salvage = createSalvage(100, 0);
+      combat.projectiles.push({
+        x: 100, y: 0, vx: 0, vy: 0,
+        damage: 8, active: true, lifetime: 3,
+      });
+
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+
+      expect(salvage.damageFlash).toBe(0.15);
+    });
+
+    it('projectile prioritizes player over salvage', () => {
+      const salvage = createSalvage(5, 0); // Near player at origin
+      combat.projectiles.push({
+        x: 5, y: 0, vx: -100, vy: 0,
+        damage: 8, active: true, lifetime: 3,
+      });
+
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+
+      // Player should take damage, salvage should not
+      expect(player.health).toBe(92); // 100 - 8
+      expect(salvage.hp).toBe(30); // untouched
+    });
+
+    it('projectile outside 15px does not damage salvage', () => {
+      const salvage = createSalvage(100, 0);
+      combat.projectiles.push({
+        x: 120, y: 0, vx: 0, vy: 0,
+        damage: 8, active: true, lifetime: 3,
+      });
+
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+
+      expect(salvage.hp).toBe(30);
+      expect(combat.projectiles).toHaveLength(1);
+    });
+
+    it('salvage is destroyed when hp reaches 0', () => {
+      const salvage = createSalvage(100, 0);
+      salvage.hp = 5;
+      combat.projectiles.push({
+        x: 100, y: 0, vx: 0, vy: 0,
+        damage: 8, active: true, lifetime: 3,
+      });
+
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+
+      expect(salvage.hp).toBe(0);
+      expect(salvage.active).toBe(false);
+    });
+
+    it('calls onDeath when salvage is destroyed by projectile', () => {
+      const onDeath = vi.fn();
+      const salvage = createSalvage(100, 0);
+      salvage.hp = 5;
+      combat.projectiles.push({
+        x: 100, y: 0, vx: 0, vy: 0,
+        damage: 8, active: true, lifetime: 3,
+      });
+
+      combat.update([], player, 0.1, false, 15, () => {}, onDeath, () => {}, undefined, undefined, undefined, [salvage]);
+
+      expect(onDeath).toHaveBeenCalled();
+    });
+
+    it('calls addFloatingText with damage amount on salvage hit', () => {
+      const addFloatingText = vi.fn();
+      const salvage = createSalvage(100, 0);
+      combat.projectiles.push({
+        x: 100, y: 0, vx: 0, vy: 0,
+        damage: 8, active: true, lifetime: 3,
+      });
+
+      combat.update([], player, 0.1, false, 15, addFloatingText, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+
+      expect(addFloatingText).toHaveBeenCalledWith('-8', 100, 0, expect.any(String));
+    });
+
+    it('inactive salvage is not hit by projectiles', () => {
+      const salvage = createSalvage(100, 0);
+      salvage.active = false;
+      combat.projectiles.push({
+        x: 100, y: 0, vx: 0, vy: 0,
+        damage: 8, active: true, lifetime: 3,
+      });
+
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+
+      expect(salvage.hp).toBe(30);
+      expect(combat.projectiles).toHaveLength(1);
+    });
+  });
+
+  describe('salvage damage from enemy contact', () => {
+    it('melee enemy within 25px deals contact damage to salvage', () => {
+      const enemy = createEnemy(505, 0, 'scout');
+      const salvage = createSalvage(500, 0);
+
+      combat.update([enemy], player, 1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+
+      expect(salvage.hp).toBeLessThan(30);
+    });
+
+    it('ranged enemies do not deal contact damage to salvage', () => {
+      const enemy = createEnemy(502, 0, 'ranged');
+      const salvage = createSalvage(500, 0);
+
+      combat.update([enemy], player, 1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+
+      expect(salvage.hp).toBe(30);
+    });
+
+    it('salvage destroyed by contact damage sets active to false', () => {
+      const enemy = createEnemy(502, 0, 'brute');
+      enemy.damage = 50;
+      const salvage = createSalvage(500, 0);
+      salvage.hp = 5;
+
+      combat.update([enemy], player, 1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+
+      expect(salvage.active).toBe(false);
+      expect(salvage.hp).toBe(0);
+    });
+
+    it('enemy outside 25px does not damage salvage', () => {
+      const enemy = createEnemy(530, 0, 'scout');
+      const salvage = createSalvage(500, 0);
+
+      combat.update([enemy], player, 0.016, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+
+      expect(salvage.hp).toBe(30);
+    });
+
+    it('player collision behavior is unchanged when salvage is provided', () => {
+      const enemy = createEnemy(5, 0, 'scout');
+      const salvage = createSalvage(500, 0);
+
+      combat.update([enemy], player, 1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+
+      expect(player.health).toBeLessThan(player.maxHealth);
     });
   });
 
