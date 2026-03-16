@@ -74,7 +74,7 @@ export class RadarDisplay {
 
     // Ping ring (expanding circle with fade) — rendered without clip, can extend beyond radar
     if (this.pingState && this.pingState.active && this.pingState.radius > 0) {
-      const pingRadius = Math.min(this.pingState.radius, radius);
+      const pingRadius = Math.min(this.pingState.radius * zoomLevel, radius);
       const alpha = this.pingState.alpha;
 
       // Filled area behind the ping (faint glow showing what's been scanned)
