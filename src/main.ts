@@ -28,6 +28,7 @@ import { MotionTrail } from './radar/MotionTrail';
 import { DeathParticles } from './radar/DeathParticles';
 import { TowRopeSystem } from './systems/TowRopeSystem';
 import { OrbitBotSystem } from './systems/OrbitBotSystem';
+import { createZoomState, adjustZoom, updateZoom, resetZoom, ZOOM_WHEEL_SENSITIVITY, ZOOM_KEY_STEP, ZoomState } from './systems/ZoomState';
 import { Minimap } from './ui/Minimap';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
 import { BloomEffect } from './rendering/effects/BloomEffect';
@@ -106,6 +107,8 @@ let currentLevelConfig: LevelConfig | null = null;
 const activeTrailIds = new Set<string>();
 /** Pre-allocated target position object — reused every frame to avoid GC pressure */
 const waveTargetPos = { x: 0, y: 0 };
+/** Camera zoom state — purely visual, does not affect gameplay mechanics */
+const zoom: ZoomState = createZoomState();
 /** Pre-allocated salvage array — reused every frame to pass active salvage to CombatSystem */
 const salvageBuffer: import('./entities/Entity').Salvage[] = [];
 /** Bounds for the START RUN button in base_mode (recalculated each render) */
@@ -138,6 +141,7 @@ function showMainMenu() {
 
 /** Reset per-run state for a new run without recreating one-time systems (canvas, shaders, etc.) */
 function startRun() {
+  resetZoom(zoom);
   cleanupCurrentGame();
   player = new Player();
   world.reset();
@@ -197,6 +201,7 @@ function leaveBaseMode() {
 }
 
 function init() {
+  resetZoom(zoom);
   radar = new RadarDisplay();
   blipRenderer = new BlipRenderer();
   sweepEffects = new SweepEffects();
@@ -395,10 +400,15 @@ function isActiveGameplay(state: GameState): boolean {
   return state === 'playing' || state === 'run_active' || state === 'final_wave';
 }
 
-// Scroll help screen
+// Mouse wheel: zoom during gameplay, scroll when help screen is open
 window.addEventListener('wheel', (e) => {
   if (helpScreen.isVisible()) {
     helpScreen.scroll(-e.deltaY * 0.5);
+    e.preventDefault();
+    return;
+  }
+  if (isActiveGameplay(gameState)) {
+    adjustZoom(zoom, -e.deltaY * ZOOM_WHEEL_SENSITIVITY);
     e.preventDefault();
   }
 }, { passive: false });
@@ -449,6 +459,16 @@ window.addEventListener('keydown', (e) => {
 
   // Don't process other keys while paused
   if (gameState === 'paused') return;
+
+  // Zoom in/out with +/- keys
+  if (e.key === '=' || e.key === '+') {
+    adjustZoom(zoom, ZOOM_KEY_STEP);
+    return;
+  }
+  if (e.key === '-' || e.key === '_') {
+    adjustZoom(zoom, -ZOOM_KEY_STEP);
+    return;
+  }
 
   // Only show upgrades panel if upgrades are enabled
   const features = currentLevelConfig?.features;
@@ -537,6 +557,9 @@ showMainMenu();
 const loop = new GameLoop({
   update(dt) {
     if (!isActiveGameplay(gameState)) return;
+
+    // Zoom lerp
+    updateZoom(zoom, dt);
 
     // Minimap animation
     minimap.update(dt);
@@ -1066,13 +1089,15 @@ const loop = new GameLoop({
     // Rotated world layer — full screen visibility, no circular clip
     ctx.save();
 
-    // Rotate world around center by negative heading (world rotates opposite to player turn)
+    // Rotate and scale world around center (world rotates opposite to player turn)
     ctx.translate(cx, cy);
+    ctx.scale(zoom.current, zoom.current);
     ctx.rotate(-player.heading - Math.PI / 2); // Offset so heading=0 (up) maps to screen-up
     ctx.translate(-cx, -cy);
 
-    // View radius covers the full screen (corner-to-corner distance)
-    const viewRadius = Math.sqrt(canvas.width * canvas.width + canvas.height * canvas.height) / 2;
+    // View radius covers the full screen — divide by zoom so we don't cull entities that are
+    // visible when zoomed out (zoom < 1 means more world is visible)
+    const viewRadius = Math.sqrt(canvas.width * canvas.width + canvas.height * canvas.height) / 2 / zoom.current;
     const viewRadiusSq = viewRadius * viewRadius;
 
     ambientParticles.renderDeep(ctx, cx, cy, viewRadius, player.x, player.y);
