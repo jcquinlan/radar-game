@@ -10,9 +10,9 @@ export interface BloomEffectConfig {
 }
 
 export const DEFAULT_BLOOM_CONFIG: BloomEffectConfig = {
-  threshold: 0.25,
-  intensity: 0.45,
-  radius: 4.0,
+  threshold: 0.3,
+  intensity: 0.3,
+  radius: 3.5,
 };
 
 // Single-pass bloom: extract bright pixels, apply a 13-tap blur kernel, and composite

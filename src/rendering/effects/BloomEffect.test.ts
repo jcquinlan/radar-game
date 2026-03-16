@@ -18,8 +18,8 @@ describe('BloomEffect', () => {
   it('merges partial config with defaults', () => {
     const effect = new BloomEffect({ threshold: 0.5 });
     expect(effect.getConfig().threshold).toBe(0.5);
-    expect(effect.getConfig().intensity).toBe(DEFAULT_BLOOM_CONFIG.intensity);
-    expect(effect.getConfig().radius).toBe(DEFAULT_BLOOM_CONFIG.radius);
+    expect(effect.getConfig().intensity).toBe(0.3);
+    expect(effect.getConfig().radius).toBe(3.5);
   });
 
   it('has name "bloom"', () => {
