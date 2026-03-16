@@ -1,19 +1,91 @@
-import { Enemy, GameEntity, Projectile } from '../entities/Entity';
+import { Defense, Enemy, GameEntity, HomeBase, Projectile } from '../entities/Entity';
 import { Player } from '../entities/Player';
 import { getTheme } from '../themes/theme';
 import type { DeathCallback } from './AbilitySystem';
 
 type FloatingTextCallback = (text: string, x: number, y: number, color: string) => void;
 
+/** Turret projectile speed in pixels per second */
+const TURRET_PROJECTILE_SPEED = 150;
+/** Turret projectile lifetime in seconds */
+const TURRET_PROJECTILE_LIFETIME = 3;
+
 export class CombatSystem {
   projectiles: Projectile[] = [];
+  turretProjectiles: Projectile[] = [];
   private gameTime = 0;
   private ramHitEnemies: Set<Enemy> = new Set();
   private wasRamActive = false;
 
   /**
+   * Update turret AI: find nearest enemy in range, fire projectiles at fire rate.
+   * Updates turret.aimDirection toward the current target.
+   */
+  updateTurrets(
+    defenses: Defense[],
+    entities: GameEntity[],
+    gameTime: number,
+    dt: number,
+  ): void {
+    for (let i = 0; i < defenses.length; i++) {
+      const def = defenses[i];
+      if (!def.active || def.type !== 'turret') continue;
+
+      // Find nearest active enemy within range
+      let nearestEnemy: Enemy | null = null;
+      let nearestDistSq = def.range * def.range;
+
+      for (let j = 0; j < entities.length; j++) {
+        const entity = entities[j];
+        if (!entity.active || entity.type !== 'enemy') continue;
+        const edx = entity.x - def.x;
+        const edy = entity.y - def.y;
+        const distSq = edx * edx + edy * edy;
+        if (distSq < nearestDistSq) {
+          nearestDistSq = distSq;
+          nearestEnemy = entity as Enemy;
+        }
+      }
+
+      if (!nearestEnemy) continue;
+
+      // Update aim direction toward target
+      def.aimDirection = Math.atan2(nearestEnemy.y - def.y, nearestEnemy.x - def.x);
+
+      // Check fire rate cooldown
+      const timeSinceLastFire = gameTime - def.lastFireTime;
+      if (timeSinceLastFire < 1 / def.fireRate) continue;
+
+      // Fire projectile
+      def.lastFireTime = gameTime;
+      const dist = Math.sqrt(nearestDistSq);
+      if (dist === 0) continue;
+      const dirX = (nearestEnemy.x - def.x) / dist;
+      const dirY = (nearestEnemy.y - def.y) / dist;
+
+      this.turretProjectiles.push({
+        x: def.x,
+        y: def.y,
+        vx: dirX * TURRET_PROJECTILE_SPEED,
+        vy: dirY * TURRET_PROJECTILE_SPEED,
+        damage: def.damage,
+        active: true,
+        lifetime: TURRET_PROJECTILE_LIFETIME,
+      });
+    }
+  }
+
+  /**
    * Update enemy AI, projectiles, and handle contact damage.
    * Returns true if the player is still alive.
+   *
+   * @param targetPos - Optional override for enemy AI target position. When provided,
+   *   enemies chase this point instead of the player. Used during final_wave to direct
+   *   enemies toward the home base.
+   * @param baseTarget - Optional home base reference. When provided, enemies within 30px
+   *   of the base deal contactDamage * dt to it.
+   * @param defenses - Optional defense array. When provided, enemies within 30px of an
+   *   active defense deal contactDamage * dt to its health.
    */
   update(
     entities: GameEntity[],
@@ -24,8 +96,15 @@ export class CombatSystem {
     addFloatingText: FloatingTextCallback = () => {},
     onDeath: DeathCallback = () => {},
     onImpact: DeathCallback = () => {},
+    targetPos?: { x: number; y: number },
+    baseTarget?: HomeBase,
+    defenses?: Defense[],
   ): boolean {
     this.gameTime += dt;
+
+    // AI target: use override if provided, otherwise chase the player
+    const aiTargetX = targetPos ? targetPos.x : player.x;
+    const aiTargetY = targetPos ? targetPos.y : player.y;
 
     // Clear ram hit tracking when a new dash starts
     if (ramActive && !this.wasRamActive) {
@@ -37,39 +116,47 @@ export class CombatSystem {
       if (!entity.active || entity.type !== 'enemy') continue;
 
       const enemy = entity as Enemy;
+
+      // Distance to AI target (for chase/fire behavior)
+      const tdx = aiTargetX - enemy.x;
+      const tdy = aiTargetY - enemy.y;
+      const targetDistSq = tdx * tdx + tdy * tdy;
+
+      // Distance to player (for contact damage — always relevant)
       const dx = player.x - enemy.x;
       const dy = player.y - enemy.y;
       const distSq = dx * dx + dy * dy;
 
-      // Chase the player if within range (scouts and brutes)
-      // Stop at standoff distance instead of stacking on top of the player
+      // Chase the AI target if within range (scouts and brutes)
+      // Stop at standoff distance instead of stacking on top of the target
       const standoffDist = enemy.subtype === 'brute' ? 20 : 25;
       const enemyAccel = enemy.speed * enemy.friction;
-      const inChaseRange = distSq < enemy.chaseRange * enemy.chaseRange;
+      // Wave enemies always chase (infinite range); normal enemies use chaseRange
+      const inChaseRange = enemy.waveEnemy || targetDistSq < enemy.chaseRange * enemy.chaseRange;
 
-      if (enemy.subtype !== 'ranged' && inChaseRange && distSq > standoffDist * standoffDist) {
-        const dist = Math.sqrt(distSq);
-        enemy.vx += (dx / dist) * enemyAccel * dt;
-        enemy.vy += (dy / dist) * enemyAccel * dt;
+      if (enemy.subtype !== 'ranged' && inChaseRange && targetDistSq > standoffDist * standoffDist) {
+        const dist = Math.sqrt(targetDistSq);
+        enemy.vx += (tdx / dist) * enemyAccel * dt;
+        enemy.vy += (tdy / dist) * enemyAccel * dt;
       }
 
-      // Ranged enemies: maintain distance and fire
+      // Ranged enemies: maintain distance and fire at AI target
       if (enemy.subtype === 'ranged' && inChaseRange) {
-        const dist = Math.sqrt(distSq);
+        const dist = Math.sqrt(targetDistSq);
         // Back away if too close
         if (dist < 100 && dist > 0) {
-          enemy.vx -= (dx / dist) * enemyAccel * dt;
-          enemy.vy -= (dy / dist) * enemyAccel * dt;
+          enemy.vx -= (tdx / dist) * enemyAccel * dt;
+          enemy.vy -= (tdy / dist) * enemyAccel * dt;
         }
 
-        // Fire projectile
+        // Fire projectile toward AI target
         if (this.gameTime - enemy.lastFireTime >= enemy.fireRate && dist > 0) {
           enemy.lastFireTime = this.gameTime;
           this.projectiles.push({
             x: enemy.x,
             y: enemy.y,
-            vx: (dx / dist) * enemy.projectileSpeed,
-            vy: (dy / dist) * enemy.projectileSpeed,
+            vx: (tdx / dist) * enemy.projectileSpeed,
+            vy: (tdy / dist) * enemy.projectileSpeed,
             damage: 8,
             active: true,
             lifetime: 3,
@@ -136,6 +223,31 @@ export class CombatSystem {
           player.takeDamage(enemy.damage * dt);
         }
       }
+
+      // Base damage: wave enemies within 30px of the base deal contact damage to it
+      if (baseTarget && enemy.waveEnemy) {
+        const baseDx = baseTarget.x - enemy.x;
+        const baseDy = baseTarget.y - enemy.y;
+        if (baseDx * baseDx + baseDy * baseDy < 30 * 30) {
+          baseTarget.health -= enemy.damage * dt;
+        }
+      }
+
+      // Defense damage: enemies within 30px of an active defense deal contact damage
+      if (defenses) {
+        for (let di = 0; di < defenses.length; di++) {
+          const def = defenses[di];
+          if (!def.active) continue;
+          const defDx = def.x - enemy.x;
+          const defDy = def.y - enemy.y;
+          if (defDx * defDx + defDy * defDy < 30 * 30) {
+            def.health -= enemy.damage * dt;
+            if (def.health <= 0) {
+              def.active = false;
+            }
+          }
+        }
+      }
     }
 
     // Update projectiles
@@ -162,6 +274,52 @@ export class CombatSystem {
         player.takeDamage(p.damage);
         onImpact(player.x, player.y, p.x, p.y, getTheme().effects.projectile);
         this.projectiles.splice(i, 1);
+      }
+    }
+
+    // Update turret projectiles — move, expire, check collision with enemies
+    for (let i = this.turretProjectiles.length - 1; i >= 0; i--) {
+      const p = this.turretProjectiles[i];
+      if (!p.active) {
+        this.turretProjectiles.splice(i, 1);
+        continue;
+      }
+
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.lifetime -= dt;
+
+      if (p.lifetime <= 0) {
+        this.turretProjectiles.splice(i, 1);
+        continue;
+      }
+
+      // Check collision with enemies
+      let hit = false;
+      for (let j = 0; j < entities.length; j++) {
+        const entity = entities[j];
+        if (!entity.active || entity.type !== 'enemy') continue;
+        const enemy = entity as Enemy;
+        const edx = p.x - enemy.x;
+        const edy = p.y - enemy.y;
+        if (edx * edx + edy * edy < 20 * 20) {
+          enemy.health -= p.damage;
+          addFloatingText(`-${p.damage}`, enemy.x, enemy.y, '#00ddff');
+          if (enemy.health <= 0 && enemy.active) {
+            enemy.active = false;
+            const deathColor = enemy.subtype === 'ranged' ? getTheme().entities.enemyRanged : getTheme().entities.enemy;
+            onDeath(enemy.x, enemy.y, p.x, p.y, deathColor);
+            player.addEnergy(enemy.energyDrop);
+            player.kills++;
+            player.score += 50;
+            addFloatingText('+50', enemy.x, enemy.y - 15, getTheme().entities.salvage);
+          }
+          hit = true;
+          break;
+        }
+      }
+      if (hit) {
+        this.turretProjectiles.splice(i, 1);
       }
     }
 

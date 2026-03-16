@@ -1,6 +1,15 @@
 import { Player } from '../entities/Player';
+import { HomeBase } from '../entities/Entity';
 import { getThreatLevel } from '../world/World';
 import { getTheme } from '../themes/theme';
+
+/** Format seconds into MM:SS string. Exported for testing. */
+export function formatTime(seconds: number): string {
+  const clamped = Math.max(0, seconds);
+  const m = Math.floor(clamped / 60);
+  const s = Math.floor(clamped % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
 
 export class HUD {
   private fps = 0;
@@ -22,6 +31,9 @@ export class HUD {
     player: Player,
     canvasWidth: number,
     canvasHeight: number,
+    runTimer: number = -1,
+    homeBase?: HomeBase,
+    defenseHint?: { show: boolean; defenseCount: number; maxDefenses: number },
   ): void {
     const padding = 20;
     const barWidth = 200;
@@ -45,24 +57,48 @@ export class HUD {
       `HP: ${Math.ceil(player.health)}/${player.maxHealth}${player.shieldActive ? ' [SHIELD]' : ''}`
     );
 
+    // Base HP bar (below player HP bar)
+    if (homeBase) {
+      const baseBarY = y + barHeight + 4;
+      const baseRatio = homeBase.health / homeBase.maxHealth;
+      // Interpolate color from cyan to red based on damage
+      const r = Math.round(100 + (255 - 100) * (1 - baseRatio));
+      const g = Math.round(220 * baseRatio + 60 * (1 - baseRatio));
+      const b = Math.round(255 * baseRatio + 60 * (1 - baseRatio));
+      const baseColor = `rgb(${r}, ${g}, ${b})`;
+      this.renderBar(
+        ctx,
+        padding,
+        baseBarY,
+        barWidth,
+        barHeight,
+        baseRatio,
+        baseColor,
+        `BASE: ${Math.ceil(homeBase.health)}/${homeBase.maxHealth}`
+      );
+    }
+
+    // Offset subsequent elements when base bar is present
+    const baseBarOffset = homeBase ? barHeight + 4 : 0;
+
     // Energy counter
     ctx.fillStyle = theme.ui.textPrimary;
     ctx.shadowColor = theme.ui.textPrimary;
     ctx.shadowBlur = 5;
-    ctx.fillText(`Energy: ${Math.floor(player.energy)}`, padding, y + barHeight + 24);
+    ctx.fillText(`Energy: ${Math.floor(player.energy)}`, padding, y + barHeight + baseBarOffset + 24);
     ctx.shadowBlur = 0;
 
     // Distance from origin
     const dist = Math.floor(Math.sqrt(player.x * player.x + player.y * player.y));
     ctx.fillStyle = theme.ui.textSecondary;
-    ctx.fillText(`RANGE: ${dist}m`, padding, y + barHeight + 44);
+    ctx.fillText(`RANGE: ${dist}m`, padding, y + barHeight + baseBarOffset + 44);
 
     // Threat level
     const threat = getThreatLevel(player.x, player.y);
     ctx.fillStyle = threat.color;
     ctx.shadowColor = threat.color;
     ctx.shadowBlur = 3;
-    ctx.fillText(`THREAT: ${threat.label}`, padding, y + barHeight + 64);
+    ctx.fillText(`THREAT: ${threat.label}`, padding, y + barHeight + baseBarOffset + 64);
     ctx.shadowBlur = 0;
 
     // Coordinates
@@ -71,8 +107,38 @@ export class HUD {
     ctx.fillText(
       `POS: ${Math.floor(player.x)}, ${Math.floor(player.y)}`,
       padding,
-      y + barHeight + 82
+      y + barHeight + baseBarOffset + 82
     );
+
+    // Run timer (top center) — only shown during timed runs
+    if (runTimer >= 0) {
+      ctx.save();
+      ctx.font = 'bold 20px monospace';
+      ctx.textAlign = 'center';
+      if (runTimer === 0) {
+        // Final wave in progress — show FINAL WAVE instead of 00:00
+        const pulse = Math.sin(performance.now() / 400) * 0.5 + 0.5;
+        const alpha = 0.6 + pulse * 0.4;
+        ctx.fillStyle = `rgba(255, 200, 60, ${alpha})`;
+        ctx.shadowColor = 'rgba(255, 200, 60, 0.8)';
+        ctx.shadowBlur = 8;
+        ctx.fillText('FINAL WAVE', canvasWidth / 2, y + 20);
+      } else if (runTimer <= 60) {
+        // Pulsing red in the final 60 seconds
+        const pulse = Math.sin(performance.now() / 500) * 0.5 + 0.5; // 0..1
+        const alpha = 0.5 + pulse * 0.5; // 0.5..1.0
+        ctx.fillStyle = `rgba(255, 60, 60, ${alpha})`;
+        ctx.shadowColor = 'rgba(255, 60, 60, 0.8)';
+        ctx.shadowBlur = 6;
+        ctx.fillText(formatTime(runTimer), canvasWidth / 2, y + 20);
+      } else {
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 4;
+        ctx.fillText(formatTime(runTimer), canvasWidth / 2, y + 20);
+      }
+      ctx.restore();
+    }
 
     // Score (top right)
     ctx.font = '16px monospace';
@@ -102,6 +168,19 @@ export class HUD {
     ctx.globalAlpha = 0.5;
     ctx.fillText(`${this.fps} FPS`, padding, canvasHeight - 10);
     ctx.globalAlpha = 1;
+
+    // Defense placement hint — shown when near base with room for more defenses
+    if (defenseHint && defenseHint.show && defenseHint.defenseCount < defenseHint.maxDefenses
+        && (player.energy >= 75)) {
+      ctx.font = '13px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(170, 220, 170, 0.85)';
+      const hintY = canvasHeight - 35;
+      ctx.fillText('[T] Turret (100)  |  [R] Repair (75)', canvasWidth / 2, hintY);
+      ctx.font = '10px monospace';
+      ctx.fillStyle = 'rgba(136, 170, 136, 0.6)';
+      ctx.fillText(`Defenses: ${defenseHint.defenseCount}/${defenseHint.maxDefenses}`, canvasWidth / 2, hintY + 14);
+    }
 
     ctx.restore();
   }
