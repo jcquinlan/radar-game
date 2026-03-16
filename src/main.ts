@@ -21,6 +21,7 @@ import { AbilityEffects } from './radar/AbilityEffects';
 import { AbilityBar } from './ui/AbilityBar';
 import { KeyRemapScreen } from './ui/KeyRemapScreen';
 import { PauseMenu } from './ui/PauseMenu';
+import { HelpScreen } from './ui/HelpScreen';
 import { MotionTrail } from './radar/MotionTrail';
 import { DeathParticles } from './radar/DeathParticles';
 import { TowRopeSystem } from './systems/TowRopeSystem';
@@ -44,6 +45,7 @@ if (shaderPipeline) {
   shaderPipeline.addEffect(new CRTEffect());
 }
 const pauseMenu = new PauseMenu();
+const helpScreen = new HelpScreen();
 const levelManager = new LevelManager();
 const mainMenuScreen = new MainMenuScreen();
 const levelCompleteScreen = new LevelCompleteScreen();
@@ -238,6 +240,14 @@ function togglePause() {
   }
 }
 
+// Scroll help screen
+window.addEventListener('wheel', (e) => {
+  if (helpScreen.isVisible()) {
+    helpScreen.scroll(-e.deltaY * 0.5);
+    e.preventDefault();
+  }
+}, { passive: false });
+
 // Toggle panels (registered once, outside init)
 window.addEventListener('keydown', (e) => {
   // Only handle keys during gameplay or pause
@@ -246,8 +256,12 @@ window.addEventListener('keydown', (e) => {
   // Key remap screen captures keys when listening — skip other handlers
   if (keyRemapScreen && keyRemapScreen.isListening()) return;
 
-  // Escape toggles pause menu
+  // Escape closes help screen first, then toggles pause
   if (e.key === 'Escape') {
+    if (helpScreen.isVisible()) {
+      helpScreen.toggle();
+      return;
+    }
     togglePause();
     return;
   }
@@ -266,6 +280,10 @@ window.addEventListener('keydown', (e) => {
   }
   if ((e.key === 'k' || e.key === 'K') && gameState === 'playing') {
     keyRemapScreen.toggle();
+  }
+  if ((e.key === 'h' || e.key === 'H') && gameState === 'playing') {
+    helpScreen.toggle();
+    return;
   }
 
   // Ability keybinds — only if abilities are enabled
@@ -895,6 +913,9 @@ const loop = new GameLoop({
 
     // Key remap screen (on top of everything)
     keyRemapScreen.render(ctx, abilitySystem.abilities, canvas.width, canvas.height);
+
+    // Help screen
+    helpScreen.render(ctx, canvas.width, canvas.height);
 
     // Pause menu (on top of everything except shader)
     pauseMenu.render(ctx, canvas.width, canvas.height);
