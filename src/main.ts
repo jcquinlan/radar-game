@@ -22,7 +22,7 @@ import { AbilitySystem } from './systems/AbilitySystem';
 import { AbilityEffects } from './radar/AbilityEffects';
 import { AbilityBar } from './ui/AbilityBar';
 import { KeyRemapScreen } from './ui/KeyRemapScreen';
-import { PauseMenu } from './ui/PauseMenu';
+import { PauseMenu, ShaderSliderDef, loadAndApplyShaderSettings } from './ui/PauseMenu';
 import { HelpScreen } from './ui/HelpScreen';
 import { MotionTrail } from './radar/MotionTrail';
 import { DeathParticles } from './radar/DeathParticles';
@@ -49,13 +49,44 @@ const ctx = canvas.getContext('2d')!;
 // Shader pipeline and pause menu (persist across game restarts)
 const shaderPipeline = ShaderPipeline.create(canvas);
 let damageDistortionEffect: DamageDistortionEffect | null = null;
+let bloomEffect: BloomEffect | null = null;
+let grainEffect: GrainEffect | null = null;
 if (shaderPipeline) {
-  shaderPipeline.addEffect(new BloomEffect());
+  const bloom = new BloomEffect();
+  shaderPipeline.addEffect(bloom);
+  bloomEffect = bloom;
   const dmgEffect = new DamageDistortionEffect();
   shaderPipeline.addEffect(dmgEffect);
   damageDistortionEffect = dmgEffect;
-  shaderPipeline.addEffect(new GrainEffect());
+  const grain = new GrainEffect();
+  shaderPipeline.addEffect(grain);
+  grainEffect = grain;
 }
+
+function getShaderSliders(): ShaderSliderDef[] {
+  const sliders: ShaderSliderDef[] = [];
+  if (bloomEffect) {
+    sliders.push({
+      label: 'Bloom',
+      getValue: () => bloomEffect!.getConfig().intensity,
+      setValue: (v) => bloomEffect!.setIntensity(v),
+      min: 0, max: 1, step: 0.05,
+    });
+  }
+  if (grainEffect) {
+    sliders.push({
+      label: 'Grain',
+      getValue: () => grainEffect!.getConfig().intensity,
+      setValue: (v) => grainEffect!.setIntensity(v),
+      min: 0, max: 0.5, step: 0.01,
+    });
+  }
+  return sliders;
+}
+
+// Load persisted shader settings
+loadAndApplyShaderSettings(getShaderSliders());
+
 const pauseMenu = new PauseMenu();
 const helpScreen = new HelpScreen();
 const levelManager = new LevelManager();
@@ -388,6 +419,7 @@ function togglePause() {
       },
       isShaderEnabled: () => shaderPipeline ? shaderPipeline.enabled : false,
       getThemeName: () => getTheme().name,
+      getShaderSliders,
     });
   }
 }

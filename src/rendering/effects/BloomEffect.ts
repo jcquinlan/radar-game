@@ -81,6 +81,10 @@ export class BloomEffect implements ShaderEffect {
     return this.config;
   }
 
+  setIntensity(value: number): void {
+    this.config.intensity = Math.max(0, Math.min(1, value));
+  }
+
   init(_gl: WebGL2RenderingContext): void {
     // No additional GL resources needed
   }

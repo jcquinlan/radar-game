@@ -8,7 +8,7 @@ export interface GrainEffectConfig {
 }
 
 export const DEFAULT_GRAIN_CONFIG: GrainEffectConfig = {
-  intensity: 0.15,
+  intensity: 0.12,
   scale: 1.0,
 };
 
@@ -72,6 +72,10 @@ export class GrainEffect implements ShaderEffect {
 
   getConfig(): GrainEffectConfig {
     return this.config;
+  }
+
+  setIntensity(value: number): void {
+    this.config.intensity = Math.max(0, Math.min(1, value));
   }
 
   init(_gl: WebGL2RenderingContext): void {
