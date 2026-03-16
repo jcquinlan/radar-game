@@ -33,6 +33,8 @@ export class HUD {
     canvasHeight: number,
     runTimer: number = -1,
     homeBase?: HomeBase,
+    defenseHint?: { show: boolean; defenseCount: number; maxDefenses: number },
+    combatBotHint?: { charges: number; maxBots: number },
   ): void {
     const padding = 20;
     const barWidth = 200;
@@ -108,6 +110,17 @@ export class HUD {
       padding,
       y + barHeight + baseBarOffset + 82
     );
+
+    // Combat bot charges
+    if (combatBotHint) {
+      ctx.font = '12px monospace';
+      ctx.fillStyle = combatBotHint.charges > 0 ? '#ff8844' : theme.ui.textTertiary;
+      ctx.fillText(
+        `BOTS: ${combatBotHint.charges}/${combatBotHint.maxBots}`,
+        padding,
+        y + barHeight + baseBarOffset + 98
+      );
+    }
 
     // Run timer (top center) — only shown during timed runs
     if (runTimer >= 0) {

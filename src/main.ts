@@ -27,6 +27,7 @@ import { MotionTrail } from './radar/MotionTrail';
 import { DeathParticles } from './radar/DeathParticles';
 import { TowRopeSystem } from './systems/TowRopeSystem';
 import { OrbitBotSystem } from './systems/OrbitBotSystem';
+import { CombatBotSystem } from './systems/CombatBotSystem';
 import { createZoomState, adjustZoom, updateZoom, resetZoom, ZOOM_WHEEL_SENSITIVITY, ZOOM_KEY_STEP, ZoomState } from './systems/ZoomState';
 import { Minimap } from './ui/Minimap';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
@@ -89,6 +90,7 @@ let motionTrail: MotionTrail;
 let deathParticles: DeathParticles;
 let towRopeSystem: TowRopeSystem;
 let orbitBotSystem: OrbitBotSystem;
+let combatBotSystem: CombatBotSystem;
 let minimap: Minimap;
 let homeBase: HomeBase;
 let resolutionLevel: number;
@@ -153,6 +155,7 @@ function startRun() {
   abilitySystem.onShake = (intensity) => screenShake.trigger(intensity);
   abilityEffects = new AbilityEffects();
   orbitBotSystem = new OrbitBotSystem(player);
+  combatBotSystem = new CombatBotSystem();
   pingSystem = new PingSystem({ maxRadius: radar.getRadius() });
   upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
     resolutionLevel = lvl;
@@ -227,6 +230,7 @@ function init() {
   abilitySystem.onShake = (intensity) => screenShake.trigger(intensity);
   abilityEffects = new AbilityEffects();
   orbitBotSystem = new OrbitBotSystem(player);
+  combatBotSystem = new CombatBotSystem();
   abilityBar = new AbilityBar();
   motionTrail = new MotionTrail();
   deathParticles = new DeathParticles(200);
@@ -345,6 +349,7 @@ function cleanupCurrentGame() {
   if (upgradePanel) upgradePanel.detach(canvas);
   if (keyRemapScreen) keyRemapScreen.detach(canvas);
   if (towRopeSystem) towRopeSystem.clear();
+  if (combatBotSystem) combatBotSystem.reset();
   if (deathParticles) deathParticles.reset();
   if (gameOverScreen) gameOverScreen.hide(canvas);
   if (resultsScreen) resultsScreen.hide(canvas);
@@ -710,6 +715,39 @@ const loop = new GameLoop({
       abilityEffects.update(dt);
     }
 
+    // Combat bot deployment — click to place area defender
+    {
+      const click = input.consumeClick();
+      if (click) {
+        // Check if click is near an asteroid (60px) — don't deploy there
+        let nearAsteroid = false;
+        for (let i = 0; i < world.entities.length; i++) {
+          const e = world.entities[i];
+          if (!e.active || e.type !== 'asteroid') continue;
+          const adx = e.x - click.worldX;
+          const ady = e.y - click.worldY;
+          if (adx * adx + ady * ady < 60 * 60) {
+            nearAsteroid = true;
+            break;
+          }
+        }
+        if (!nearAsteroid) {
+          if (combatBotSystem.deployBot(click.worldX, click.worldY)) {
+            floatingText.add('BOT DEPLOYED', click.worldX, click.worldY - 15, '#ff8844');
+            screenShake.trigger(2);
+          }
+        }
+      }
+    }
+
+    // Combat bot AI — auto-attack nearby enemies
+    combatBotSystem.update(
+      dt, world.entities,
+      (text, x, y, color) => floatingText.add(text, x, y, color),
+      (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color),
+      (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color, 5),
+    );
+
     // Combat — only if enabled
     let alive = true;
     if (features?.combat !== false) {
@@ -786,6 +824,14 @@ const loop = new GameLoop({
       const ob = orbitBotSystem.bot;
       motionTrail.track('ob0', ob.x, ob.y, ob.vx, ob.vy, theme.effects.drone, dt);
       activeTrailIds.add('ob0');
+    }
+    // Combat bot projectile trails
+    for (let i = 0; i < combatBotSystem.botProjectiles.length; i++) {
+      const cbp = combatBotSystem.botProjectiles[i];
+      if (!cbp.active) continue;
+      const cbpid = `cbp${i}`;
+      motionTrail.track(cbpid, cbp.x, cbp.y, cbp.vx, cbp.vy, '#ff8844', dt);
+      activeTrailIds.add(cbpid);
     }
     motionTrail.prune(activeTrailIds);
 
@@ -1067,6 +1113,50 @@ const loop = new GameLoop({
       }
     }
 
+    // Combat bots — orange/red squares with health indicator
+    for (let i = 0; i < combatBotSystem.bots.length; i++) {
+      const bot = combatBotSystem.bots[i];
+      if (!bot.active) continue;
+      const bdx = bot.x - player.x;
+      const bdy = bot.y - player.y;
+      if (bdx * bdx + bdy * bdy > viewRadiusSq) continue;
+      const bsx = cx + bdx;
+      const bsy = cy + bdy;
+
+      // Pulsing glow based on remaining lifetime
+      const lifeFrac = bot.lifetime / bot.maxLifetime;
+      const pulseAlpha = lifeFrac > 0.25 ? 0.8 : 0.4 + Math.sin(player.survivalTime * 8) * 0.4;
+      ctx.globalAlpha = pulseAlpha;
+      ctx.fillStyle = '#ff8844';
+      ctx.fillRect(bsx - 4, bsy - 4, 8, 8);
+
+      // Health bar above bot (only if damaged)
+      if (bot.health < bot.maxHealth) {
+        const hpFrac = bot.health / bot.maxHealth;
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = '#333';
+        ctx.fillRect(bsx - 6, bsy - 9, 12, 2);
+        ctx.fillStyle = hpFrac > 0.5 ? '#ff8844' : '#ff4444';
+        ctx.fillRect(bsx - 6, bsy - 9, 12 * hpFrac, 2);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // Combat bot projectiles — small orange dots
+    for (let i = 0; i < combatBotSystem.botProjectiles.length; i++) {
+      const p = combatBotSystem.botProjectiles[i];
+      if (!p.active) continue;
+      const pdx = p.x - player.x;
+      const pdy = p.y - player.y;
+      if (pdx * pdx + pdy * pdy > viewRadiusSq) continue;
+      const psx = cx + pdx;
+      const psy = cy + pdy;
+      ctx.beginPath();
+      ctx.arc(psx, psy, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#ff8844';
+      ctx.fill();
+    }
+
     // Dropoff zones — pulsing ring markers
     for (const entity of world.entities) {
       if (!entity.active || entity.type !== 'dropoff') continue;
@@ -1342,7 +1432,9 @@ const loop = new GameLoop({
     }
 
     // HUD
-    hud.render(ctx, player, canvas.width, canvas.height, runTimer, homeBase);
+    hud.render(ctx, player, canvas.width, canvas.height, runTimer, homeBase,
+      undefined,
+      { charges: combatBotSystem.getChargesRemaining(), maxBots: combatBotSystem.maxBots });
 
     // Tutorial hints
     if (currentLevelConfig && currentLevelConfig.hints.length > 0) {
