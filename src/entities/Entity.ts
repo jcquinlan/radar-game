@@ -42,6 +42,10 @@ export interface Enemy extends Entity {
   wanderAngle: number;
   /** Time until next wander direction change */
   wanderTimer: number;
+  /** Whether this enemy is part of a final wave (not a world-spawned enemy) */
+  waveEnemy: boolean;
+  /** Whether this enemy is a wave boss (renders larger) */
+  isBoss: boolean;
 }
 
 export type AllySubtype = 'healer' | 'shield' | 'beacon';
@@ -79,11 +83,49 @@ export interface Dropoff extends Entity {
   rewardPerItem: number;
 }
 
+export interface Turret {
+  type: 'turret';
+  x: number;
+  y: number;
+  health: number;
+  maxHealth: number;
+  /** Detection/firing range in pixels */
+  range: number;
+  /** Damage per shot */
+  damage: number;
+  /** Shots per second */
+  fireRate: number;
+  /** Timestamp of last shot (seconds) */
+  lastFireTime: number;
+  active: boolean;
+  /** Current aim direction in radians (fixed for now — no AI yet) */
+  aimDirection: number;
+}
+
+export interface RepairStation {
+  type: 'repair_station';
+  x: number;
+  y: number;
+  health: number;
+  maxHealth: number;
+  /** HP healed per second to nearby entities */
+  healRate: number;
+  /** Healing range in pixels */
+  range: number;
+  active: boolean;
+}
+
+export type Defense = Turret | RepairStation;
+
 export interface HomeBase {
   x: number;
   y: number;
   /** Radius of the base boundary */
   radius: number;
+  /** Current health of the home base */
+  health: number;
+  /** Maximum health of the home base */
+  maxHealth: number;
 }
 
 export interface Projectile {
@@ -143,6 +185,8 @@ export function createEnemy(x: number, y: number, subtype?: EnemySubtype): Enemy
     ghostY: null,
     wanderAngle: Math.random() * Math.PI * 2,
     wanderTimer: 1 + Math.random() * 2,
+    waveEnemy: false,
+    isBoss: false,
   };
 }
 
@@ -198,10 +242,41 @@ export function createDropoff(x: number, y: number): Dropoff {
   };
 }
 
+export function createTurret(x: number, y: number): Turret {
+  return {
+    type: 'turret',
+    x,
+    y,
+    health: 50,
+    maxHealth: 50,
+    range: 200,
+    damage: 5,
+    fireRate: 1,
+    lastFireTime: 0,
+    active: true,
+    aimDirection: 0,
+  };
+}
+
+export function createRepairStation(x: number, y: number): RepairStation {
+  return {
+    type: 'repair_station',
+    x,
+    y,
+    health: 30,
+    maxHealth: 30,
+    healRate: 3,
+    range: 100,
+    active: true,
+  };
+}
+
 export function createHomeBase(x: number, y: number): HomeBase {
   return {
     x,
     y,
     radius: 150,
+    health: 500,
+    maxHealth: 500,
   };
 }

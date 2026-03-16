@@ -8,7 +8,9 @@ import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
 import { PingSystem } from './systems/PingSystem';
 import { CombatSystem } from './systems/CombatSystem';
-import { Ally, Enemy, Resource, Dropoff, HomeBase, createHomeBase } from './entities/Entity';
+import { Ally, Enemy, GameEntity, Resource, Dropoff, HomeBase, Defense, createHomeBase } from './entities/Entity';
+import { spawnWave } from './systems/WaveSpawner';
+import { tryPlaceDefense, TURRET_COST, REPAIR_STATION_COST } from './systems/DefensePlacement';
 import { UpgradeSystem } from './systems/UpgradeSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
@@ -33,6 +35,8 @@ import { LevelManager } from './levels/LevelManager';
 import { LevelConfig, checkAllObjectivesComplete, getObjectiveProgress } from './levels/LevelConfig';
 import { MainMenuScreen } from './ui/MainMenuScreen';
 import { LevelCompleteScreen } from './ui/LevelCompleteScreen';
+import { ResultsScreen } from './ui/ResultsScreen';
+import { calculateCurrency, calculateReducedCurrency, loadSaveData, saveSaveData, SaveData } from './systems/SaveSystem';
 
 type GameState = 'menu' | 'playing' | 'level_complete' | 'base_mode' | 'run_active' | 'final_wave' | 'results' | 'game_over' | 'paused';
 
@@ -49,7 +53,10 @@ const helpScreen = new HelpScreen();
 const levelManager = new LevelManager();
 const mainMenuScreen = new MainMenuScreen();
 const levelCompleteScreen = new LevelCompleteScreen();
+const resultsScreen = new ResultsScreen();
 let gameState: GameState = 'menu';
+/** Persistent save data loaded from localStorage */
+let saveData: SaveData = loadSaveData();
 /** Tracks the state before pausing so we can restore it on unpause */
 let previousState: GameState = 'menu';
 
@@ -77,12 +84,21 @@ let deathParticles: DeathParticles;
 let towRopeSystem: TowRopeSystem;
 let minimap: Minimap;
 let homeBase: HomeBase;
+let defenses: Defense[] = [];
+/** Maximum number of defenses the player can place (upgradeable later) */
+let maxDefenses = 3;
 let resolutionLevel: number;
 let prevHealth: number;
 let damageFlash: number;
+/** Countdown timer for timed runs (seconds). -1 means no active timer. */
+let runTimer: number = -1;
+/** Current run number (1-based). Controls wave size and difficulty scaling. */
+let runCount: number = 1;
 let currentLevelConfig: LevelConfig | null = null;
 /** Pre-allocated Set for motion trail pruning — reused every frame to avoid GC pressure */
 const activeTrailIds = new Set<string>();
+/** Pre-allocated target position object — reused every frame to avoid GC pressure */
+const waveTargetPos = { x: 0, y: 0 };
 /** Bounds for the START RUN button in base_mode (recalculated each render) */
 let startRunBounds: { x: number; y: number; width: number; height: number } | null = null;
 /** Click handler for base_mode START RUN button */
@@ -142,6 +158,7 @@ function startRun() {
   keyRemapScreen.attach(canvas, abilitySystem.abilities);
   upgradePanel.attach(canvas, upgradeSystem, player);
   world.updateSpawning(player.x, player.y);
+  runTimer = 600; // 10 minutes
   gameState = 'run_active';
 }
 
@@ -185,6 +202,7 @@ function init() {
   floatingText = new FloatingText();
   screenShake = new ScreenShake();
   homeBase = createHomeBase(0, 0);
+  defenses = [];
   resolutionLevel = 0;
   prevHealth = player.health;
   damageFlash = 0;
@@ -239,6 +257,50 @@ function init() {
   world.updateSpawning(player.x, player.y);
 }
 
+/** Show results screen after a successful run (wave survived) */
+function showRunResults() {
+  const baseHpPercent = homeBase.maxHealth > 0 ? homeBase.health / homeBase.maxHealth : 0;
+  const currency = calculateCurrency(player.salvageDeposited, player.kills, baseHpPercent);
+  saveData.currency += currency;
+  saveData.runCount++;
+  saveSaveData(saveData);
+
+  gameState = 'results';
+  towRopeSystem.clear();
+  deathParticles.reset();
+  resultsScreen.show(canvas, {
+    salvageDeposited: player.salvageDeposited,
+    enemiesKilled: player.kills,
+    baseHpPercent,
+    currencyEarned: currency,
+  }, () => {
+    cleanupCurrentGame();
+    enterBaseMode();
+  });
+}
+
+/** Show results screen after a failed run (player died or base destroyed) */
+function showRunFailed() {
+  const baseHpPercent = homeBase.maxHealth > 0 ? homeBase.health / homeBase.maxHealth : 0;
+  const currency = calculateReducedCurrency(player.salvageDeposited, player.kills, baseHpPercent);
+  saveData.currency += currency;
+  saveData.runCount++;
+  saveSaveData(saveData);
+
+  gameState = 'game_over';
+  towRopeSystem.clear();
+  deathParticles.reset();
+  resultsScreen.show(canvas, {
+    salvageDeposited: player.salvageDeposited,
+    enemiesKilled: player.kills,
+    baseHpPercent,
+    currencyEarned: currency,
+  }, () => {
+    cleanupCurrentGame();
+    enterBaseMode();
+  }, true);
+}
+
 function cleanupCurrentGame() {
   if (input) input.detach();
   if (upgradePanel) upgradePanel.detach(canvas);
@@ -246,6 +308,7 @@ function cleanupCurrentGame() {
   if (towRopeSystem) towRopeSystem.clear();
   if (deathParticles) deathParticles.reset();
   if (gameOverScreen) gameOverScreen.hide(canvas);
+  if (resultsScreen) resultsScreen.hide(canvas);
   if (levelCompleteScreen) levelCompleteScreen.hide(canvas);
   leaveBaseMode();
 }
@@ -331,12 +394,40 @@ window.addEventListener('wheel', (e) => {
 
 // Toggle panels (registered once, outside init)
 window.addEventListener('keydown', (e) => {
-  // Escape toggles pause from any active gameplay state or base_mode
+  // Escape closes help screen first, then toggles pause
   if (e.key === 'Escape') {
+    if (helpScreen.isVisible()) {
+      helpScreen.toggle();
+      return;
+    }
     if (gameState === 'paused' || isActiveGameplay(gameState) || gameState === 'base_mode') {
       togglePause();
       return;
     }
+  }
+
+  // Defense placement — T/R keys during run_active or base_mode, near home base
+  if ((gameState === 'run_active' || gameState === 'base_mode') && (e.key === 't' || e.key === 'T')) {
+    const result = tryPlaceDefense('turret', player.energy, defenses, maxDefenses, homeBase.radius, player.x, player.y);
+    if (result.success) {
+      player.energy -= result.cost;
+      defenses.push(result.defense);
+      floatingText.add('TURRET PLACED', result.defense.x, result.defense.y - 15, '#00ddff');
+    } else {
+      floatingText.add(result.reason, player.x, player.y - 15, '#ff6666');
+    }
+    return;
+  }
+  if ((gameState === 'run_active' || gameState === 'base_mode') && (e.key === 'r' || e.key === 'R')) {
+    const result = tryPlaceDefense('repair_station', player.energy, defenses, maxDefenses, homeBase.radius, player.x, player.y);
+    if (result.success) {
+      player.energy -= result.cost;
+      defenses.push(result.defense);
+      floatingText.add('REPAIR STATION PLACED', result.defense.x, result.defense.y - 15, '#00ff41');
+    } else {
+      floatingText.add(result.reason, player.x, player.y - 15, '#ff6666');
+    }
+    return;
   }
 
   // Only handle remaining keys during active gameplay or pause
@@ -360,7 +451,7 @@ window.addEventListener('keydown', (e) => {
   if ((e.key === 'k' || e.key === 'K') && isActiveGameplay(gameState)) {
     keyRemapScreen.toggle();
   }
-  if ((e.key === 'h' || e.key === 'H') && gameState === 'playing') {
+  if ((e.key === 'h' || e.key === 'H') && (isActiveGameplay(gameState) || gameState === 'base_mode')) {
     helpScreen.toggle();
     return;
   }
@@ -417,6 +508,48 @@ showMainMenu();
 const loop = new GameLoop({
   update(dt) {
     if (!isActiveGameplay(gameState)) return;
+
+    // Run timer countdown — only during timed runs
+    if (gameState === 'run_active' && runTimer >= 0) {
+      runTimer -= dt;
+      if (runTimer <= 0) {
+        runTimer = 0;
+
+        // Auto-deposit towed salvage before clearing entities
+        const towedItems = towRopeSystem.getTowedItems();
+        for (const item of towedItems) {
+          player.addEnergy(50);
+          player.score += 50;
+          player.salvageDeposited++;
+        }
+        towRopeSystem.clear();
+
+        // Teleport player to home base position
+        player.x = 0;
+        player.y = 0;
+        player.vx = 0;
+        player.vy = 0;
+
+        // Close upgrade panel if open
+        if (upgradePanel.isVisible()) {
+          upgradePanel.toggle();
+        }
+
+        // Spawn the final wave and transition to final_wave state
+        const waveEnemies = spawnWave(runCount);
+        // Clear non-wave entities from the world before adding wave enemies
+        world.entities.length = 0;
+        for (const enemy of waveEnemies) {
+          world.entities.push(enemy);
+        }
+        gameState = 'final_wave';
+
+        // Show WAVE INCOMING floating text
+        floatingText.add('WAVE INCOMING', 0, -30, '#ffff00');
+
+        return;
+      }
+    }
 
     const features = currentLevelConfig?.features;
 
@@ -514,6 +647,16 @@ const loop = new GameLoop({
         floatingText.add(`+${dropoff.rewardPerItem}E`, salvage.x, salvage.y, theme.entities.dropoff);
         screenShake.trigger(2);
       }
+      // Home base also acts as a salvage deposit point
+      const homeDeposited = towRopeSystem.checkHomeDeposit(homeBase);
+      for (const salvage of homeDeposited) {
+        const reward = TowRopeSystem.HOME_DEPOSIT_REWARD;
+        player.addEnergy(reward);
+        player.score += reward;
+        player.salvageDeposited++;
+        floatingText.add(`+${reward}E`, salvage.x, salvage.y, theme.entities.dropoff);
+        screenShake.trigger(2);
+      }
     }
 
     // Shield buff countdown
@@ -548,19 +691,47 @@ const loop = new GameLoop({
       abilityEffects.update(dt);
     }
 
+    // Turret AI — fire at nearby enemies
+    if (features?.combat !== false && defenses.length > 0) {
+      combatSystem.updateTurrets(defenses, world.entities, player.survivalTime, dt);
+    }
+
     // Combat — only if enabled
     let alive = true;
     if (features?.combat !== false) {
+      // During final_wave, enemies target the home base instead of the player
+      let targetPos: { x: number; y: number } | undefined;
+      let baseTarget: HomeBase | undefined;
+      if (gameState === 'final_wave') {
+        waveTargetPos.x = homeBase.x;
+        waveTargetPos.y = homeBase.y;
+        targetPos = waveTargetPos;
+        baseTarget = homeBase;
+      }
       alive = combatSystem.update(
         world.entities, player, dt, abilitySystem.isDashing(), 15,
         (text, x, y, color) => floatingText.add(text, x, y, color),
         (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color),
         (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color, 5),
+        targetPos,
+        baseTarget,
+        defenses.length > 0 ? defenses : undefined,
       );
     }
 
     // Death particles
     deathParticles.update(dt);
+
+    // Repair station healing — heal player when within range
+    for (let i = 0; i < defenses.length; i++) {
+      const def = defenses[i];
+      if (!def.active || def.type !== 'repair_station') continue;
+      const rdx = player.x - def.x;
+      const rdy = player.y - def.y;
+      if (rdx * rdx + rdy * rdy < def.range * def.range) {
+        player.heal(def.healRate * dt);
+      }
+    }
 
     // Motion trails — track fast-moving entities
     motionTrail.track('player', player.x, player.y, player.vx, player.vy, theme.radar.primary, dt);
@@ -581,6 +752,13 @@ const loop = new GameLoop({
         const pid = `p${i}`;
         motionTrail.track(pid, p.x, p.y, p.vx, p.vy, theme.effects.projectile, dt);
         activeTrailIds.add(pid);
+      }
+      for (let i = 0; i < combatSystem.turretProjectiles.length; i++) {
+        const tp = combatSystem.turretProjectiles[i];
+        if (!tp.active) continue;
+        const tpid = `tp${i}`;
+        motionTrail.track(tpid, tp.x, tp.y, tp.vx, tp.vy, '#00ddff', dt);
+        activeTrailIds.add(tpid);
       }
     }
     if (features?.abilities !== false) {
@@ -618,17 +796,44 @@ const loop = new GameLoop({
     }
 
     if (!alive) {
-      gameState = 'game_over';
-      towRopeSystem.clear();
-      deathParticles.reset();
-      gameOverScreen.show(canvas, player, () => {
-        cleanupCurrentGame();
-        showMainMenu();
-      });
+      if (gameState === 'run_active' || gameState === 'final_wave') {
+        showRunFailed();
+      } else {
+        gameState = 'game_over';
+        towRopeSystem.clear();
+        deathParticles.reset();
+        gameOverScreen.show(canvas, player, () => {
+          cleanupCurrentGame();
+          showMainMenu();
+        });
+      }
+      return;
     }
 
-    // Periodic cleanup
-    world.cleanup(player.x, player.y);
+    // Wave end conditions during final_wave
+    if (gameState === 'final_wave') {
+      // Base destroyed — run failed
+      if (homeBase.health <= 0) {
+        homeBase.health = 0;
+        showRunFailed();
+        return;
+      }
+
+      // All wave enemies dead — wave survived, show results
+      const waveEnemiesAlive = world.entities.some(
+        (e: GameEntity) => e.active && e.type === 'enemy' && (e as Enemy).waveEnemy
+      );
+      if (!waveEnemiesAlive) {
+        runCount++;
+        showRunResults();
+        return;
+      }
+    }
+
+    // Periodic cleanup — preserve wave enemies during final_wave
+    if (gameState !== 'final_wave') {
+      world.cleanup(player.x, player.y);
+    }
   },
   render() {
     // Main menu render
@@ -728,6 +933,56 @@ const loop = new GameLoop({
       ctx.fillStyle = '#00ff41';
       ctx.textAlign = 'center';
       ctx.fillText('START RUN', bcx, btnY + 32);
+
+      // Currency display
+      ctx.font = '16px monospace';
+      ctx.fillStyle = '#ffaa00';
+      ctx.textAlign = 'center';
+      ctx.fillText(`CURRENCY: ${saveData.currency}`, bcx, bcy + 170);
+
+      // Run count
+      if (saveData.runCount > 0) {
+        ctx.font = '12px monospace';
+        ctx.fillStyle = 'rgba(136, 170, 136, 0.6)';
+        ctx.fillText(`Runs completed: ${saveData.runCount}`, bcx, bcy + 190);
+      }
+
+      // Defense placement hint in base mode
+      if (defenses.length < maxDefenses && player.energy >= 75) {
+        ctx.font = '13px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(170, 220, 170, 0.85)';
+        const hintY = canvas.height - 35;
+        ctx.fillText('[T] Turret (100)  |  [R] Repair (75)', bcx, hintY);
+        ctx.font = '10px monospace';
+        ctx.fillStyle = 'rgba(136, 170, 136, 0.6)';
+        ctx.fillText(`Defenses: ${defenses.length}/${maxDefenses}`, bcx, hintY + 14);
+      }
+
+      // Render existing defenses in base mode
+      for (const def of defenses) {
+        if (!def.active) continue;
+        const dsx = bcx + def.x;
+        const dsy = bcy + def.y;
+        if (def.type === 'turret') {
+          ctx.fillStyle = '#00ddff';
+          ctx.fillRect(dsx - 3, dsy - 3, 6, 6);
+          ctx.beginPath();
+          ctx.moveTo(dsx, dsy);
+          ctx.lineTo(dsx + Math.cos(def.aimDirection) * 8, dsy + Math.sin(def.aimDirection) * 8);
+          ctx.strokeStyle = '#00ddff';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        } else {
+          const pulseAlpha = 0.5 + Math.sin(performance.now() / 333) * 0.3;
+          ctx.globalAlpha = pulseAlpha;
+          ctx.fillStyle = '#00ff41';
+          ctx.fillRect(dsx - 6, dsy - 1.5, 12, 3);
+          ctx.fillRect(dsx - 1.5, dsy - 6, 3, 12);
+          ctx.globalAlpha = 1;
+        }
+      }
+
       ctx.restore();
 
       // Pause menu (if paused from base_mode — shows on top)
@@ -766,7 +1021,7 @@ const loop = new GameLoop({
     // Motion trails (rendered behind blips)
     motionTrail.render(ctx, player.x, player.y, cx, cy);
 
-    // Home base — boundary ring and center marker
+    // Home base — boundary ring and center marker (tints toward red when damaged)
     {
       const hbx = homeBase.x - player.x;
       const hby = homeBase.y - player.y;
@@ -775,27 +1030,34 @@ const loop = new GameLoop({
         const hsy = cy + hby;
         const pulse = 1 + Math.sin(player.survivalTime * 1.5) * 0.05;
 
+        // Interpolate color from cyan (100,220,255) to red (255,60,60) based on damage
+        const hpRatio = homeBase.maxHealth > 0 ? homeBase.health / homeBase.maxHealth : 1;
+        const hbR = Math.round(100 + (255 - 100) * (1 - hpRatio));
+        const hbG = Math.round(220 * hpRatio + 60 * (1 - hpRatio));
+        const hbB = Math.round(255 * hpRatio + 60 * (1 - hpRatio));
+        const hbHex = `#${hbR.toString(16).padStart(2, '0')}${hbG.toString(16).padStart(2, '0')}${hbB.toString(16).padStart(2, '0')}`;
+
         ctx.save();
 
         // Outer boundary ring
         ctx.beginPath();
         ctx.arc(hsx, hsy, homeBase.radius * pulse, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(100, 220, 255, 0.25)';
+        ctx.strokeStyle = `rgba(${hbR}, ${hbG}, ${hbB}, 0.25)`;
         ctx.lineWidth = 2;
-        ctx.shadowColor = '#64dcff';
+        ctx.shadowColor = hbHex;
         ctx.shadowBlur = 10;
         ctx.stroke();
 
         // Inner glow fill
         ctx.beginPath();
         ctx.arc(hsx, hsy, homeBase.radius * pulse, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(100, 220, 255, 0.03)';
+        ctx.fillStyle = `rgba(${hbR}, ${hbG}, ${hbB}, 0.03)`;
         ctx.fill();
 
         // Inner ring (second boundary line for depth)
         ctx.beginPath();
         ctx.arc(hsx, hsy, homeBase.radius * 0.6 * pulse, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(100, 220, 255, 0.12)';
+        ctx.strokeStyle = `rgba(${hbR}, ${hbG}, ${hbB}, 0.12)`;
         ctx.lineWidth = 1;
         ctx.shadowBlur = 0;
         ctx.stroke();
@@ -812,15 +1074,48 @@ const loop = new GameLoop({
           else ctx.lineTo(hxp, hyp);
         }
         ctx.closePath();
-        ctx.fillStyle = 'rgba(100, 220, 255, 0.4)';
-        ctx.strokeStyle = 'rgba(100, 220, 255, 0.7)';
+        ctx.fillStyle = `rgba(${hbR}, ${hbG}, ${hbB}, 0.4)`;
+        ctx.strokeStyle = `rgba(${hbR}, ${hbG}, ${hbB}, 0.7)`;
         ctx.lineWidth = 1.5;
-        ctx.shadowColor = '#64dcff';
+        ctx.shadowColor = hbHex;
         ctx.shadowBlur = 8;
         ctx.fill();
         ctx.stroke();
 
         ctx.restore();
+      }
+    }
+
+    // Defense entities — turrets and repair stations
+    for (const def of defenses) {
+      if (!def.active) continue;
+      const ddx = def.x - player.x;
+      const ddy = def.y - player.y;
+      if (ddx * ddx + ddy * ddy > viewRadiusSq) continue;
+      const dsx = cx + ddx;
+      const dsy = cy + ddy;
+
+      if (def.type === 'turret') {
+        // Cyan square (6x6) with aim-direction line
+        ctx.fillStyle = '#00ddff';
+        ctx.fillRect(dsx - 3, dsy - 3, 6, 6);
+        // Aim direction line (8px long)
+        ctx.beginPath();
+        ctx.moveTo(dsx, dsy);
+        ctx.lineTo(dsx + Math.cos(def.aimDirection) * 8, dsy + Math.sin(def.aimDirection) * 8);
+        ctx.strokeStyle = '#00ddff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      } else {
+        // Repair station: green cross/plus with pulsing glow
+        const pulseAlpha = 0.5 + Math.sin(player.survivalTime * 3) * 0.3;
+        ctx.globalAlpha = pulseAlpha;
+        ctx.fillStyle = '#00ff41';
+        // Horizontal bar of cross
+        ctx.fillRect(dsx - 6, dsy - 1.5, 12, 3);
+        // Vertical bar of cross
+        ctx.fillRect(dsx - 1.5, dsy - 6, 3, 12);
+        ctx.globalAlpha = 1;
       }
     }
 
@@ -955,6 +1250,23 @@ const loop = new GameLoop({
       ctx.restore();
     }
 
+    // Render turret projectiles (cyan)
+    for (const p of combatSystem.turretProjectiles) {
+      const trx = p.x - player.x;
+      const try_ = p.y - player.y;
+      if (trx * trx + try_ * try_ > viewRadiusSq) continue;
+      const tpx = cx + trx;
+      const tpy = cy + try_;
+      ctx.save();
+      ctx.shadowColor = '#00ddff';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(tpx, tpy, 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#00ddff';
+      ctx.fill();
+      ctx.restore();
+    }
+
     // Render drones
     for (const drone of abilitySystem.drones) {
       const drx = drone.x - player.x;
@@ -1041,7 +1353,10 @@ const loop = new GameLoop({
     }
 
     // HUD
-    hud.render(ctx, player, canvas.width, canvas.height);
+    const nearBase = gameState === 'run_active'
+      && player.x * player.x + player.y * player.y < homeBase.radius * homeBase.radius;
+    hud.render(ctx, player, canvas.width, canvas.height, runTimer, homeBase,
+      { show: nearBase, defenseCount: defenses.length, maxDefenses });
 
     // Tutorial hints
     if (currentLevelConfig && currentLevelConfig.hints.length > 0) {
@@ -1085,6 +1400,9 @@ const loop = new GameLoop({
 
     // Game over overlay
     gameOverScreen.render(ctx, canvas.width, canvas.height);
+
+    // Results screen overlay (win or lose from run mode)
+    resultsScreen.render(ctx, canvas.width, canvas.height);
 
     // Level complete overlay
     levelCompleteScreen.render(ctx, canvas.width, canvas.height);

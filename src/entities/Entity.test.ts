@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createResource, createEnemy, createAlly } from './Entity';
+import { createResource, createEnemy, createAlly, createHomeBase, createTurret, createRepairStation } from './Entity';
 
 describe('Entity factories', () => {
   it('creates a resource at the given position', () => {
@@ -67,6 +67,22 @@ describe('Entity factories', () => {
     expect(['healer', 'shield', 'beacon']).toContain(a.subtype);
   });
 
+  it('creates a home base with health and maxHealth', () => {
+    const hb = createHomeBase(100, 200);
+    expect(hb.x).toBe(100);
+    expect(hb.y).toBe(200);
+    expect(hb.radius).toBe(150);
+    expect(hb.health).toBe(500);
+    expect(hb.maxHealth).toBe(500);
+  });
+
+  it('creates enemies with waveEnemy and isBoss defaulting to false', () => {
+    const e = createEnemy(50, 75, 'scout');
+    expect(e.waveEnemy).toBe(false);
+    expect(e.isBoss).toBe(false);
+  });
+
+
   it('creates enemies with ghost marker and wander fields initialized', () => {
     const e = createEnemy(50, 75, 'scout');
     expect(e.ghostX).toBeNull();
@@ -74,5 +90,45 @@ describe('Entity factories', () => {
     expect(e.wanderAngle).toBeGreaterThanOrEqual(0);
     expect(e.wanderAngle).toBeLessThan(Math.PI * 2);
     expect(e.wanderTimer).toBeGreaterThan(0);
+  });
+
+  it('creates a turret at the given position with correct defaults', () => {
+    const t = createTurret(150, 250);
+    expect(t.type).toBe('turret');
+    expect(t.x).toBe(150);
+    expect(t.y).toBe(250);
+    expect(t.health).toBe(50);
+    expect(t.maxHealth).toBe(50);
+    expect(t.range).toBe(200);
+    expect(t.damage).toBe(5);
+    expect(t.fireRate).toBe(1);
+    expect(t.lastFireTime).toBe(0);
+    expect(t.active).toBe(true);
+    expect(t.aimDirection).toBe(0);
+  });
+
+  it('creates a repair station at the given position with correct defaults', () => {
+    const rs = createRepairStation(300, 400);
+    expect(rs.type).toBe('repair_station');
+    expect(rs.x).toBe(300);
+    expect(rs.y).toBe(400);
+    expect(rs.health).toBe(30);
+    expect(rs.maxHealth).toBe(30);
+    expect(rs.healRate).toBe(3);
+    expect(rs.range).toBe(100);
+    expect(rs.active).toBe(true);
+  });
+
+  it('Defense union type discriminates turret from repair station', () => {
+    const turret = createTurret(0, 0);
+    const station = createRepairStation(0, 0);
+
+    // Type narrowing works via the type field
+    if (turret.type === 'turret') {
+      expect(turret.damage).toBe(5);
+    }
+    if (station.type === 'repair_station') {
+      expect(station.healRate).toBe(3);
+    }
   });
 });
