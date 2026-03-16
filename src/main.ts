@@ -407,8 +407,10 @@ window.addEventListener('wheel', (e) => {
     e.preventDefault();
     return;
   }
-  if (isActiveGameplay(gameState)) {
-    adjustZoom(zoom, -e.deltaY * ZOOM_WHEEL_SENSITIVITY);
+  if (isActiveGameplay(gameState) || gameState === 'base_mode') {
+    // Normalize deltaY for different deltaMode values (pixel vs line vs page)
+    const normalizedDelta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    adjustZoom(zoom, -normalizedDelta * ZOOM_WHEEL_SENSITIVITY);
     e.preventDefault();
   }
 }, { passive: false });
