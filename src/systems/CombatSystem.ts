@@ -13,6 +13,7 @@ const TURRET_PROJECTILE_LIFETIME = 3;
 export class CombatSystem {
   projectiles: Projectile[] = [];
   turretProjectiles: Projectile[] = [];
+  onShake: (intensity: number) => void = () => {};
   private gameTime = 0;
   private ramHitEnemies: Set<Enemy> = new Set();
   private wasRamActive = false;
@@ -72,6 +73,7 @@ export class CombatSystem {
         active: true,
         lifetime: TURRET_PROJECTILE_LIFETIME,
       });
+      this.onShake(4);
     }
   }
 
@@ -273,6 +275,7 @@ export class CombatSystem {
       if (pdx * pdx + pdy * pdy < 20 * 20) {
         player.takeDamage(p.damage);
         onImpact(player.x, player.y, p.x, p.y, getTheme().effects.projectile);
+        this.onShake(6);
         this.projectiles.splice(i, 1);
       }
     }
@@ -319,6 +322,7 @@ export class CombatSystem {
         }
       }
       if (hit) {
+        this.onShake(4.5);
         this.turretProjectiles.splice(i, 1);
       }
     }

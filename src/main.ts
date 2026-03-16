@@ -138,8 +138,10 @@ function startRun() {
   ambientParticles = new AmbientParticles();
   motionTrail = new MotionTrail();
   combatSystem = new CombatSystem();
+  combatSystem.onShake = (intensity) => screenShake.trigger(intensity);
   towRopeSystem = new TowRopeSystem();
   abilitySystem = new AbilitySystem(player);
+  abilitySystem.onShake = (intensity) => screenShake.trigger(intensity);
   abilityEffects = new AbilityEffects();
   pingSystem = new PingSystem({ maxRadius: radar.getRadius() });
   upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
@@ -201,6 +203,7 @@ function init() {
   gameOverScreen = new GameOverScreen();
   floatingText = new FloatingText();
   screenShake = new ScreenShake();
+  combatSystem.onShake = (intensity) => screenShake.trigger(intensity);
   homeBase = createHomeBase(0, 0);
   defenses = [];
   resolutionLevel = 0;
@@ -211,6 +214,7 @@ function init() {
     resolutionLevel = lvl;
   }, pingSystem);
   abilitySystem = new AbilitySystem(player);
+  abilitySystem.onShake = (intensity) => screenShake.trigger(intensity);
   abilityEffects = new AbilityEffects();
   abilityBar = new AbilityBar();
   motionTrail = new MotionTrail();
