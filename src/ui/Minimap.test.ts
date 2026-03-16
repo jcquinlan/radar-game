@@ -177,6 +177,81 @@ describe('Minimap', () => {
     });
   });
 
+  describe('zoom integration', () => {
+    // We test the zoom's effect on worldToMinimap indirectly:
+    // when expanded with zoom < 1, worldRadius increases, so distant entities
+    // appear closer to center (smaller offset) than without zoom.
+
+    function expandMinimap(m: Minimap): void {
+      m.expand();
+      for (let i = 0; i < 60; i++) m.update(1 / 60);
+    }
+
+    it('expanded minimap with no zoom uses default world radius', () => {
+      const m = new Minimap();
+      m.initBounds(800, 600);
+      expandMinimap(m);
+
+      const player = new Player(0, 0);
+      // Render with no zoom to set internal state
+      const ctx = { save: () => {}, restore: () => {}, fillStyle: '', fillRect: () => {}, strokeStyle: '', strokeRect: () => {}, lineWidth: 0, globalAlpha: 1, beginPath: () => {}, rect: () => {}, clip: () => {}, arc: () => {}, stroke: () => {}, fill: () => {}, moveTo: () => {}, lineTo: () => {}, font: '', textAlign: '', fillText: () => {} } as unknown as CanvasRenderingContext2D;
+      m.render(ctx, player, [], 800, 600, undefined, undefined);
+
+      const posDefault = m.worldToMinimap(1000, 0, player, 800, 600);
+      const offsetDefault = posDefault.x - posDefault.centerX;
+
+      // Render with zoom = 0.5 (zoomed out — should show wider area)
+      m.render(ctx, player, [], 800, 600, undefined, 0.5);
+      const posZoomed = m.worldToMinimap(1000, 0, player, 800, 600);
+      const offsetZoomed = posZoomed.x - posZoomed.centerX;
+
+      // Zoomed out means larger world radius, so same world distance maps to smaller screen offset
+      expect(Math.abs(offsetZoomed)).toBeLessThan(Math.abs(offsetDefault));
+    });
+
+    it('collapsed minimap is unaffected by zoom level', () => {
+      const m = new Minimap();
+      m.initBounds(800, 600);
+      const player = new Player(0, 0);
+
+      const ctx = { save: () => {}, restore: () => {}, fillStyle: '', fillRect: () => {}, strokeStyle: '', strokeRect: () => {}, lineWidth: 0, globalAlpha: 1, beginPath: () => {}, rect: () => {}, clip: () => {}, arc: () => {}, stroke: () => {}, fill: () => {}, moveTo: () => {}, lineTo: () => {}, font: '', textAlign: '', fillText: () => {} } as unknown as CanvasRenderingContext2D;
+
+      // Render collapsed with zoom = 1
+      m.render(ctx, player, [], 800, 600, undefined, 1.0);
+      const posNoZoom = m.worldToMinimap(500, 0, player, 800, 600);
+
+      // Render collapsed with zoom = 0.5
+      m.render(ctx, player, [], 800, 600, undefined, 0.5);
+      const posZoomed = m.worldToMinimap(500, 0, player, 800, 600);
+
+      // In collapsed state (animProgress = 0), lerp is entirely COLLAPSED_WORLD_RADIUS,
+      // so zoom has no effect
+      expect(posNoZoom.x).toBeCloseTo(posZoomed.x, 1);
+    });
+
+    it('expanded minimap with zoom > 1 shows tighter area', () => {
+      const m = new Minimap();
+      m.initBounds(800, 600);
+      expandMinimap(m);
+
+      const player = new Player(0, 0);
+      const ctx = { save: () => {}, restore: () => {}, fillStyle: '', fillRect: () => {}, strokeStyle: '', strokeRect: () => {}, lineWidth: 0, globalAlpha: 1, beginPath: () => {}, rect: () => {}, clip: () => {}, arc: () => {}, stroke: () => {}, fill: () => {}, moveTo: () => {}, lineTo: () => {}, font: '', textAlign: '', fillText: () => {} } as unknown as CanvasRenderingContext2D;
+
+      // Render with zoom = 1 (default)
+      m.render(ctx, player, [], 800, 600, undefined, 1.0);
+      const posDefault = m.worldToMinimap(1000, 0, player, 800, 600);
+      const offsetDefault = posDefault.x - posDefault.centerX;
+
+      // Render with zoom = 2.0 (zoomed in — should show tighter area)
+      m.render(ctx, player, [], 800, 600, undefined, 2.0);
+      const posZoomed = m.worldToMinimap(1000, 0, player, 800, 600);
+      const offsetZoomed = posZoomed.x - posZoomed.centerX;
+
+      // Zoomed in means smaller world radius, so same world distance maps to larger screen offset
+      expect(Math.abs(offsetZoomed)).toBeGreaterThan(Math.abs(offsetDefault));
+    });
+  });
+
   describe('getEntityColor', () => {
     it('returns gold for dropoff entities', () => {
       const dropoff = createDropoff(0, 0);

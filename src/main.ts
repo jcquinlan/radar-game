@@ -1496,7 +1496,7 @@ const loop = new GameLoop({
     }
 
     // Minimap (bottom left)
-    minimap.render(ctx, player, world.entities, canvas.width, canvas.height, homeBase);
+    minimap.render(ctx, player, world.entities, canvas.width, canvas.height, homeBase, zoom.current);
 
     // Objective progress
     if (currentLevelConfig && currentLevelConfig.objectives.length > 0) {

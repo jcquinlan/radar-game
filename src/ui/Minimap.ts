@@ -178,6 +178,7 @@ export class Minimap {
     canvasWidth: number,
     canvasHeight: number,
     homeBase?: HomeBase,
+    zoomLevel?: number,
   ): void {
     const t = easeInOutCubic(this._animProgress);
     const expanded = this._animProgress > 0.5;
@@ -185,7 +186,10 @@ export class Minimap {
     // Compute interpolated values
     const expandedSize = Math.min(canvasWidth, canvasHeight) * 0.8;
     const size = lerp(COLLAPSED_SIZE, expandedSize, t);
-    const worldRadius = lerp(COLLAPSED_WORLD_RADIUS, EXPANDED_WORLD_RADIUS, t);
+    // When expanded, divide world radius by zoom so zooming out shows more area on the minimap
+    const effectiveZoom = zoomLevel ?? 1;
+    const expandedRadius = EXPANDED_WORLD_RADIUS / effectiveZoom;
+    const worldRadius = lerp(COLLAPSED_WORLD_RADIUS, expandedRadius, t);
     const dotRadius = lerp(COLLAPSED_DOT_RADIUS, EXPANDED_DOT_RADIUS, t);
 
     // Position: collapsed = bottom-left, expanded = centered
