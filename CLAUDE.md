@@ -41,7 +41,7 @@ npm run lint         # (not configured — echoes a no-op)
 - **Language:** TypeScript 5.7 (strict mode, ES2022 target)
 - **Bundler:** Vite 6.2 (dev server port 3232)
 - **Tests:** Vitest 3.0 with jsdom
-- **Rendering:** Canvas 2D API + optional WebGL2 post-processing (CRT shader)
+- **Rendering:** Canvas 2D API + optional WebGL2 post-processing (bloom + damage distortion shaders)
 - **Dependencies:** Zero runtime dependencies. Only devDependencies: typescript, vite, vitest, jsdom.
 
 **Keep it zero-dep.** Do not add runtime dependencies. This game runs on Canvas 2D and math. If you think you need a library, you almost certainly don't — write the 20 lines of code instead.
@@ -100,7 +100,7 @@ The game uses a lightweight entity-systems architecture. Entities are plain data
 10. Game over overlay
 11. Key remap screen (modal overlay, toggled with K key)
 12. Pause menu (Escape key)
-13. Post-processing shader pass (CRT effect, toggleable)
+13. Post-processing shader pass (bloom glow + damage distortion, toggleable)
 
 ### Directory layout
 
@@ -124,17 +124,18 @@ src/
     World.ts                 # Chunk-based spawning via POI system, difficulty scaling, entity cleanup
     POIGenerator.ts          # POI type definitions, corridor detection, weighted selection, resource veins
   radar/
-    RadarDisplay.ts          # Radar rendering — circle, rings, ping circle, CRT scanlines
+    RadarDisplay.ts          # Radar rendering — circle, rings, ping circle, scanlines
     BlipRenderer.ts          # Entity blip rendering — colors, sizes, pulse animations, labels
     SweepEffects.ts          # Expanding flash circles on ping interactions
     AbilityEffects.ts        # Blast ring, regen glow, drone spawn flash
     AmbientParticles.ts      # Decorative floating particles inside radar
     MotionTrail.ts           # Velocity-based motion streaks behind fast-moving entities
   rendering/
-    ShaderPipeline.ts        # WebGL2 post-processing pipeline (reads Canvas 2D as texture)
-    ShaderEffect.ts          # Base class for shader effects
+    ShaderPipeline.ts        # WebGL2 multi-pass post-processing pipeline (reads Canvas 2D as texture, ping-pong FBOs)
+    ShaderEffect.ts          # ShaderEffect interface + compile/link helpers
     effects/
-      CRTEffect.ts           # CRT scanline + vignette post-processing shader
+      BloomEffect.ts         # Bloom/glow — brightness threshold + 13-tap star blur + additive composite
+      DamageDistortionEffect.ts  # On-damage chromatic aberration + barrel warp + noise (driven by damageFlash)
   ui/
     HUD.ts                   # Health bar, energy, score, kills, distance, time, threat level, coordinates
     UpgradePanel.ts          # Right-side upgrade shop (E key toggle, click to buy)
@@ -145,6 +146,31 @@ src/
     KeyRemapScreen.ts        # K key toggle — rebind ability keys and upgrades key, persists to localStorage
     PauseMenu.ts             # Escape key — pause/resume, restart, toggle shaders, open keybinds
 ```
+
+### Post-processing shader pipeline
+
+The game uses an optional WebGL2 overlay canvas for post-processing effects. The pipeline reads the completed Canvas 2D frame as a texture and applies shader effects in sequence.
+
+**Architecture:**
+- `ShaderPipeline` creates a WebGL2 canvas layered on top of the 2D canvas (`pointer-events: none`)
+- Effects implement the `ShaderEffect` interface: `init()`, `getFragmentSource()`, `setUniforms()`, `dispose()`
+- Multi-pass rendering uses ping-pong framebuffers — each effect reads the previous output, last effect renders to screen
+- The pipeline auto-sets a `uFlipY` uniform: `1.0` for the first effect (canvas texture has inverted Y vs WebGL), `0.0` for subsequent effects (FBO textures are already in WebGL coordinates)
+- If WebGL2 is unavailable, `ShaderPipeline.create()` returns `null` and the game runs without post-processing
+
+**Current effects (render order):**
+
+| Effect | File | What it does | Key config |
+|--------|------|-------------|------------|
+| Bloom | `BloomEffect.ts` | Extracts bright pixels above luminance threshold, applies 13-tap star blur, composites additively | threshold: 0.3, intensity: 0.3, radius: 3.5 |
+| Damage Distortion | `DamageDistortionEffect.ts` | Chromatic aberration + barrel warp + animated noise, scaled by `damageIntensity` (0 = passthrough) | maxAberration: 0.008, maxCurvature: 0.03, maxNoise: 0.08 |
+
+**Adding a new shader effect:**
+1. Create a new file in `src/rendering/effects/` implementing `ShaderEffect`
+2. Write a `#version 300 es` fragment shader with `uniform sampler2D uSource` and `uniform float uFlipY`
+3. Use `if (uFlipY > 0.5) uv.y = 1.0 - uv.y;` after computing UV from `gl_FragCoord`
+4. Add to the pipeline in `main.ts` via `shaderPipeline.addEffect(new MyEffect())` — order matters (first added = first rendered)
+5. The pipeline handles FBO management, texture binding, and Y-flip coordination automatically
 
 ### Key conventions
 
@@ -317,5 +343,5 @@ Commits follow the pattern: `prd-NNN: <description>` for features, `review:` / `
 - The `index.html` contains a single `<canvas id="game-canvas">` element
 - The main branch contains the full codebase
 - World chunks are 400px squares; the game loads a 5x5 grid around the player and cleans up entities beyond 2000px
-- The CRT post-processing shader is optional (WebGL2); falls back to Canvas 2D scanlines if unavailable
+- Post-processing shaders (bloom + damage distortion) require WebGL2; if unavailable, the game runs with Canvas 2D only (no post-processing)
 - The pause menu (Escape) allows toggling shaders and opening keybind remapping

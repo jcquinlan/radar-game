@@ -30,7 +30,8 @@ import { TowRopeSystem } from './systems/TowRopeSystem';
 import { OrbitBotSystem } from './systems/OrbitBotSystem';
 import { Minimap } from './ui/Minimap';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
-import { CRTEffect } from './rendering/effects/CRTEffect';
+import { BloomEffect } from './rendering/effects/BloomEffect';
+import { DamageDistortionEffect } from './rendering/effects/DamageDistortionEffect';
 import { getTheme, cycleTheme } from './themes/theme';
 import { LevelManager } from './levels/LevelManager';
 import { LevelConfig, checkAllObjectivesComplete, getObjectiveProgress } from './levels/LevelConfig';
@@ -46,8 +47,12 @@ const ctx = canvas.getContext('2d')!;
 
 // Shader pipeline and pause menu (persist across game restarts)
 const shaderPipeline = ShaderPipeline.create(canvas);
+let damageDistortionEffect: DamageDistortionEffect | null = null;
 if (shaderPipeline) {
-  shaderPipeline.addEffect(new CRTEffect());
+  shaderPipeline.addEffect(new BloomEffect());
+  const dmgEffect = new DamageDistortionEffect();
+  shaderPipeline.addEffect(dmgEffect);
+  damageDistortionEffect = dmgEffect;
 }
 const pauseMenu = new PauseMenu();
 const helpScreen = new HelpScreen();
@@ -155,8 +160,6 @@ function startRun() {
   prevHealth = player.health;
   damageFlash = 0;
 
-  // Disable Canvas 2D scanlines when shader pipeline is active
-  radar.scanlineEnabled = !shaderPipeline || !shaderPipeline.enabled;
 
   input.attach();
   keyRemapScreen.load(abilitySystem.abilities);
@@ -256,8 +259,6 @@ function init() {
 
   prevHealth = player.health;
 
-  // Disable Canvas 2D scanlines when shader pipeline is active
-  radar.scanlineEnabled = !shaderPipeline || !shaderPipeline.enabled;
 
   input.attach();
   keyRemapScreen.attach(canvas, abilitySystem.abilities);
@@ -372,7 +373,6 @@ function togglePause() {
       onToggleShaders: () => {
         if (shaderPipeline) {
           shaderPipeline.setEnabled(!shaderPipeline.enabled);
-          radar.scanlineEnabled = !shaderPipeline.enabled;
         }
       },
       onCycleTheme: () => cycleTheme(),
@@ -808,6 +808,9 @@ const loop = new GameLoop({
     screenShake.update(dt);
     if (damageFlash > 0) {
       damageFlash = Math.max(0, damageFlash - dt * 2);
+    }
+    if (damageDistortionEffect) {
+      damageDistortionEffect.setDamageIntensity(damageFlash * 2);
     }
 
     // Check level objectives

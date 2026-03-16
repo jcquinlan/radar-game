@@ -20,17 +20,29 @@ void main() {
 }
 `;
 
+interface EffectSlot {
+  effect: ShaderEffect;
+  program: WebGLProgram;
+  fragmentShader: WebGLShader;
+}
+
 export class ShaderPipeline {
   private gl: WebGL2RenderingContext;
   private glCanvas: HTMLCanvasElement;
   private sourceCanvas: HTMLCanvasElement;
-  private texture: WebGLTexture;
+  private sourceTexture: WebGLTexture;
   private vao: WebGLVertexArrayObject;
-  private program: WebGLProgram | null = null;
   private vertexShader: WebGLShader;
-  private fragmentShader: WebGLShader | null = null;
-  private effect: ShaderEffect | null = null;
+  private passthroughProgram: WebGLProgram;
+  private passthroughFragment: WebGLShader;
+  private effects: EffectSlot[] = [];
   private _enabled = true;
+
+  // Ping-pong framebuffers for multi-pass rendering
+  private fbos: WebGLFramebuffer[] = [];
+  private fboTextures: WebGLTexture[] = [];
+  private fboWidth = 0;
+  private fboHeight = 0;
 
   private constructor(gl: WebGL2RenderingContext, glCanvas: HTMLCanvasElement, sourceCanvas: HTMLCanvasElement) {
     this.gl = gl;
@@ -43,8 +55,8 @@ export class ShaderPipeline {
     // Create texture for the 2D canvas source
     const texture = gl.createTexture();
     if (!texture) throw new Error('Failed to create texture');
-    this.texture = texture;
-    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    this.sourceTexture = texture;
+    gl.bindTexture(gl.TEXTURE_2D, this.sourceTexture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -55,23 +67,9 @@ export class ShaderPipeline {
     if (!vao) throw new Error('Failed to create VAO');
     this.vao = vao;
 
-    // Build initial passthrough program
-    this.buildProgram(PASSTHROUGH_FRAGMENT);
-  }
-
-  private buildProgram(fragmentSource: string): void {
-    const { gl } = this;
-
-    // Clean up old fragment shader and program
-    if (this.fragmentShader) {
-      gl.deleteShader(this.fragmentShader);
-    }
-    if (this.program) {
-      gl.deleteProgram(this.program);
-    }
-
-    this.fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
-    this.program = createProgram(gl, this.vertexShader, this.fragmentShader);
+    // Build passthrough program
+    this.passthroughFragment = compileShader(gl, gl.FRAGMENT_SHADER, PASSTHROUGH_FRAGMENT);
+    this.passthroughProgram = createProgram(gl, this.vertexShader, this.passthroughFragment);
   }
 
   static create(sourceCanvas: HTMLCanvasElement): ShaderPipeline | null {
@@ -97,9 +95,19 @@ export class ShaderPipeline {
   }
 
   addEffect(effect: ShaderEffect): void {
-    this.effect = effect;
-    effect.init(this.gl);
-    this.buildProgram(effect.getFragmentSource());
+    const { gl } = this;
+    effect.init(gl);
+    const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, effect.getFragmentSource());
+    const program = createProgram(gl, this.vertexShader, fragmentShader);
+    this.effects.push({ effect, program, fragmentShader });
+
+    // Ensure we have enough FBOs for multi-pass (need N-1 FBOs for N effects)
+    this.ensureFBOs();
+  }
+
+  getEffect<T extends ShaderEffect>(name: string): T | null {
+    const slot = this.effects.find(s => s.effect.name === name);
+    return slot ? slot.effect as T : null;
   }
 
   get enabled(): boolean {
@@ -117,8 +125,45 @@ export class ShaderPipeline {
     this.gl.viewport(0, 0, this.glCanvas.width, this.glCanvas.height);
   }
 
+  private ensureFBOs(): void {
+    const { gl } = this;
+    const needed = Math.max(0, this.effects.length - 1);
+    const w = this.sourceCanvas.width;
+    const h = this.sourceCanvas.height;
+
+    // Rebuild if count changed or size changed
+    if (this.fbos.length === needed && this.fboWidth === w && this.fboHeight === h) return;
+
+    // Clean up old FBOs
+    for (const fbo of this.fbos) gl.deleteFramebuffer(fbo);
+    for (const tex of this.fboTextures) gl.deleteTexture(tex);
+    this.fbos = [];
+    this.fboTextures = [];
+
+    for (let i = 0; i < needed; i++) {
+      const tex = gl.createTexture()!;
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+      const fbo = gl.createFramebuffer()!;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+
+      this.fbos.push(fbo);
+      this.fboTextures.push(tex);
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.fboWidth = w;
+    this.fboHeight = h;
+  }
+
   render(time: number): void {
-    if (!this._enabled || !this.program) return;
+    if (!this._enabled) return;
 
     const { gl } = this;
     const w = this.sourceCanvas.width;
@@ -127,48 +172,92 @@ export class ShaderPipeline {
     // Sync size if needed
     if (this.glCanvas.width !== w || this.glCanvas.height !== h) {
       this.handleResize();
+      this.ensureFBOs();
     }
 
     // Upload the 2D canvas as a texture
-    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.bindTexture(gl.TEXTURE_2D, this.sourceTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.sourceCanvas);
 
-    // Draw fullscreen triangle
-    gl.useProgram(this.program);
+    gl.bindVertexArray(this.vao);
 
-    // Set source texture uniform
-    const sourceLoc = gl.getUniformLocation(this.program, 'uSource');
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.texture);
-    gl.uniform1i(sourceLoc, 0);
-
-    // Set effect-specific uniforms
-    if (this.effect) {
-      this.effect.setUniforms(gl, this.program, time, [w, h]);
+    if (this.effects.length === 0) {
+      // No effects — passthrough
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, w, h);
+      gl.useProgram(this.passthroughProgram);
+      const loc = gl.getUniformLocation(this.passthroughProgram, 'uSource');
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.sourceTexture);
+      gl.uniform1i(loc, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      return;
     }
 
-    gl.bindVertexArray(this.vao);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    // Multi-pass: each effect reads from the previous output, writes to next FBO (or screen for last)
+    let inputTexture = this.sourceTexture;
+
+    for (let i = 0; i < this.effects.length; i++) {
+      const slot = this.effects[i];
+      const isLast = i === this.effects.length - 1;
+
+      if (isLast) {
+        // Render to screen
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      } else {
+        // Render to FBO
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbos[i]);
+      }
+
+      gl.viewport(0, 0, w, h);
+      gl.useProgram(slot.program);
+
+      // Bind input texture
+      const sourceLoc = gl.getUniformLocation(slot.program, 'uSource');
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, inputTexture);
+      gl.uniform1i(sourceLoc, 0);
+
+      // Tell the shader whether to flip Y (only first effect reads the canvas texture,
+      // which has opposite Y convention to WebGL. Subsequent effects read from FBOs
+      // which are already in WebGL's coordinate system.)
+      const flipLoc = gl.getUniformLocation(slot.program, 'uFlipY');
+      if (flipLoc) {
+        gl.uniform1f(flipLoc, i === 0 ? 1.0 : 0.0);
+      }
+
+      // Set effect-specific uniforms
+      slot.effect.setUniforms(gl, slot.program, time, [w, h]);
+
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+      // Next effect reads from this FBO's texture
+      if (!isLast) {
+        inputTexture = this.fboTextures[i];
+      }
+    }
   }
 
   dispose(): void {
     const { gl } = this;
 
-    if (this.effect) {
-      this.effect.dispose(gl);
-      this.effect = null;
+    for (const slot of this.effects) {
+      slot.effect.dispose(gl);
+      gl.deleteProgram(slot.program);
+      gl.deleteShader(slot.fragmentShader);
     }
+    this.effects = [];
 
-    if (this.program) {
-      gl.deleteProgram(this.program);
-      this.program = null;
-    }
-    if (this.fragmentShader) {
-      gl.deleteShader(this.fragmentShader);
-      this.fragmentShader = null;
-    }
+    gl.deleteProgram(this.passthroughProgram);
+    gl.deleteShader(this.passthroughFragment);
+
+    for (const fbo of this.fbos) gl.deleteFramebuffer(fbo);
+    for (const tex of this.fboTextures) gl.deleteTexture(tex);
+    this.fbos = [];
+    this.fboTextures = [];
+
     gl.deleteShader(this.vertexShader);
-    gl.deleteTexture(this.texture);
+    gl.deleteTexture(this.sourceTexture);
     gl.deleteVertexArray(this.vao);
 
     // Remove GL canvas overlay
