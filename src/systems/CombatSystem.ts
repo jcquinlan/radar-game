@@ -73,7 +73,7 @@ export class CombatSystem {
         active: true,
         lifetime: TURRET_PROJECTILE_LIFETIME,
       });
-      this.onShake(3);
+      this.onShake(4);
     }
   }
 
@@ -275,7 +275,7 @@ export class CombatSystem {
       if (pdx * pdx + pdy * pdy < 20 * 20) {
         player.takeDamage(p.damage);
         onImpact(player.x, player.y, p.x, p.y, getTheme().effects.projectile);
-        this.onShake(5);
+        this.onShake(6);
         this.projectiles.splice(i, 1);
       }
     }
@@ -322,7 +322,7 @@ export class CombatSystem {
         }
       }
       if (hit) {
-        this.onShake(3.5);
+        this.onShake(4.5);
         this.turretProjectiles.splice(i, 1);
       }
     }
