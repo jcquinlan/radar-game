@@ -75,6 +75,12 @@ export interface Salvage extends Entity {
   towVy: number;
   /** Randomized rope rest length for this specific item */
   ropeLength: number;
+  /** Current hit points — destroyed when reaching 0 */
+  hp: number;
+  /** Maximum hit points */
+  maxHp: number;
+  /** Damage flash timer (seconds remaining) — renders white overlay when > 0 */
+  damageFlash: number;
 }
 
 export interface Dropoff extends Entity {
@@ -217,6 +223,9 @@ export function createAlly(x: number, y: number, subtype?: AllySubtype): Ally {
 const SALVAGE_ROPE_MIN = 25;
 const SALVAGE_ROPE_MAX = 55;
 
+/** Base HP for salvage items — survives ~3-4 enemy projectile hits */
+const SALVAGE_BASE_HP = 30;
+
 export function createSalvage(x: number, y: number): Salvage {
   return {
     x,
@@ -229,6 +238,9 @@ export function createSalvage(x: number, y: number): Salvage {
     towVx: 0,
     towVy: 0,
     ropeLength: SALVAGE_ROPE_MIN + Math.random() * (SALVAGE_ROPE_MAX - SALVAGE_ROPE_MIN),
+    hp: SALVAGE_BASE_HP,
+    maxHp: SALVAGE_BASE_HP,
+    damageFlash: 0,
   };
 }
 

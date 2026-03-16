@@ -1,4 +1,4 @@
-import { Defense, Enemy, GameEntity, HomeBase, Projectile } from '../entities/Entity';
+import { Defense, Enemy, GameEntity, HomeBase, Projectile, Salvage } from '../entities/Entity';
 import { Player } from '../entities/Player';
 import { getTheme } from '../themes/theme';
 import type { DeathCallback } from './AbilitySystem';
@@ -88,6 +88,8 @@ export class CombatSystem {
    *   of the base deal contactDamage * dt to it.
    * @param defenses - Optional defense array. When provided, enemies within 30px of an
    *   active defense deal contactDamage * dt to its health.
+   * @param salvage - Optional salvage array. When provided, enemy projectiles and contact
+   *   damage can hit salvage items. Destroyed salvage (hp<=0) is set to active=false.
    */
   update(
     entities: GameEntity[],
@@ -101,6 +103,7 @@ export class CombatSystem {
     targetPos?: { x: number; y: number },
     baseTarget?: HomeBase,
     defenses?: Defense[],
+    salvage?: Salvage[],
   ): boolean {
     this.gameTime += dt;
 
@@ -251,6 +254,27 @@ export class CombatSystem {
           }
         }
       }
+
+      // Salvage contact damage: enemies within 25px of active salvage deal contact damage
+      if (salvage && enemy.subtype !== 'ranged') {
+        for (let si = 0; si < salvage.length; si++) {
+          const s = salvage[si];
+          if (!s.active || s.hp <= 0) continue;
+          const sdx = s.x - enemy.x;
+          const sdy = s.y - enemy.y;
+          if (sdx * sdx + sdy * sdy < 25 * 25) {
+            const dmg = enemy.damage * dt;
+            s.hp -= dmg;
+            s.damageFlash = 0.15;
+            if (s.hp <= 0) {
+              s.hp = 0;
+              s.active = false;
+              onDeath(s.x, s.y, enemy.x, enemy.y, getTheme().entities.salvage);
+              addFloatingText('DESTROYED', s.x, s.y, getTheme().entities.salvage);
+            }
+          }
+        }
+      }
     }
 
     // Update projectiles
@@ -278,6 +302,36 @@ export class CombatSystem {
         onImpact(player.x, player.y, p.x, p.y, getTheme().effects.projectile);
         this.onShake(6);
         this.projectiles.splice(i, 1);
+        continue;
+      }
+
+      // Check collision with salvage (15px hit radius — salvage is smaller than player)
+      if (salvage) {
+        let hitSalvage = false;
+        for (let si = 0; si < salvage.length; si++) {
+          const s = salvage[si];
+          if (!s.active || s.hp <= 0) continue;
+          const sdx = p.x - s.x;
+          const sdy = p.y - s.y;
+          if (sdx * sdx + sdy * sdy < 15 * 15) {
+            s.hp -= p.damage;
+            s.damageFlash = 0.15;
+            addFloatingText(`-${p.damage}`, s.x, s.y, getTheme().entities.salvage);
+            onImpact(s.x, s.y, p.x, p.y, getTheme().entities.salvage);
+            this.onShake(4);
+            if (s.hp <= 0) {
+              s.hp = 0;
+              s.active = false;
+              onDeath(s.x, s.y, p.x, p.y, getTheme().entities.salvage);
+              addFloatingText('DESTROYED', s.x, s.y - 15, getTheme().entities.salvage);
+            }
+            hitSalvage = true;
+            break;
+          }
+        }
+        if (hitSalvage) {
+          this.projectiles.splice(i, 1);
+        }
       }
     }
 
@@ -310,6 +364,7 @@ export class CombatSystem {
           enemy.health -= p.damage;
           enemy.aggro = true;
           addFloatingText(`-${p.damage}`, enemy.x, enemy.y, '#00ddff');
+          onImpact(enemy.x, enemy.y, p.x, p.y, '#00ddff');
           if (enemy.health <= 0 && enemy.active) {
             enemy.active = false;
             const deathColor = enemy.subtype === 'ranged' ? getTheme().entities.enemyRanged : getTheme().entities.enemy;

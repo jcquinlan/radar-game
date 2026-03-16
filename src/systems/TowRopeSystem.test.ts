@@ -317,6 +317,44 @@ describe('TowRopeSystem', () => {
     });
   });
 
+  describe('update - destroyed salvage cleanup', () => {
+    it('removes towed salvage that has been deactivated', () => {
+      const salvage = buildSalvage(50, 0);
+      system.collect(salvage);
+      salvage.active = false;
+
+      system.update(player, 1 / 60);
+
+      expect(system.getTowedItems()).toHaveLength(0);
+      expect(salvage.towedByPlayer).toBe(false);
+    });
+
+    it('removes towed salvage with hp <= 0', () => {
+      const salvage = buildSalvage(50, 0);
+      system.collect(salvage);
+      salvage.hp = 0;
+
+      system.update(player, 1 / 60);
+
+      expect(system.getTowedItems()).toHaveLength(0);
+      expect(salvage.towedByPlayer).toBe(false);
+    });
+
+    it('remaining towed items continue working after sibling is destroyed', () => {
+      const s1 = buildSalvage(50, 0);
+      const s2 = buildSalvage(60, 0);
+      system.collect(s1);
+      system.collect(s2);
+
+      s1.active = false; // Destroyed by enemy
+
+      system.update(player, 1 / 60);
+
+      expect(system.getTowedItems()).toHaveLength(1);
+      expect(system.getTowedItems()[0].salvage).toBe(s2);
+    });
+  });
+
   describe('clear', () => {
     it('removes all towed items', () => {
       system.collect(buildSalvage(50, 50));

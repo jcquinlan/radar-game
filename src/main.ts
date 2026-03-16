@@ -106,6 +106,8 @@ let currentLevelConfig: LevelConfig | null = null;
 const activeTrailIds = new Set<string>();
 /** Pre-allocated target position object — reused every frame to avoid GC pressure */
 const waveTargetPos = { x: 0, y: 0 };
+/** Pre-allocated salvage array — reused every frame to pass active salvage to CombatSystem */
+const salvageBuffer: import('./entities/Entity').Salvage[] = [];
 /** Bounds for the START RUN button in base_mode (recalculated each render) */
 let startRunBounds: { x: number; y: number; width: number; height: number } | null = null;
 /** Click handler for base_mode START RUN button */
@@ -745,6 +747,14 @@ const loop = new GameLoop({
         targetPos = waveTargetPos;
         baseTarget = homeBase;
       }
+      // Build salvage array for combat collision (reuse pre-allocated buffer)
+      // Towed salvage remains in world.entities, so this catches all active salvage
+      salvageBuffer.length = 0;
+      for (let i = 0; i < world.entities.length; i++) {
+        const e = world.entities[i];
+        if (e.active && e.type === 'salvage') salvageBuffer.push(e as import('./entities/Entity').Salvage);
+      }
+
       alive = combatSystem.update(
         world.entities, player, dt, abilitySystem.isDashing(), 15,
         (text, x, y, color) => floatingText.add(text, x, y, color),
@@ -753,7 +763,16 @@ const loop = new GameLoop({
         targetPos,
         baseTarget,
         defenses.length > 0 ? defenses : undefined,
+        salvageBuffer.length > 0 ? salvageBuffer : undefined,
       );
+    }
+
+    // Decrement salvage damage flash timers
+    for (let i = 0; i < salvageBuffer.length; i++) {
+      const s = salvageBuffer[i];
+      if (s.damageFlash > 0) {
+        s.damageFlash = Math.max(0, s.damageFlash - dt);
+      }
     }
 
     // Death particles
@@ -1245,6 +1264,15 @@ const loop = new GameLoop({
         ctx.shadowColor = salvageColor;
         ctx.shadowBlur = 8;
         ctx.fill();
+
+        // Damage flash overlay — white flash when recently hit
+        if (item.salvage.damageFlash > 0) {
+          ctx.globalAlpha = Math.min(item.salvage.damageFlash / 0.15, 1);
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowBlur = 0;
+          ctx.fill();
+        }
+
         ctx.restore();
       }
       ctx.globalAlpha = 1;
