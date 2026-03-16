@@ -32,6 +32,7 @@ import { Minimap } from './ui/Minimap';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
 import { BloomEffect } from './rendering/effects/BloomEffect';
 import { DamageDistortionEffect } from './rendering/effects/DamageDistortionEffect';
+import { GrainEffect } from './rendering/effects/GrainEffect';
 import { getTheme, cycleTheme } from './themes/theme';
 import { LevelManager } from './levels/LevelManager';
 import { LevelConfig, checkAllObjectivesComplete, getObjectiveProgress } from './levels/LevelConfig';
@@ -53,6 +54,7 @@ if (shaderPipeline) {
   const dmgEffect = new DamageDistortionEffect();
   shaderPipeline.addEffect(dmgEffect);
   damageDistortionEffect = dmgEffect;
+  shaderPipeline.addEffect(new GrainEffect());
 }
 const pauseMenu = new PauseMenu();
 const helpScreen = new HelpScreen();
