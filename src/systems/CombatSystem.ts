@@ -1,6 +1,7 @@
 import { Enemy, GameEntity, Projectile } from '../entities/Entity';
 import { Player } from '../entities/Player';
 import { getTheme } from '../themes/theme';
+import type { DeathCallback } from './AbilitySystem';
 
 type FloatingTextCallback = (text: string, x: number, y: number, color: string) => void;
 
@@ -21,6 +22,8 @@ export class CombatSystem {
     ramActive: boolean = false,
     ramDamage: number = 15,
     addFloatingText: FloatingTextCallback = () => {},
+    onDeath: DeathCallback = () => {},
+    onImpact: DeathCallback = () => {},
   ): boolean {
     this.gameTime += dt;
 
@@ -121,6 +124,8 @@ export class CombatSystem {
           }
           if (enemy.health <= 0 && enemy.active) {
             enemy.active = false;
+            const deathColor = enemy.subtype === 'ranged' ? getTheme().entities.enemyRanged : getTheme().entities.enemy;
+            onDeath(enemy.x, enemy.y, player.x, player.y, deathColor);
             player.addEnergy(enemy.energyDrop);
             player.kills++;
             player.score += 50;
@@ -155,6 +160,7 @@ export class CombatSystem {
       const pdy = p.y - player.y;
       if (pdx * pdx + pdy * pdy < 20 * 20) {
         player.takeDamage(p.damage);
+        onImpact(player.x, player.y, p.x, p.y, getTheme().effects.projectile);
         this.projectiles.splice(i, 1);
       }
     }
