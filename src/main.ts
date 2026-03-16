@@ -8,9 +8,8 @@ import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
 import { PingSystem } from './systems/PingSystem';
 import { CombatSystem } from './systems/CombatSystem';
-import { Ally, Enemy, GameEntity, Dropoff, HomeBase, Defense, createHomeBase } from './entities/Entity';
+import { Enemy, GameEntity, Dropoff, HomeBase, createHomeBase } from './entities/Entity';
 import { spawnWave } from './systems/WaveSpawner';
-import { tryPlaceDefense, TURRET_COST, REPAIR_STATION_COST } from './systems/DefensePlacement';
 import { UpgradeSystem } from './systems/UpgradeSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
@@ -92,9 +91,6 @@ let towRopeSystem: TowRopeSystem;
 let orbitBotSystem: OrbitBotSystem;
 let minimap: Minimap;
 let homeBase: HomeBase;
-let defenses: Defense[] = [];
-/** Maximum number of defenses the player can place (upgradeable later) */
-let maxDefenses = 3;
 let resolutionLevel: number;
 let prevHealth: number;
 let damageFlash: number;
@@ -220,7 +216,6 @@ function init() {
   screenShake = new ScreenShake();
   combatSystem.onShake = (intensity) => screenShake.trigger(intensity);
   homeBase = createHomeBase(0, 0);
-  defenses = [];
   resolutionLevel = 0;
   prevHealth = player.health;
   damageFlash = 0;
@@ -456,30 +451,6 @@ window.addEventListener('keydown', (e) => {
     }
   }
 
-  // Defense placement — T/R keys during run_active or base_mode, near home base
-  if ((gameState === 'run_active' || gameState === 'base_mode') && (e.key === 't' || e.key === 'T')) {
-    const result = tryPlaceDefense('turret', player.energy, defenses, maxDefenses, homeBase.radius, player.x, player.y);
-    if (result.success) {
-      player.energy -= result.cost;
-      defenses.push(result.defense);
-      floatingText.add('TURRET PLACED', result.defense.x, result.defense.y - 15, '#00ddff');
-    } else {
-      floatingText.add(result.reason, player.x, player.y - 15, '#ff6666');
-    }
-    return;
-  }
-  if ((gameState === 'run_active' || gameState === 'base_mode') && (e.key === 'r' || e.key === 'R')) {
-    const result = tryPlaceDefense('repair_station', player.energy, defenses, maxDefenses, homeBase.radius, player.x, player.y);
-    if (result.success) {
-      player.energy -= result.cost;
-      defenses.push(result.defense);
-      floatingText.add('REPAIR STATION PLACED', result.defense.x, result.defense.y - 15, '#00ff41');
-    } else {
-      floatingText.add(result.reason, player.x, player.y - 15, '#ff6666');
-    }
-    return;
-  }
-
   // Only handle remaining keys during active gameplay or pause
   if (!isActiveGameplay(gameState) && gameState !== 'paused') return;
 
@@ -678,21 +649,7 @@ const loop = new GameLoop({
     // Feed ping state to radar for rendering
     radar.setPingState(pingSystem.getState());
 
-    // Track score and floating text from ping events
     const theme = getTheme();
-    for (const event of events) {
-      if (event.type === 'collect') {
-        player.totalEnergyCollected += event.value;
-        player.score += event.value;
-        floatingText.add(`+${event.value}E`, event.entity.x, event.entity.y, theme.events.collect);
-      }
-      if (event.type === 'heal') {
-        floatingText.add(`+${event.value}HP`, player.x, player.y - 20, theme.events.heal);
-      }
-      if (event.type === 'shield') {
-        floatingText.add('SHIELD!', player.x, player.y - 20, theme.events.shield);
-      }
-    }
 
     // Visual effects from ping interactions
     sweepEffects.addEvents(events, player.x, player.y);
@@ -729,18 +686,6 @@ const loop = new GameLoop({
     // Shield buff countdown
     player.updateShield(dt);
 
-    // Beacon passive energy generation
-    for (const entity of world.entities) {
-      if (!entity.active || entity.type !== 'ally') continue;
-      const ally = entity as Ally;
-      if (ally.subtype !== 'beacon') continue;
-      const bdx = ally.x - player.x;
-      const bdy = ally.y - player.y;
-      if (bdx * bdx + bdy * bdy < ally.beaconRange * ally.beaconRange) {
-        player.addEnergy(ally.energyPerSecond * dt);
-      }
-    }
-
     // Abilities — only if enabled
     if (features?.abilities !== false) {
       const addText = (text: string, x: number, y: number, color: string) =>
@@ -763,11 +708,6 @@ const loop = new GameLoop({
         abilityEffects.setRegenActive(hotAbility.active, hotAbility.durationRemaining);
       }
       abilityEffects.update(dt);
-    }
-
-    // Turret AI — fire at nearby enemies
-    if (features?.combat !== false && defenses.length > 0) {
-      combatSystem.updateTurrets(defenses, world.entities, player.survivalTime, dt);
     }
 
     // Combat — only if enabled
@@ -797,7 +737,6 @@ const loop = new GameLoop({
         (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color, 5),
         targetPos,
         baseTarget,
-        defenses.length > 0 ? defenses : undefined,
         salvageBuffer.length > 0 ? salvageBuffer : undefined,
       );
     }
@@ -812,17 +751,6 @@ const loop = new GameLoop({
 
     // Death particles
     deathParticles.update(dt);
-
-    // Repair station healing — heal player when within range
-    for (let i = 0; i < defenses.length; i++) {
-      const def = defenses[i];
-      if (!def.active || def.type !== 'repair_station') continue;
-      const rdx = player.x - def.x;
-      const rdy = player.y - def.y;
-      if (rdx * rdx + rdy * rdy < def.range * def.range) {
-        player.heal(def.healRate * dt);
-      }
-    }
 
     // Motion trails — track fast-moving entities
     motionTrail.track('player', player.x, player.y, player.vx, player.vy, theme.radar.primary, dt);
@@ -843,13 +771,6 @@ const loop = new GameLoop({
         const pid = `p${i}`;
         motionTrail.track(pid, p.x, p.y, p.vx, p.vy, theme.effects.projectile, dt);
         activeTrailIds.add(pid);
-      }
-      for (let i = 0; i < combatSystem.turretProjectiles.length; i++) {
-        const tp = combatSystem.turretProjectiles[i];
-        if (!tp.active) continue;
-        const tpid = `tp${i}`;
-        motionTrail.track(tpid, tp.x, tp.y, tp.vx, tp.vy, '#00ddff', dt);
-        activeTrailIds.add(tpid);
       }
     }
     if (features?.abilities !== false) {
@@ -1041,42 +962,6 @@ const loop = new GameLoop({
         ctx.fillText(`Runs completed: ${saveData.runCount}`, bcx, bcy + 190);
       }
 
-      // Defense placement hint in base mode
-      if (defenses.length < maxDefenses && player.energy >= 75) {
-        ctx.font = '13px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(170, 220, 170, 0.85)';
-        const hintY = canvas.height - 35;
-        ctx.fillText('[T] Turret (100)  |  [R] Repair (75)', bcx, hintY);
-        ctx.font = '10px monospace';
-        ctx.fillStyle = 'rgba(136, 170, 136, 0.6)';
-        ctx.fillText(`Defenses: ${defenses.length}/${maxDefenses}`, bcx, hintY + 14);
-      }
-
-      // Render existing defenses in base mode
-      for (const def of defenses) {
-        if (!def.active) continue;
-        const dsx = bcx + def.x;
-        const dsy = bcy + def.y;
-        if (def.type === 'turret') {
-          ctx.fillStyle = '#00ddff';
-          ctx.fillRect(dsx - 3, dsy - 3, 6, 6);
-          ctx.beginPath();
-          ctx.moveTo(dsx, dsy);
-          ctx.lineTo(dsx + Math.cos(def.aimDirection) * 8, dsy + Math.sin(def.aimDirection) * 8);
-          ctx.strokeStyle = '#00ddff';
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-        } else {
-          const pulseAlpha = 0.5 + Math.sin(performance.now() / 333) * 0.3;
-          ctx.globalAlpha = pulseAlpha;
-          ctx.fillStyle = '#00ff41';
-          ctx.fillRect(dsx - 6, dsy - 1.5, 12, 3);
-          ctx.fillRect(dsx - 1.5, dsy - 6, 3, 12);
-          ctx.globalAlpha = 1;
-        }
-      }
-
       ctx.restore();
 
       // Pause menu (if paused from base_mode — shows on top)
@@ -1179,39 +1064,6 @@ const loop = new GameLoop({
         ctx.stroke();
 
         ctx.restore();
-      }
-    }
-
-    // Defense entities — turrets and repair stations
-    for (const def of defenses) {
-      if (!def.active) continue;
-      const ddx = def.x - player.x;
-      const ddy = def.y - player.y;
-      if (ddx * ddx + ddy * ddy > viewRadiusSq) continue;
-      const dsx = cx + ddx;
-      const dsy = cy + ddy;
-
-      if (def.type === 'turret') {
-        // Cyan square (6x6) with aim-direction line
-        ctx.fillStyle = '#00ddff';
-        ctx.fillRect(dsx - 3, dsy - 3, 6, 6);
-        // Aim direction line (8px long)
-        ctx.beginPath();
-        ctx.moveTo(dsx, dsy);
-        ctx.lineTo(dsx + Math.cos(def.aimDirection) * 8, dsy + Math.sin(def.aimDirection) * 8);
-        ctx.strokeStyle = '#00ddff';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-      } else {
-        // Repair station: green cross/plus with pulsing glow
-        const pulseAlpha = 0.5 + Math.sin(player.survivalTime * 3) * 0.3;
-        ctx.globalAlpha = pulseAlpha;
-        ctx.fillStyle = '#00ff41';
-        // Horizontal bar of cross
-        ctx.fillRect(dsx - 6, dsy - 1.5, 12, 3);
-        // Vertical bar of cross
-        ctx.fillRect(dsx - 1.5, dsy - 6, 3, 12);
-        ctx.globalAlpha = 1;
       }
     }
 
@@ -1355,23 +1207,6 @@ const loop = new GameLoop({
       ctx.restore();
     }
 
-    // Render turret projectiles (cyan)
-    for (const p of combatSystem.turretProjectiles) {
-      const trx = p.x - player.x;
-      const try_ = p.y - player.y;
-      if (trx * trx + try_ * try_ > viewRadiusSq) continue;
-      const tpx = cx + trx;
-      const tpy = cy + try_;
-      ctx.save();
-      ctx.shadowColor = '#00ddff';
-      ctx.shadowBlur = 6;
-      ctx.beginPath();
-      ctx.arc(tpx, tpy, 2, 0, Math.PI * 2);
-      ctx.fillStyle = '#00ddff';
-      ctx.fill();
-      ctx.restore();
-    }
-
     // Render orbit bot
     {
       const ob = orbitBotSystem.bot;
@@ -1507,10 +1342,7 @@ const loop = new GameLoop({
     }
 
     // HUD
-    const nearBase = gameState === 'run_active'
-      && player.x * player.x + player.y * player.y < homeBase.radius * homeBase.radius;
-    hud.render(ctx, player, canvas.width, canvas.height, runTimer, homeBase,
-      { show: nearBase, defenseCount: defenses.length, maxDefenses });
+    hud.render(ctx, player, canvas.width, canvas.height, runTimer, homeBase);
 
     // Tutorial hints
     if (currentLevelConfig && currentLevelConfig.hints.length > 0) {

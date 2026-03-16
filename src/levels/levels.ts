@@ -16,7 +16,6 @@ export const LEVELS: LevelConfig[] = [
       maxChunks: 25,
       difficultyMultiplier: 0,
       spawnEnemies: false,
-      spawnAllies: false,
     },
     objectives: [
       { type: 'collect_energy', target: 50, label: 'Collect 50 energy' },
@@ -44,7 +43,6 @@ export const LEVELS: LevelConfig[] = [
       maxChunks: 25,
       difficultyMultiplier: 0.5,
       spawnEnemies: true,
-      spawnAllies: true,
     },
     objectives: [
       { type: 'kill_enemies', target: 5, label: 'Destroy 5 enemies' },
@@ -52,7 +50,6 @@ export const LEVELS: LevelConfig[] = [
     hints: [
       'Your radar ping reveals enemy positions.',
       'Red blips are enemies — use abilities to fight them!',
-      'Blue blips are allies — healers, shields, and beacons.',
     ],
     playerOverrides: {
       health: 80,
@@ -74,7 +71,6 @@ export const LEVELS: LevelConfig[] = [
       maxChunks: null,
       difficultyMultiplier: null,
       spawnEnemies: true,
-      spawnAllies: true,
     },
     objectives: [],
     hints: [],

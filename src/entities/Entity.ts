@@ -1,4 +1,4 @@
-export type EntityType = 'resource' | 'enemy' | 'ally' | 'salvage' | 'dropoff' | 'asteroid';
+export type EntityType = 'resource' | 'enemy' | 'salvage' | 'dropoff' | 'asteroid';
 
 export interface Entity {
   x: number;
@@ -50,21 +50,6 @@ export interface Enemy extends Entity {
   aggro: boolean;
 }
 
-export type AllySubtype = 'healer' | 'shield' | 'beacon';
-
-export interface Ally extends Entity {
-  type: 'ally';
-  subtype: AllySubtype;
-  healAmount: number;
-  cooldown: number;
-  lastHealTime: number;
-  /** Shield: damage reduction multiplier (0-1), duration in seconds */
-  shieldReduction: number;
-  shieldDuration: number;
-  /** Beacon: energy per second when player is in range */
-  energyPerSecond: number;
-  beaconRange: number;
-}
 
 export interface Salvage extends Entity {
   type: 'salvage';
@@ -111,39 +96,6 @@ export interface Asteroid extends Entity {
   miningProgress: number;
 }
 
-export interface Turret {
-  type: 'turret';
-  x: number;
-  y: number;
-  health: number;
-  maxHealth: number;
-  /** Detection/firing range in pixels */
-  range: number;
-  /** Damage per shot */
-  damage: number;
-  /** Shots per second */
-  fireRate: number;
-  /** Timestamp of last shot (seconds) */
-  lastFireTime: number;
-  active: boolean;
-  /** Current aim direction in radians (fixed for now — no AI yet) */
-  aimDirection: number;
-}
-
-export interface RepairStation {
-  type: 'repair_station';
-  x: number;
-  y: number;
-  health: number;
-  maxHealth: number;
-  /** HP healed per second to nearby entities */
-  healRate: number;
-  /** Healing range in pixels */
-  range: number;
-  active: boolean;
-}
-
-export type Defense = Turret | RepairStation;
 
 export interface HomeBase {
   x: number;
@@ -166,7 +118,7 @@ export interface Projectile {
   lifetime: number;
 }
 
-export type GameEntity = Resource | Enemy | Ally | Salvage | Dropoff | Asteroid;
+export type GameEntity = Resource | Enemy | Salvage | Dropoff | Asteroid;
 
 export function createResource(x: number, y: number): Resource {
   return {
@@ -219,25 +171,6 @@ export function createEnemy(x: number, y: number, subtype?: EnemySubtype): Enemy
   };
 }
 
-export function createAlly(x: number, y: number, subtype?: AllySubtype): Ally {
-  const st = subtype ?? (['healer', 'shield', 'beacon'][Math.floor(Math.random() * 3)] as AllySubtype);
-  return {
-    x,
-    y,
-    type: 'ally',
-    subtype: st,
-    active: true,
-    visible: true,
-    pingedThisWave: false,
-    healAmount: st === 'healer' ? 8 + Math.floor(Math.random() * 8) : 0,
-    cooldown: st === 'healer' ? 3 : st === 'shield' ? 8 : 0,
-    lastHealTime: -Infinity,
-    shieldReduction: st === 'shield' ? 0.5 : 0,
-    shieldDuration: st === 'shield' ? 5 : 0,
-    energyPerSecond: st === 'beacon' ? 2 : 0,
-    beaconRange: st === 'beacon' ? 150 : 0,
-  };
-}
 
 /** Min/max rope length for salvage items (randomized per item for visual spread) */
 const SALVAGE_ROPE_MIN = 25;
@@ -312,34 +245,6 @@ export function createAsteroid(x: number, y: number, size?: AsteroidSize): Aster
   };
 }
 
-export function createTurret(x: number, y: number): Turret {
-  return {
-    type: 'turret',
-    x,
-    y,
-    health: 50,
-    maxHealth: 50,
-    range: 200,
-    damage: 5,
-    fireRate: 1,
-    lastFireTime: 0,
-    active: true,
-    aimDirection: 0,
-  };
-}
-
-export function createRepairStation(x: number, y: number): RepairStation {
-  return {
-    type: 'repair_station',
-    x,
-    y,
-    health: 30,
-    maxHealth: 30,
-    healRate: 3,
-    range: 100,
-    active: true,
-  };
-}
 
 export function createHomeBase(x: number, y: number): HomeBase {
   return {

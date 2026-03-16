@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { PingSystem } from './PingSystem';
 import { Player } from '../entities/Player';
-import { createResource, createEnemy, createAlly, createAsteroid } from '../entities/Entity';
+import { createEnemy, createAsteroid } from '../entities/Entity';
 
 describe('PingSystem', () => {
   let ping: PingSystem;
@@ -17,20 +17,6 @@ describe('PingSystem', () => {
     ping.update([], player, 0.016);
     expect(ping.getState().active).toBe(true);
     expect(ping.getState().radius).toBeGreaterThan(0);
-  });
-
-  it('collects a resource when the ping reaches it', () => {
-    const resource = createResource(50, 0);
-    resource.energyValue = 15;
-
-    // First update fires ping, expand enough to reach 50px
-    // speed=600, dt=0.1 => radius = 60
-    const events = ping.update([resource], player, 0.1);
-    expect(events).toHaveLength(1);
-    expect(events[0].type).toBe('collect');
-    expect(events[0].value).toBe(15);
-    expect(player.energy).toBe(15);
-    expect(resource.active).toBe(false);
   });
 
   it('does not damage enemies when the ping reaches them', () => {
@@ -83,65 +69,26 @@ describe('PingSystem', () => {
   });
 
   it('does not interact with the same entity twice per ping wave', () => {
-    const resource = createResource(50, 0);
-    resource.energyValue = 10;
+    const enemy = createEnemy(50, 0);
 
-    ping.update([resource], player, 0.1);
-    expect(resource.active).toBe(false);
+    // First reveal
+    ping.update([enemy], player, 0.1);
+    expect(enemy.visible).toBe(true);
 
-    // Create another resource that's already pinged
-    const resource2 = createResource(50, 0);
-    resource2.pingedThisWave = true;
-    const events = ping.update([resource2], player, 0.1);
-    expect(events).toHaveLength(0);
+    // Create another enemy that's already pinged
+    const enemy2 = createEnemy(50, 0);
+    enemy2.pingedThisWave = true;
+    // Should stay invisible since it was already pinged
+    ping.update([enemy2], player, 0.1);
+    expect(enemy2.visible).toBe(false);
   });
 
   it('ignores entities outside max radius', () => {
-    const resource = createResource(500, 0);
-    resource.energyValue = 10;
+    const enemy = createEnemy(500, 0);
 
-    const events = ping.update([resource], player, 0.1);
+    const events = ping.update([enemy], player, 0.1);
     expect(events).toHaveLength(0);
-    expect(player.energy).toBe(0);
-  });
-
-  it('heals the player when ping reaches a healer ally', () => {
-    player.takeDamage(30);
-    const ally = createAlly(50, 0, 'healer');
-    ally.healAmount = 10;
-
-    const events = ping.update([ally], player, 0.1);
-    expect(events).toHaveLength(1);
-    expect(events[0].type).toBe('heal');
-    expect(player.health).toBe(80);
-  });
-
-  it('applies shield when ping reaches a shield ally', () => {
-    const ally = createAlly(50, 0, 'shield');
-
-    const events = ping.update([ally], player, 0.1);
-    expect(events).toHaveLength(1);
-    expect(events[0].type).toBe('shield');
-    expect(player.shieldActive).toBe(true);
-  });
-
-  it('respects ally heal cooldown', () => {
-    player.takeDamage(50);
-    const ally = createAlly(50, 0, 'healer');
-    ally.healAmount = 10;
-    ally.cooldown = 3;
-
-    // First heal works
-    ping.update([ally], player, 0.1);
-    expect(player.health).toBe(60);
-
-    // Reset flag manually to simulate next wave
-    ally.pingedThisWave = false;
-
-    // Second heal too soon
-    const events = ping.update([ally], player, 0.1);
-    expect(events).toHaveLength(0);
-    expect(player.health).toBe(60);
+    expect(enemy.visible).toBe(false);
   });
 
   it('ping decelerates over time', () => {
@@ -169,21 +116,6 @@ describe('PingSystem', () => {
     const alpha2 = ping.getState().alpha;
 
     expect(alpha2).toBeLessThan(alpha1);
-  });
-
-  it('resources and allies remain visible (not affected by ping visibility)', () => {
-    const resource = createResource(50, 0);
-    const ally = createAlly(80, 0, 'healer');
-
-    expect(resource.visible).toBe(true);
-    expect(ally.visible).toBe(true);
-
-    // Fire ping and let it pass
-    ping.update([resource, ally], player, 0.5);
-
-    // Resources and allies visibility is not toggled off by new pings
-    // (only enemies get hidden)
-    expect(ally.visible).toBe(true);
   });
 
   it('does not kill enemies or drop energy via ping', () => {

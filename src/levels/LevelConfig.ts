@@ -26,8 +26,6 @@ export interface LevelConfig {
     difficultyMultiplier: number | null;
     /** Whether enemies spawn */
     spawnEnemies: boolean;
-    /** Whether allies spawn */
-    spawnAllies: boolean;
   };
 
   /** Objectives to complete this level (empty = endless/no completion) */

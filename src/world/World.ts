@@ -84,20 +84,18 @@ export class World {
         // Safe zone: no enemies in the inner 3x3 chunks around the player
         const isNearPlayer = Math.abs(dx) <= 1 && Math.abs(dy) <= 1;
 
-        // Skip enemy/ally spawning based on level config
+        // Skip enemy spawning based on level config
         const spawnEnemies = this.levelConfig?.world.spawnEnemies ?? true;
-        const spawnAllies = this.levelConfig?.world.spawnAllies ?? true;
 
         // Try to place a POI in this chunk
-        const poi = (isNearPlayer || (!spawnEnemies && !spawnAllies)) ? null : selectPOI(chunkCenterX, chunkCenterY);
+        const poi = (isNearPlayer || !spawnEnemies) ? null : selectPOI(chunkCenterX, chunkCenterY);
 
         if (poi) {
           // POI chunk — use structured spawning
           const poiEntities = poi.spawn(chunkCenterX, chunkCenterY, difficulty);
-          // Filter out enemies/allies if level config disables them
+          // Filter out enemies if level config disables them
           const filtered = poiEntities.filter(e => {
             if (e.type === 'enemy' && !spawnEnemies) return false;
-            if (e.type === 'ally' && !spawnAllies) return false;
             return true;
           });
           this.entities.push(...filtered);

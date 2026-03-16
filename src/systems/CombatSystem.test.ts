@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CombatSystem } from './CombatSystem';
 import { Player } from '../entities/Player';
-import { createEnemy, createHomeBase, createTurret, createRepairStation, createSalvage, Defense } from '../entities/Entity';
+import { createEnemy, createHomeBase, createSalvage } from '../entities/Entity';
 
 describe('CombatSystem', () => {
   let combat: CombatSystem;
@@ -272,24 +272,6 @@ describe('CombatSystem', () => {
       expect(enemy.aggro).toBe(true);
     });
 
-    it('turret projectile sets aggro on hit enemy', () => {
-      const enemy = createEnemy(100, 0, 'scout');
-      enemy.health = 50;
-      expect(enemy.aggro).toBe(false);
-
-      combat.turretProjectiles.push({
-        x: 100, y: 0,
-        vx: 0, vy: 0,
-        damage: 5,
-        active: true,
-        lifetime: 3,
-      });
-
-      combat.update([enemy], player, 0.016);
-
-      expect(enemy.aggro).toBe(true);
-    });
-
     it('normal chase range behavior still works for non-aggroed enemies', () => {
       const enemy = createEnemy(100, 0, 'scout');
       enemy.chaseRange = 200;
@@ -389,278 +371,6 @@ describe('CombatSystem', () => {
     });
   });
 
-  describe('turret AI', () => {
-    it('turret fires projectile at nearest enemy within range', () => {
-      const turret = createTurret(0, 0);
-      turret.lastFireTime = -10; // ensure cooldown has elapsed
-      const enemy = createEnemy(100, 0, 'scout');
-      enemy.active = true;
-
-      combat.updateTurrets([turret], [enemy], 1, 0.1);
-
-      expect(combat.turretProjectiles.length).toBe(1);
-      expect(combat.turretProjectiles[0].vx).toBeGreaterThan(0); // aimed toward enemy at x=100
-    });
-
-    it('turret does not fire when no enemies in range', () => {
-      const turret = createTurret(0, 0);
-      turret.range = 200;
-      const enemy = createEnemy(500, 0, 'scout');
-
-      combat.updateTurrets([turret], [enemy], 1, 0.1);
-
-      expect(combat.turretProjectiles.length).toBe(0);
-    });
-
-    it('turret respects fire rate cooldown', () => {
-      const turret = createTurret(0, 0);
-      turret.fireRate = 1; // 1 shot per second
-      turret.lastFireTime = 0.5;
-      const enemy = createEnemy(100, 0, 'scout');
-
-      // gameTime=0.8, lastFireTime=0.5 — only 0.3s elapsed, need 1s
-      combat.updateTurrets([turret], [enemy], 0.8, 0.1);
-
-      expect(combat.turretProjectiles.length).toBe(0);
-    });
-
-    it('turret fires when cooldown has elapsed', () => {
-      const turret = createTurret(0, 0);
-      turret.fireRate = 1;
-      turret.lastFireTime = 0;
-      const enemy = createEnemy(100, 0, 'scout');
-
-      // gameTime=1.5, lastFireTime=0 — 1.5s elapsed, need 1s
-      combat.updateTurrets([turret], [enemy], 1.5, 0.1);
-
-      expect(combat.turretProjectiles.length).toBe(1);
-      expect(turret.lastFireTime).toBe(1.5);
-    });
-
-    it('inactive turret does not fire', () => {
-      const turret = createTurret(0, 0);
-      turret.active = false;
-      turret.lastFireTime = -10;
-      const enemy = createEnemy(100, 0, 'scout');
-
-      combat.updateTurrets([turret], [enemy], 1, 0.1);
-
-      expect(combat.turretProjectiles.length).toBe(0);
-    });
-
-    it('turret targets nearest enemy when multiple in range', () => {
-      const turret = createTurret(0, 0);
-      turret.lastFireTime = -10;
-      const farEnemy = createEnemy(150, 0, 'scout');
-      const nearEnemy = createEnemy(50, 0, 'scout');
-
-      combat.updateTurrets([turret], [farEnemy, nearEnemy], 1, 0.1);
-
-      expect(combat.turretProjectiles.length).toBe(1);
-      // Projectile should be aimed at the nearer enemy
-      expect(combat.turretProjectiles[0].damage).toBe(turret.damage);
-    });
-
-    it('turret updates aimDirection toward target', () => {
-      const turret = createTurret(0, 0);
-      turret.lastFireTime = -10;
-      const enemy = createEnemy(0, 100, 'scout'); // directly below
-
-      combat.updateTurrets([turret], [enemy], 1, 0.1);
-
-      // aimDirection should be ~PI/2 (pointing down/toward y=100)
-      expect(turret.aimDirection).toBeCloseTo(Math.PI / 2, 1);
-    });
-
-    it('turret projectiles have correct speed and damage', () => {
-      const turret = createTurret(0, 0);
-      turret.lastFireTime = -10;
-      turret.damage = 7;
-      const enemy = createEnemy(100, 0, 'scout');
-
-      combat.updateTurrets([turret], [enemy], 1, 0.1);
-
-      const proj = combat.turretProjectiles[0];
-      expect(proj.damage).toBe(7);
-      // Speed should be ~150 px/s
-      const speed = Math.sqrt(proj.vx * proj.vx + proj.vy * proj.vy);
-      expect(speed).toBeCloseTo(150, 0);
-    });
-
-    it('turret ignores inactive enemies', () => {
-      const turret = createTurret(0, 0);
-      turret.lastFireTime = -10;
-      const enemy = createEnemy(100, 0, 'scout');
-      enemy.active = false;
-
-      combat.updateTurrets([turret], [enemy], 1, 0.1);
-
-      expect(combat.turretProjectiles.length).toBe(0);
-    });
-  });
-
-  describe('turret projectile vs enemy collision', () => {
-    it('turret projectile damages enemy on contact', () => {
-      const enemy = createEnemy(100, 0, 'scout');
-      enemy.health = 15;
-      // Place turret projectile right next to enemy
-      combat.turretProjectiles.push({
-        x: 100, y: 0,
-        vx: 0, vy: 0,
-        damage: 5,
-        active: true,
-        lifetime: 3,
-      });
-
-      combat.update([enemy], player, 0.016);
-
-      expect(enemy.health).toBe(10); // 15 - 5
-      expect(combat.turretProjectiles.length).toBe(0); // consumed
-    });
-
-    it('turret projectile kills enemy and awards score', () => {
-      const enemy = createEnemy(100, 0, 'scout');
-      enemy.health = 3;
-      enemy.energyDrop = 10;
-      combat.turretProjectiles.push({
-        x: 100, y: 0,
-        vx: 0, vy: 0,
-        damage: 5,
-        active: true,
-        lifetime: 3,
-      });
-
-      combat.update([enemy], player, 0.016);
-
-      expect(enemy.active).toBe(false);
-      expect(player.kills).toBe(1);
-      expect(player.score).toBe(50);
-      expect(player.energy).toBe(10);
-    });
-
-    it('turret projectiles expire after lifetime', () => {
-      combat.turretProjectiles.push({
-        x: 500, y: 500,
-        vx: 10, vy: 0,
-        damage: 5,
-        active: true,
-        lifetime: 0.1,
-      });
-
-      combat.update([], player, 0.2);
-
-      expect(combat.turretProjectiles.length).toBe(0);
-    });
-
-    it('turret projectile triggers impact particles on enemy hit', () => {
-      const onImpact = vi.fn();
-      const enemy = createEnemy(100, 0, 'scout');
-      enemy.health = 50;
-      combat.turretProjectiles.push({
-        x: 100, y: 0, vx: 0, vy: 0,
-        damage: 5, active: true, lifetime: 3,
-      });
-
-      combat.update([enemy], player, 0.016, false, 15, () => {}, () => {}, onImpact);
-
-      expect(onImpact).toHaveBeenCalledWith(
-        expect.any(Number), expect.any(Number),  // enemy position (may have moved)
-        expect.any(Number), expect.any(Number),  // projectile position
-        '#00ddff'
-      );
-    });
-
-    it('turret projectiles do not damage the player', () => {
-      combat.turretProjectiles.push({
-        x: 5, y: 0,
-        vx: -100, vy: 0,
-        damage: 15,
-        active: true,
-        lifetime: 3,
-      });
-
-      combat.update([], player, 0.1);
-
-      expect(player.health).toBe(player.maxHealth);
-    });
-  });
-
-  describe('enemy damage to defenses', () => {
-    it('enemy within 30px damages defense health', () => {
-      const turret = createTurret(100, 0);
-      turret.health = 50;
-      const enemy = createEnemy(110, 0, 'scout');
-      enemy.damage = 10;
-      const defenses: Defense[] = [turret];
-
-      combat.update([enemy], player, 1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, defenses);
-
-      expect(turret.health).toBeLessThan(50);
-    });
-
-    it('enemy outside 30px does not damage defense', () => {
-      const turret = createTurret(100, 0);
-      const enemy = createEnemy(200, 0, 'scout');
-      enemy.damage = 10;
-      const defenses: Defense[] = [turret];
-
-      combat.update([enemy], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, defenses);
-
-      expect(turret.health).toBe(50);
-    });
-
-    it('defense becomes inactive when health reaches 0', () => {
-      const turret = createTurret(100, 0);
-      turret.health = 5;
-      const enemy = createEnemy(105, 0, 'brute');
-      enemy.damage = 20;
-      const defenses: Defense[] = [turret];
-
-      combat.update([enemy], player, 1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, defenses);
-
-      expect(turret.active).toBe(false);
-      expect(turret.health).toBeLessThanOrEqual(0);
-    });
-
-    it('inactive defenses are not damaged further', () => {
-      const turret = createTurret(100, 0);
-      turret.active = false;
-      turret.health = 0;
-      const enemy = createEnemy(105, 0, 'brute');
-      enemy.damage = 20;
-      const defenses: Defense[] = [turret];
-
-      combat.update([enemy], player, 1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, defenses);
-
-      expect(turret.health).toBe(0); // not further reduced
-    });
-
-    it('repair stations can be damaged by enemies', () => {
-      const station = createRepairStation(100, 0);
-      station.health = 30;
-      const enemy = createEnemy(105, 0, 'scout');
-      enemy.damage = 6;
-      const defenses: Defense[] = [station];
-
-      combat.update([enemy], player, 1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, defenses);
-
-      expect(station.health).toBeLessThan(30);
-    });
-
-    it('ranged enemies also damage defenses on contact', () => {
-      const turret = createTurret(100, 0);
-      turret.health = 50;
-      const enemy = createEnemy(105, 0, 'ranged');
-      // ranged enemies have damage=0 normally, but they still have a damage field
-      enemy.damage = 5;
-      const defenses: Defense[] = [turret];
-
-      combat.update([enemy], player, 1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, defenses);
-
-      expect(turret.health).toBeLessThan(50);
-    });
-  });
-
   describe('camera shake on projectile events', () => {
     it('triggers shake when enemy projectile hits the player', () => {
       const onShake = vi.fn();
@@ -676,38 +386,6 @@ describe('CombatSystem', () => {
       combat.update([], player, 0.1);
 
       expect(onShake).toHaveBeenCalledWith(6);
-    });
-
-    it('triggers shake when turret projectile hits an enemy', () => {
-      const onShake = vi.fn();
-      combat.onShake = onShake;
-
-      const enemy = createEnemy(100, 0, 'scout');
-      enemy.health = 50;
-      combat.turretProjectiles.push({
-        x: 100, y: 0,
-        vx: 0, vy: 0,
-        damage: 5,
-        active: true,
-        lifetime: 3,
-      });
-
-      combat.update([enemy], player, 0.016);
-
-      expect(onShake).toHaveBeenCalledWith(4.5);
-    });
-
-    it('triggers shake when turret fires a projectile', () => {
-      const onShake = vi.fn();
-      combat.onShake = onShake;
-
-      const turret = createTurret(0, 0);
-      turret.lastFireTime = -10;
-      const enemy = createEnemy(100, 0, 'scout');
-
-      combat.updateTurrets([turret], [enemy], 1, 0.1);
-
-      expect(onShake).toHaveBeenCalledWith(4);
     });
 
     it('does not trigger shake when no collisions occur', () => {
@@ -732,7 +410,7 @@ describe('CombatSystem', () => {
         lifetime: 3,
       });
 
-      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, [salvage]);
 
       expect(salvage.hp).toBe(22); // 30 - 8
       expect(combat.projectiles).toHaveLength(0); // projectile consumed
@@ -745,7 +423,7 @@ describe('CombatSystem', () => {
         damage: 8, active: true, lifetime: 3,
       });
 
-      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, [salvage]);
 
       expect(salvage.damageFlash).toBe(0.15);
     });
@@ -757,7 +435,7 @@ describe('CombatSystem', () => {
         damage: 8, active: true, lifetime: 3,
       });
 
-      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, [salvage]);
 
       // Player should take damage, salvage should not
       expect(player.health).toBe(92); // 100 - 8
@@ -771,7 +449,7 @@ describe('CombatSystem', () => {
         damage: 8, active: true, lifetime: 3,
       });
 
-      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, [salvage]);
 
       expect(salvage.hp).toBe(30);
       expect(combat.projectiles).toHaveLength(1);
@@ -785,7 +463,7 @@ describe('CombatSystem', () => {
         damage: 8, active: true, lifetime: 3,
       });
 
-      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, [salvage]);
 
       expect(salvage.hp).toBe(0);
       expect(salvage.active).toBe(false);
@@ -800,7 +478,7 @@ describe('CombatSystem', () => {
         damage: 8, active: true, lifetime: 3,
       });
 
-      combat.update([], player, 0.1, false, 15, () => {}, onDeath, () => {}, undefined, undefined, undefined, [salvage]);
+      combat.update([], player, 0.1, false, 15, () => {}, onDeath, () => {}, undefined, undefined, [salvage]);
 
       expect(onDeath).toHaveBeenCalled();
     });
@@ -813,7 +491,7 @@ describe('CombatSystem', () => {
         damage: 8, active: true, lifetime: 3,
       });
 
-      combat.update([], player, 0.1, false, 15, addFloatingText, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+      combat.update([], player, 0.1, false, 15, addFloatingText, () => {}, () => {}, undefined, undefined, [salvage]);
 
       expect(addFloatingText).toHaveBeenCalledWith('-8', 100, 0, expect.any(String));
     });
@@ -827,7 +505,7 @@ describe('CombatSystem', () => {
         damage: 8, active: true, lifetime: 3,
       });
 
-      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, [salvage]);
 
       expect(onShake).toHaveBeenCalledWith(4);
     });
@@ -840,7 +518,7 @@ describe('CombatSystem', () => {
         damage: 8, active: true, lifetime: 3,
       });
 
-      combat.update([], player, 0.1, false, 15, () => {}, () => {}, onImpact, undefined, undefined, undefined, [salvage]);
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, onImpact, undefined, undefined, [salvage]);
 
       expect(onImpact).toHaveBeenCalledWith(100, 0, 100, 0, expect.any(String));
     });
@@ -853,7 +531,7 @@ describe('CombatSystem', () => {
         damage: 8, active: true, lifetime: 3,
       });
 
-      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, [salvage]);
 
       expect(salvage.hp).toBe(30);
       expect(combat.projectiles).toHaveLength(1);
@@ -869,7 +547,7 @@ describe('CombatSystem', () => {
         damage: 8, active: true, lifetime: 3,
       });
 
-      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [s1, s2]);
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, [s1, s2]);
 
       // Only one should be damaged
       const totalDamage = (30 - s1.hp) + (30 - s2.hp);
@@ -885,7 +563,7 @@ describe('CombatSystem', () => {
         damage: 8, active: true, lifetime: 3,
       });
 
-      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, [salvage]);
 
       // Projectile should pass through
       expect(combat.projectiles).toHaveLength(1);
@@ -896,7 +574,7 @@ describe('CombatSystem', () => {
       enemy.damage = 10;
       const salvage = createSalvage(500, 0);
 
-      combat.update([enemy], player, 0.5, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+      combat.update([enemy], player, 0.5, false, 15, () => {}, () => {}, () => {}, undefined, undefined, [salvage]);
 
       // damage = 10 * 0.5 = 5
       expect(salvage.hp).toBe(25);
@@ -908,7 +586,7 @@ describe('CombatSystem', () => {
       const enemy = createEnemy(505, 0, 'scout');
       const salvage = createSalvage(500, 0);
 
-      combat.update([enemy], player, 1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+      combat.update([enemy], player, 1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, [salvage]);
 
       expect(salvage.hp).toBeLessThan(30);
     });
@@ -917,7 +595,7 @@ describe('CombatSystem', () => {
       const enemy = createEnemy(502, 0, 'ranged');
       const salvage = createSalvage(500, 0);
 
-      combat.update([enemy], player, 1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+      combat.update([enemy], player, 1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, [salvage]);
 
       expect(salvage.hp).toBe(30);
     });
@@ -928,7 +606,7 @@ describe('CombatSystem', () => {
       const salvage = createSalvage(500, 0);
       salvage.hp = 5;
 
-      combat.update([enemy], player, 1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+      combat.update([enemy], player, 1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, [salvage]);
 
       expect(salvage.active).toBe(false);
       expect(salvage.hp).toBe(0);
@@ -938,7 +616,7 @@ describe('CombatSystem', () => {
       const enemy = createEnemy(530, 0, 'scout');
       const salvage = createSalvage(500, 0);
 
-      combat.update([enemy], player, 0.016, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+      combat.update([enemy], player, 0.016, false, 15, () => {}, () => {}, () => {}, undefined, undefined, [salvage]);
 
       expect(salvage.hp).toBe(30);
     });
@@ -947,15 +625,13 @@ describe('CombatSystem', () => {
       const enemy = createEnemy(5, 0, 'scout');
       const salvage = createSalvage(500, 0);
 
-      combat.update([enemy], player, 1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+      combat.update([enemy], player, 1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, [salvage]);
 
       expect(player.health).toBeLessThan(player.maxHealth);
     });
   });
 
-  describe('repair station healing', () => {
-    // Note: repair station healing is handled in main.ts, not CombatSystem.
-    // These tests verify the Player.heal() method works correctly for this use case.
+  describe('player heal', () => {
     it('player heal method heals by the given amount', () => {
       player.takeDamage(20);
       expect(player.health).toBe(80);
