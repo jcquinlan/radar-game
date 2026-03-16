@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { PingSystem } from './PingSystem';
 import { Player } from '../entities/Player';
-import { createResource, createEnemy, createAlly } from '../entities/Entity';
+import { createResource, createEnemy, createAlly, createAsteroid } from '../entities/Entity';
 
 describe('PingSystem', () => {
   let ping: PingSystem;
@@ -40,6 +40,17 @@ describe('PingSystem', () => {
     const events = ping.update([enemy], player, 0.1);
     expect(events).toHaveLength(0);
     expect(enemy.health).toBe(50);
+  });
+
+  it('does not collect asteroids when the ping reaches them', () => {
+    const asteroid = createAsteroid(50, 0, 'medium');
+    const initialEnergy = player.energy;
+
+    const events = ping.update([asteroid], player, 0.1);
+    expect(events).toHaveLength(0);
+    expect(asteroid.active).toBe(true);
+    expect(asteroid.hp).toBe(40); // unchanged
+    expect(player.energy).toBe(initialEnergy);
   });
 
   it('reveals enemies when the ping reaches them', () => {

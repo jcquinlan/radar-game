@@ -8,7 +8,7 @@ import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
 import { PingSystem } from './systems/PingSystem';
 import { CombatSystem } from './systems/CombatSystem';
-import { Ally, Enemy, GameEntity, Resource, Dropoff, HomeBase, Defense, createHomeBase } from './entities/Entity';
+import { Ally, Enemy, GameEntity, Dropoff, HomeBase, Defense, createHomeBase } from './entities/Entity';
 import { spawnWave } from './systems/WaveSpawner';
 import { tryPlaceDefense, TURRET_COST, REPAIR_STATION_COST } from './systems/DefensePlacement';
 import { UpgradeSystem } from './systems/UpgradeSystem';
@@ -671,23 +671,6 @@ const loop = new GameLoop({
     sweepEffects.addEvents(events, player.x, player.y);
     sweepEffects.update(dt);
     floatingText.update(dt);
-
-    // Energy magnet: auto-collect nearby resources
-    if (player.magnetRange > 0) {
-      for (const entity of world.entities) {
-        if (!entity.active || entity.type !== 'resource') continue;
-        const resource = entity as Resource;
-        const mdx = entity.x - player.x;
-        const mdy = entity.y - player.y;
-        if (mdx * mdx + mdy * mdy < player.magnetRange * player.magnetRange) {
-          player.addEnergy(resource.energyValue);
-          player.totalEnergyCollected += resource.energyValue;
-          player.score += resource.energyValue;
-          floatingText.add(`+${resource.energyValue}E`, resource.x, resource.y, theme.events.collect);
-          resource.active = false;
-        }
-      }
-    }
 
     // Salvage & tow rope — only if enabled
     if (features?.towRope !== false) {

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Minimap } from './Minimap';
 import { Player } from '../entities/Player';
-import { createAlly, createDropoff, createEnemy, createResource, createSalvage, GameEntity } from '../entities/Entity';
+import { createAlly, createAsteroid, createDropoff, createEnemy, createResource, createSalvage, GameEntity } from '../entities/Entity';
 
 describe('Minimap', () => {
   let minimap: Minimap;
@@ -271,6 +271,11 @@ describe('Minimap', () => {
     it('returns green for resource entities', () => {
       const resource = createResource(0, 0);
       expect(minimap.getEntityColor(resource)).toBe('#00ff41');
+    });
+
+    it('returns amber for asteroid entities', () => {
+      const asteroid = createAsteroid(0, 0, 'medium');
+      expect(minimap.getEntityColor(asteroid)).toBe('#cc8844');
     });
   });
 });

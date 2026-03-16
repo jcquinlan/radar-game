@@ -162,6 +162,7 @@ export class PingSystem {
         return null; // Ping only reveals enemies, does not damage them
       case 'ally':
         return this.healFromAlly(entity as Ally, player);
+      case 'asteroid':
       case 'salvage':
       case 'dropoff':
         return null; // These are not interacted with by ping

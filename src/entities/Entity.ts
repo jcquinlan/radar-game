@@ -1,4 +1,4 @@
-export type EntityType = 'resource' | 'enemy' | 'ally' | 'salvage' | 'dropoff';
+export type EntityType = 'resource' | 'enemy' | 'ally' | 'salvage' | 'dropoff' | 'asteroid';
 
 export interface Entity {
   x: number;
@@ -91,6 +91,26 @@ export interface Dropoff extends Entity {
   rewardPerItem: number;
 }
 
+export type AsteroidSize = 'small' | 'medium' | 'large';
+
+export interface Asteroid extends Entity {
+  type: 'asteroid';
+  /** Size category — determines energy value, HP, and render size */
+  size: AsteroidSize;
+  /** Energy awarded when fully mined */
+  energyValue: number;
+  /** Current hit points — destroyed/mined when reaching 0 */
+  hp: number;
+  /** Maximum hit points */
+  maxHp: number;
+  /** Damage flash timer (seconds remaining) — renders white overlay when > 0 */
+  damageFlash: number;
+  /** Whether a mining bot is actively mining this asteroid */
+  miningActive: boolean;
+  /** Mining progress 0-1 (for future mining bot system) */
+  miningProgress: number;
+}
+
 export interface Turret {
   type: 'turret';
   x: number;
@@ -146,7 +166,7 @@ export interface Projectile {
   lifetime: number;
 }
 
-export type GameEntity = Resource | Enemy | Ally | Salvage | Dropoff;
+export type GameEntity = Resource | Enemy | Ally | Salvage | Dropoff | Asteroid;
 
 export function createResource(x: number, y: number): Resource {
   return {
@@ -254,6 +274,41 @@ export function createDropoff(x: number, y: number): Dropoff {
     pingedThisWave: false,
     radius: 60,
     rewardPerItem: 50,
+  };
+}
+
+/** Stats per asteroid size: [energyMin, energyMax, hp] */
+const ASTEROID_STATS: Record<AsteroidSize, { energyMin: number; energyMax: number; hp: number }> = {
+  small:  { energyMin: 10, energyMax: 15, hp: 20 },
+  medium: { energyMin: 20, energyMax: 35, hp: 40 },
+  large:  { energyMin: 40, energyMax: 60, hp: 80 },
+};
+
+/** Pick a random asteroid size with weighted distribution: 50% small, 35% medium, 15% large */
+function randomAsteroidSize(): AsteroidSize {
+  const roll = Math.random();
+  if (roll < 0.50) return 'small';
+  if (roll < 0.85) return 'medium';
+  return 'large';
+}
+
+export function createAsteroid(x: number, y: number, size?: AsteroidSize): Asteroid {
+  const s = size ?? randomAsteroidSize();
+  const stats = ASTEROID_STATS[s];
+  return {
+    x,
+    y,
+    type: 'asteroid',
+    active: true,
+    visible: true,
+    pingedThisWave: false,
+    size: s,
+    energyValue: stats.energyMin + Math.floor(Math.random() * (stats.energyMax - stats.energyMin + 1)),
+    hp: stats.hp,
+    maxHp: stats.hp,
+    damageFlash: 0,
+    miningActive: false,
+    miningProgress: 0,
   };
 }
 

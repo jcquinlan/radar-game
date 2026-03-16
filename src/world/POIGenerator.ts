@@ -2,8 +2,8 @@ import {
   GameEntity,
   Enemy,
   EnemySubtype,
-  Resource,
-  createResource,
+  Asteroid,
+  createAsteroid,
   createEnemy,
   createAlly,
   createDropoff,
@@ -124,10 +124,10 @@ const resourceCache: POIType = {
   spawn(cx, cy, difficulty) {
     const entities: GameEntity[] = [];
 
-    // 8-12 clustered resources
-    const resourceCount = randInt(8, 12);
-    for (const pt of scatterAround(cx, cy, resourceCount, 60)) {
-      entities.push(createResource(pt.x, pt.y));
+    // 8-12 clustered asteroids
+    const asteroidCount = randInt(8, 12);
+    for (const pt of scatterAround(cx, cy, asteroidCount, 60)) {
+      entities.push(createAsteroid(pt.x, pt.y));
     }
 
     // 2-3 enemy guards (mixed subtypes if 3+)
@@ -155,10 +155,10 @@ const allyOutpost: POIType = {
     const allyOffset = scatterAround(cx, cy, 1, 15)[0];
     entities.push(createAlly(allyOffset.x, allyOffset.y));
 
-    // 3-4 resources in a ring
-    const resourceCount = randInt(3, 4);
-    for (const pt of ringAround(cx, cy, resourceCount, 80)) {
-      entities.push(createResource(pt.x, pt.y));
+    // 3-4 asteroids in a ring
+    const asteroidCount = randInt(3, 4);
+    for (const pt of ringAround(cx, cy, asteroidCount, 80)) {
+      entities.push(createAsteroid(pt.x, pt.y));
     }
 
     return entities;
@@ -182,8 +182,8 @@ const enemyCamp: POIType = {
       entities.push(enemy);
     }
 
-    // 1 high-value resource at center (2x normal max energy)
-    const reward = createResource(cx, cy);
+    // 1 high-value asteroid at center (large size, boosted energy)
+    const reward = createAsteroid(cx, cy, 'large');
     reward.energyValue = randInt(30, 50);
     entities.push(reward);
 
@@ -201,10 +201,10 @@ const salvageDropoff: POIType = {
     // Dropoff point at center
     entities.push(createDropoff(cx, cy));
 
-    // A few resources nearby as a lure
-    const resourceCount = randInt(2, 3);
-    for (const pt of ringAround(cx, cy, resourceCount, 90)) {
-      entities.push(createResource(pt.x, pt.y));
+    // A few asteroids nearby as a lure
+    const asteroidCount = randInt(2, 3);
+    for (const pt of ringAround(cx, cy, asteroidCount, 90)) {
+      entities.push(createAsteroid(pt.x, pt.y));
     }
 
     return entities;
@@ -306,15 +306,15 @@ export function selectPOI(
 }
 
 // ---------------------------------------------------------------------------
-// Resource vein spawning (used by World.ts for non-POI chunks)
+// Asteroid vein spawning (used by World.ts for non-POI chunks)
 // ---------------------------------------------------------------------------
 
 /**
- * Spawn a cluster of 3-5 resources within 40px of a center point.
+ * Spawn a cluster of 5-8 asteroids within 40px of a center point.
  */
-export function spawnResourceVein(cx: number, cy: number): Resource[] {
+export function spawnAsteroidVein(cx: number, cy: number): Asteroid[] {
   const count = randInt(5, 8);
   return scatterAround(cx, cy, count, 40).map((pt) =>
-    createResource(pt.x, pt.y)
+    createAsteroid(pt.x, pt.y)
   );
 }
