@@ -1014,7 +1014,7 @@ const loop = new GameLoop({
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Radar (drawn without rotation — rings/crosshair are fixed)
-    radar.render(ctx, cx, cy);
+    radar.render(ctx, cx, cy, player.x, player.y, player.heading);
 
     // Rotated world layer — full screen visibility, no circular clip
     ctx.save();

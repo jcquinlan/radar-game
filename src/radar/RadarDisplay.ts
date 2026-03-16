@@ -1,6 +1,23 @@
 import { PingState } from '../systems/PingSystem';
 import { getTheme } from '../themes/theme';
 
+/** Distance threshold — hide the home arrow when player is this close to origin */
+const HOME_ARROW_MIN_DISTANCE = 200;
+
+/**
+ * Compute the screen-space angle for the home base direction arrow.
+ * RadarDisplay renders before the world rotation transform, so we must
+ * account for the player heading and the PI/2 offset applied in main.ts.
+ */
+export function computeHomeArrowAngle(playerX: number, playerY: number, playerHeading: number): number {
+  return Math.atan2(-playerY, -playerX) - playerHeading - Math.PI / 2;
+}
+
+/** Returns true when the player is far enough from origin to show the arrow */
+export function shouldShowHomeArrow(playerX: number, playerY: number): boolean {
+  return playerX * playerX + playerY * playerY > HOME_ARROW_MIN_DISTANCE * HOME_ARROW_MIN_DISTANCE;
+}
+
 export interface RadarConfig {
   /** Radar radius in pixels */
   radius: number;
@@ -41,7 +58,14 @@ export class RadarDisplay {
     this.pingState = state;
   }
 
-  render(ctx: CanvasRenderingContext2D, centerX: number, centerY: number): void {
+  render(
+    ctx: CanvasRenderingContext2D,
+    centerX: number,
+    centerY: number,
+    playerX = 0,
+    playerY = 0,
+    playerHeading = 0,
+  ): void {
     const { radius } = this.config;
     const theme = getTheme();
     const color = theme.radar.primary;
@@ -92,6 +116,28 @@ export class RadarDisplay {
     ctx.lineWidth = 2;
     ctx.stroke();
     ctx.restore();
+
+    // Home base direction arrow — gold chevron on outer ring pointing toward origin
+    if (shouldShowHomeArrow(playerX, playerY)) {
+      const arrowAngle = computeHomeArrowAngle(playerX, playerY, playerHeading);
+      const arrowX = centerX + Math.cos(arrowAngle) * radius;
+      const arrowY = centerY + Math.sin(arrowAngle) * radius;
+      const arrowSize = 8;
+
+      ctx.save();
+      ctx.translate(arrowX, arrowY);
+      ctx.rotate(arrowAngle); // rotate so the chevron points outward from center
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = '#ffaa00';
+      ctx.beginPath();
+      // Triangle pointing outward (right along local x-axis after rotation)
+      ctx.moveTo(arrowSize, 0);
+      ctx.lineTo(-arrowSize * 0.5, -arrowSize * 0.5);
+      ctx.lineTo(-arrowSize * 0.5, arrowSize * 0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
 
     // Center dot
     ctx.beginPath();
