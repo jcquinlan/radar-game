@@ -138,6 +138,7 @@ function startRun() {
   ambientParticles = new AmbientParticles();
   motionTrail = new MotionTrail();
   combatSystem = new CombatSystem();
+  combatSystem.onShake = (intensity) => screenShake.trigger(intensity);
   towRopeSystem = new TowRopeSystem();
   abilitySystem = new AbilitySystem(player);
   abilityEffects = new AbilityEffects();
@@ -201,6 +202,7 @@ function init() {
   gameOverScreen = new GameOverScreen();
   floatingText = new FloatingText();
   screenShake = new ScreenShake();
+  combatSystem.onShake = (intensity) => screenShake.trigger(intensity);
   homeBase = createHomeBase(0, 0);
   defenses = [];
   resolutionLevel = 0;
