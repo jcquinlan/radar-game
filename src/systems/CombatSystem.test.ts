@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CombatSystem } from './CombatSystem';
 import { Player } from '../entities/Player';
 import { createEnemy, createHomeBase, createTurret, createRepairStation, Defense } from '../entities/Entity';
@@ -573,6 +573,66 @@ describe('CombatSystem', () => {
       combat.update([enemy], player, 1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, defenses);
 
       expect(turret.health).toBeLessThan(50);
+    });
+  });
+
+  describe('camera shake on projectile events', () => {
+    it('triggers shake when enemy projectile hits the player', () => {
+      const onShake = vi.fn();
+      combat.onShake = onShake;
+
+      combat.projectiles.push({
+        x: 5, y: 0,
+        vx: -100, vy: 0,
+        damage: 15,
+        active: true,
+        lifetime: 3,
+      });
+      combat.update([], player, 0.1);
+
+      expect(onShake).toHaveBeenCalledWith(6);
+    });
+
+    it('triggers shake when turret projectile hits an enemy', () => {
+      const onShake = vi.fn();
+      combat.onShake = onShake;
+
+      const enemy = createEnemy(100, 0, 'scout');
+      enemy.health = 50;
+      combat.turretProjectiles.push({
+        x: 100, y: 0,
+        vx: 0, vy: 0,
+        damage: 5,
+        active: true,
+        lifetime: 3,
+      });
+
+      combat.update([enemy], player, 0.016);
+
+      expect(onShake).toHaveBeenCalledWith(4.5);
+    });
+
+    it('triggers shake when turret fires a projectile', () => {
+      const onShake = vi.fn();
+      combat.onShake = onShake;
+
+      const turret = createTurret(0, 0);
+      turret.lastFireTime = -10;
+      const enemy = createEnemy(100, 0, 'scout');
+
+      combat.updateTurrets([turret], [enemy], 1, 0.1);
+
+      expect(onShake).toHaveBeenCalledWith(4);
+    });
+
+    it('does not trigger shake when no collisions occur', () => {
+      const onShake = vi.fn();
+      combat.onShake = onShake;
+
+      const enemy = createEnemy(500, 0, 'scout');
+      combat.update([enemy], player, 0.016);
+
+      expect(onShake).not.toHaveBeenCalled();
     });
   });
 
