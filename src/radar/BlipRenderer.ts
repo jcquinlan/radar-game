@@ -153,6 +153,15 @@ export class BlipRenderer {
         ctx.rect(-s, -s, s * 2, s * 2);
         ctx.fillStyle = color;
         ctx.fill();
+
+        // Damage flash overlay — white flash when recently hit
+        if (salvage.damageFlash > 0) {
+          ctx.globalAlpha = Math.min(salvage.damageFlash / 0.15, 1);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+
         ctx.restore();
       } else {
         // Faked glow: larger, lower-alpha circle behind the blip
