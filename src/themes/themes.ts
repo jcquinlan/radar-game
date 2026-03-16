@@ -21,6 +21,7 @@ const classic: ColorTheme = {
     allyBeacon: '#88ff41',
     salvage: '#ffaa00',
     dropoff: '#ffdd00',
+    asteroid: '#cc8844',
   },
 
   ui: {
@@ -95,6 +96,7 @@ const ocean: ColorTheme = {
     allyBeacon: '#aaff44',
     salvage: '#ffcc33',
     dropoff: '#ffee55',
+    asteroid: '#aa9966',
   },
 
   ui: {
@@ -169,6 +171,7 @@ const ember: ColorTheme = {
     allyBeacon: '#ffcc00',
     salvage: '#cc88ff',
     dropoff: '#ffdd66',
+    asteroid: '#dd7744',
   },
 
   ui: {

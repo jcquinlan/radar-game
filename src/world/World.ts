@@ -5,7 +5,7 @@ import {
   createSalvage,
   EnemySubtype,
 } from '../entities/Entity';
-import { selectPOI, spawnResourceVein, scaleEnemy } from './POIGenerator';
+import { selectPOI, spawnAsteroidVein, scaleEnemy } from './POIGenerator';
 import { getTheme } from '../themes/theme';
 import { LevelConfig } from '../levels/LevelConfig';
 
@@ -120,19 +120,19 @@ export class World {
     }
   }
 
-  /** Spawn ambient resources (as veins) and occasional solo enemies in non-POI chunks */
+  /** Spawn ambient asteroids (as veins) and occasional solo enemies in non-POI chunks */
   private spawnAmbient(
     chunkX: number,
     chunkY: number,
     difficulty: number,
     isNearPlayer: boolean
   ): void {
-    // 1-2 resource veins per chunk
+    // 1-2 asteroid veins per chunk
     const veinCount = 1 + (Math.random() < 0.4 ? 1 : 0);
     for (let v = 0; v < veinCount; v++) {
       const veinCenterX = chunkX + 60 + Math.random() * (CHUNK_SIZE - 120);
       const veinCenterY = chunkY + 60 + Math.random() * (CHUNK_SIZE - 120);
-      const vein = spawnResourceVein(veinCenterX, veinCenterY);
+      const vein = spawnAsteroidVein(veinCenterX, veinCenterY);
       this.entities.push(...vein);
     }
 

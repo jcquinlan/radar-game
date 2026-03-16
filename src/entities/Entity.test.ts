@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createResource, createEnemy, createAlly, createHomeBase, createTurret, createRepairStation, createSalvage } from './Entity';
+import { createResource, createEnemy, createAlly, createHomeBase, createTurret, createRepairStation, createSalvage, createAsteroid } from './Entity';
 
 describe('Entity factories', () => {
   it('creates a resource at the given position', () => {
@@ -127,6 +127,52 @@ describe('Entity factories', () => {
     expect(s.damageFlash).toBe(0);
     expect(s.towedByPlayer).toBe(false);
     expect(s.active).toBe(true);
+  });
+
+  it('creates a small asteroid with correct stats', () => {
+    const a = createAsteroid(100, 200, 'small');
+    expect(a.type).toBe('asteroid');
+    expect(a.size).toBe('small');
+    expect(a.x).toBe(100);
+    expect(a.y).toBe(200);
+    expect(a.active).toBe(true);
+    expect(a.visible).toBe(true);
+    expect(a.pingedThisWave).toBe(false);
+    expect(a.energyValue).toBeGreaterThanOrEqual(10);
+    expect(a.energyValue).toBeLessThanOrEqual(15);
+    expect(a.hp).toBe(20);
+    expect(a.maxHp).toBe(20);
+    expect(a.damageFlash).toBe(0);
+    expect(a.miningActive).toBe(false);
+    expect(a.miningProgress).toBe(0);
+  });
+
+  it('creates a medium asteroid with correct stats', () => {
+    const a = createAsteroid(0, 0, 'medium');
+    expect(a.size).toBe('medium');
+    expect(a.energyValue).toBeGreaterThanOrEqual(20);
+    expect(a.energyValue).toBeLessThanOrEqual(35);
+    expect(a.hp).toBe(40);
+    expect(a.maxHp).toBe(40);
+  });
+
+  it('creates a large asteroid with correct stats', () => {
+    const a = createAsteroid(0, 0, 'large');
+    expect(a.size).toBe('large');
+    expect(a.energyValue).toBeGreaterThanOrEqual(40);
+    expect(a.energyValue).toBeLessThanOrEqual(60);
+    expect(a.hp).toBe(80);
+    expect(a.maxHp).toBe(80);
+  });
+
+  it('creates a random asteroid size when none specified', () => {
+    const sizes = new Set<string>();
+    for (let i = 0; i < 100; i++) {
+      sizes.add(createAsteroid(0, 0).size);
+    }
+    expect(sizes.has('small')).toBe(true);
+    expect(sizes.has('medium')).toBe(true);
+    expect(sizes.has('large')).toBe(true);
   });
 
   it('Defense union type discriminates turret from repair station', () => {

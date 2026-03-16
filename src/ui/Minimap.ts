@@ -28,6 +28,7 @@ function lerp(a: number, b: number, t: number): number {
 function entityLabel(type: string): string {
   switch (type) {
     case 'resource': return 'RES';
+    case 'asteroid': return 'AST';
     case 'enemy': return 'ENEMY';
     case 'ally': return 'ALLY';
     case 'salvage': return 'SALVAGE';
@@ -123,7 +124,7 @@ export class Minimap {
       if (!e.active) return false;
       if (expanded) {
         // Show all major entity types when expanded
-        return e.type === 'dropoff' || e.type === 'resource' || e.type === 'enemy' || e.type === 'ally' || e.type === 'salvage';
+        return e.type === 'dropoff' || e.type === 'resource' || e.type === 'asteroid' || e.type === 'enemy' || e.type === 'ally' || e.type === 'salvage';
       }
       return e.type === 'dropoff';
     });
@@ -136,6 +137,7 @@ export class Minimap {
       : entity.type === 'enemy' ? e.enemy
       : entity.type === 'salvage' ? e.salvage
       : entity.type === 'resource' ? e.resource
+      : entity.type === 'asteroid' ? e.asteroid
       : '#ffffff';
   }
 

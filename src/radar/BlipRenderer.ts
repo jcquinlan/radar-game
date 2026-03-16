@@ -1,4 +1,4 @@
-import { GameEntity, Ally, Enemy, Salvage } from '../entities/Entity';
+import { GameEntity, Ally, Enemy, Salvage, Asteroid } from '../entities/Entity';
 import { getTheme } from '../themes/theme';
 
 
@@ -8,6 +8,7 @@ const BLIP_SIZES: Record<string, number> = {
   ally: 4,
   salvage: 5,
   dropoff: 6,
+  asteroid: 4,
 };
 
 /** Glow radius multiplier — the faked glow circle is this much larger than the blip */
@@ -64,6 +65,7 @@ export class BlipRenderer {
         : entity.type === 'enemy' ? themeColors.enemy
         : entity.type === 'ally' ? themeColors.ally
         : entity.type === 'salvage' ? themeColors.salvage
+        : entity.type === 'asteroid' ? themeColors.asteroid
         : themeColors.dropoff;
       const size = BLIP_SIZES[entity.type];
 
@@ -120,6 +122,64 @@ export class BlipRenderer {
 
       // Dropoffs are rendered in full by main.ts — skip blip
       if (entity.type === 'dropoff') continue;
+
+      // Asteroids: irregular circle, size varies by asteroid size category
+      if (entity.type === 'asteroid') {
+        const asteroid = entity as Asteroid;
+        const asteroidRadius = asteroid.size === 'small' ? 4
+          : asteroid.size === 'medium' ? 7
+          : 10;
+
+        // Faked glow behind the asteroid
+        ctx.globalAlpha = GLOW_ALPHA;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, asteroidRadius * GLOW_RADIUS_MULT, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Irregular polygon shape (6 vertices with jitter based on position for consistency)
+        ctx.beginPath();
+        const vertices = 6;
+        for (let v = 0; v < vertices; v++) {
+          const angle = (v / vertices) * Math.PI * 2;
+          // Use position-based seed for consistent jitter per asteroid
+          const jitter = 0.7 + 0.3 * Math.abs(Math.sin(asteroid.x * 13.7 + asteroid.y * 7.3 + v * 2.1));
+          const r = asteroidRadius * jitter;
+          const px = screenX + Math.cos(angle) * r;
+          const py = screenY + Math.sin(angle) * r;
+          if (v === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+
+        // Damage flash overlay
+        if (asteroid.damageFlash > 0) {
+          ctx.globalAlpha = Math.min(asteroid.damageFlash / 0.15, 1);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+
+        // Resolution label for asteroids (S/M/L)
+        if (resolutionLevel >= 2) {
+          ctx.save();
+          if (worldRotation) {
+            ctx.translate(screenX, screenY);
+            ctx.rotate(-worldRotation);
+            ctx.translate(-screenX, -screenY);
+          }
+          ctx.font = '10px monospace';
+          ctx.fillStyle = color;
+          ctx.globalAlpha = 0.8;
+          const astLabel = asteroid.size === 'small' ? 'S' : asteroid.size === 'medium' ? 'M' : 'L';
+          ctx.fillText(astLabel, screenX + asteroidRadius + 2, screenY + 3);
+          ctx.restore();
+        }
+        continue;
+      }
 
       // Salvage: pulsing diamond with aura (skip if already towed — rendered by tow rope system)
       if (entity.type === 'salvage') {

@@ -95,11 +95,11 @@ describe('World', () => {
     // Spawn far from origin to get POIs with enemies
     world.updateSpawning(3000, 3000);
 
-    const resources = world.entities.filter((e) => e.type === 'resource');
+    const asteroids = world.entities.filter((e) => e.type === 'asteroid');
     const enemies = world.entities.filter((e) => e.type === 'enemy');
 
-    // Should have both resources and enemies in the world
-    expect(resources.length).toBeGreaterThan(0);
+    // Should have both asteroids and enemies in the world
+    expect(asteroids.length).toBeGreaterThan(0);
     expect(enemies.length).toBeGreaterThan(0);
   });
 });
