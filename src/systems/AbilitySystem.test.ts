@@ -104,6 +104,19 @@ describe('AbilitySystem', () => {
       expect(texts[0].text).toBe('-20');
       expect(texts[0].color).toBe('#ff4141');
     });
+
+    it('sets aggro on enemies hit by blast', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      const enemy = createEnemy(100, 0, 'brute');
+      enemy.health = 80;
+      expect(enemy.aggro).toBe(false);
+
+      system.activate('damage_blast', [enemy], () => {});
+
+      expect(enemy.aggro).toBe(true);
+    });
   });
 
   describe('heal over time', () => {
@@ -199,6 +212,21 @@ describe('AbilitySystem', () => {
       const { system } = buildAbilitySystem();
       const ability = system.getAbility('helper_drone')!;
       expect(ability.cooldown).toBe(15);
+    });
+
+    it('drone sets aggro on enemies it damages', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      const enemy = createEnemy(5, 0, 'brute');
+      enemy.health = 80;
+      expect(enemy.aggro).toBe(false);
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('helper_drone', entities, () => {});
+      system.update(1, entities, () => {});
+
+      expect(enemy.aggro).toBe(true);
     });
 
     it('drone kills enemies and awards score', () => {
@@ -410,6 +438,23 @@ describe('AbilitySystem', () => {
       expect(player.kills).toBe(1);
       expect(player.score).toBe(50);
       expect(player.energy).toBe(5);
+    });
+
+    it('sets aggro on enemy hit by missile', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      const enemy = createEnemy(150, 0, 'brute');
+      enemy.visible = true;
+      enemy.health = 80;
+      expect(enemy.aggro).toBe(false);
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('homing_missile', entities, () => {});
+      for (let i = 0; i < 80; i++) system.update(0.05, entities, () => {});
+
+      expect(enemy.health).toBeLessThan(80);
+      expect(enemy.aggro).toBe(true);
     });
 
     it('expires after 4 seconds if it misses', () => {

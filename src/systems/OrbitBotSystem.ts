@@ -255,6 +255,7 @@ export class OrbitBotSystem {
     if (distSq < CONTACT_RANGE_SQ) {
       const dmg = DAMAGE_PER_SECOND * dt;
       target.health -= dmg;
+      target.aggro = true;
 
       // Batch floating text
       bot.damageAccum += dmg;

@@ -236,6 +236,73 @@ describe('CombatSystem', () => {
     expect(enemy.x).toBeLessThan(initialX); // moved toward player at x=250
   });
 
+  describe('aggro on damage', () => {
+    it('aggroed enemies chase the player even when beyond normal chase range', () => {
+      const enemy = createEnemy(1000, 0, 'scout');
+      enemy.chaseRange = 200;
+      enemy.aggro = true;
+      const initialX = enemy.x;
+
+      combat.update([enemy], player, 1);
+
+      // Should chase toward player at origin despite being 1000px away (chaseRange=200)
+      expect(enemy.x).toBeLessThan(initialX);
+    });
+
+    it('non-aggroed enemies outside chase range do not chase', () => {
+      const enemy = createEnemy(1000, 0, 'scout');
+      enemy.chaseRange = 200;
+      enemy.aggro = false;
+      enemy.wanderAngle = Math.PI / 2; // wander perpendicular, not toward player
+      enemy.wanderTimer = 5;
+
+      combat.update([enemy], player, 0.5);
+
+      // Should NOT have moved significantly toward player
+      expect(enemy.x).toBeGreaterThan(990);
+    });
+
+    it('ram sets aggro on hit enemy', () => {
+      const enemy = createEnemy(5, 0, 'scout');
+      enemy.health = 50;
+      expect(enemy.aggro).toBe(false);
+
+      combat.update([enemy], player, 0.016, true, 15);
+
+      expect(enemy.aggro).toBe(true);
+    });
+
+    it('turret projectile sets aggro on hit enemy', () => {
+      const enemy = createEnemy(100, 0, 'scout');
+      enemy.health = 50;
+      expect(enemy.aggro).toBe(false);
+
+      combat.turretProjectiles.push({
+        x: 100, y: 0,
+        vx: 0, vy: 0,
+        damage: 5,
+        active: true,
+        lifetime: 3,
+      });
+
+      combat.update([enemy], player, 0.016);
+
+      expect(enemy.aggro).toBe(true);
+    });
+
+    it('normal chase range behavior still works for non-aggroed enemies', () => {
+      const enemy = createEnemy(100, 0, 'scout');
+      enemy.chaseRange = 200;
+      enemy.aggro = false;
+      const initialX = enemy.x;
+
+      combat.update([enemy], player, 1);
+
+      // Within chase range, should still chase
+      expect(enemy.x).toBeLessThan(initialX);
+    });
+  });
+
   describe('targetPos override', () => {
     it('enemies chase targetPos instead of player when provided', () => {
       const enemy = createEnemy(100, 0, 'scout');

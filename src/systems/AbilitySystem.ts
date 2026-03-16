@@ -223,6 +223,7 @@ export class AbilitySystem {
 
       if (distSq < blastRadius * blastRadius) {
         enemy.health -= blastDamage;
+        enemy.aggro = true;
         addFloatingText(`-${blastDamage}`, enemy.x, enemy.y, getTheme().events.damage);
 
         if (enemy.health <= 0) {
@@ -306,6 +307,7 @@ export class AbilitySystem {
         if (dist < 20) {
           const dmg = drone.damage * dt;
           nearest.health -= dmg;
+          nearest.aggro = true;
           if (nearest.health <= 0 && nearest.active) {
             nearest.active = false;
             const deathColor = nearest.subtype === 'ranged' ? getTheme().entities.enemyRanged : getTheme().entities.enemy;
@@ -404,6 +406,7 @@ export class AbilitySystem {
       // Handle collision
       if (hitEnemy) {
         hitEnemy.health -= missile.damage;
+        hitEnemy.aggro = true;
         addFloatingText(`-${missile.damage}`, hitEnemy.x, hitEnemy.y, getTheme().effects.missile);
         onImpact(hitEnemy.x, hitEnemy.y, missile.x, missile.y, getTheme().effects.missile);
         this.onShake(7);
