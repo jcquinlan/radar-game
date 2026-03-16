@@ -590,7 +590,7 @@ describe('CombatSystem', () => {
       });
       combat.update([], player, 0.1);
 
-      expect(onShake).toHaveBeenCalledWith(1.5);
+      expect(onShake).toHaveBeenCalledWith(3);
     });
 
     it('triggers shake when turret projectile hits an enemy', () => {
@@ -609,7 +609,7 @@ describe('CombatSystem', () => {
 
       combat.update([enemy], player, 0.016);
 
-      expect(onShake).toHaveBeenCalledWith(0.8);
+      expect(onShake).toHaveBeenCalledWith(2);
     });
 
     it('triggers shake when turret fires a projectile', () => {
@@ -622,7 +622,7 @@ describe('CombatSystem', () => {
 
       combat.updateTurrets([turret], [enemy], 1, 0.1);
 
-      expect(onShake).toHaveBeenCalledWith(0.5);
+      expect(onShake).toHaveBeenCalledWith(1.5);
     });
 
     it('does not trigger shake when no collisions occur', () => {
