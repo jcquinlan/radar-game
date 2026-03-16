@@ -171,6 +171,33 @@ describe('World with level config', () => {
   });
 });
 
+describe('World.reset', () => {
+  it('clears all entities and visited chunks', () => {
+    const world = new World();
+    world.updateSpawning(0, 0);
+    expect(world.entities.length).toBeGreaterThan(0);
+    expect(world.getChunkCount()).toBeGreaterThan(0);
+
+    world.reset();
+
+    expect(world.entities).toHaveLength(0);
+    expect(world.getChunkCount()).toBe(0);
+  });
+
+  it('allows re-spawning in previously visited chunks after reset', () => {
+    const world = new World();
+    world.updateSpawning(0, 0);
+
+    world.reset();
+    expect(world.entities).toHaveLength(0);
+
+    // After reset, the same chunks should spawn entities again
+    world.updateSpawning(0, 0);
+    expect(world.entities.length).toBeGreaterThan(0);
+    expect(world.getChunkCount()).toBeGreaterThan(0);
+  });
+});
+
 describe('getThreatLevel', () => {
   it('returns LOW at origin', () => {
     expect(getThreatLevel(0, 0).label).toBe('LOW');
