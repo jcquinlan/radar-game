@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { AbilitySystem } from './AbilitySystem';
 import { Player } from '../entities/Player';
 import { createEnemy } from '../entities/Entity';
@@ -447,6 +447,24 @@ describe('AbilitySystem', () => {
       for (let i = 0; i < 80; i++) system.update(0.05, entities, () => {});
 
       expect(enemy.health).toBe(80); // No damage — missile didn't track
+    });
+
+    it('triggers shake when missile hits an enemy', () => {
+      const { system, player } = buildAbilitySystem();
+      const onShake = vi.fn();
+      system.onShake = onShake;
+      player.x = 0;
+      player.y = 0;
+      const enemy = createEnemy(150, 0, 'brute');
+      enemy.visible = true;
+      enemy.health = 80;
+      const entities: GameEntity[] = [enemy];
+
+      system.activate('homing_missile', entities, () => {});
+      for (let i = 0; i < 80; i++) system.update(0.05, entities, () => {});
+
+      expect(enemy.health).toBeLessThan(80);
+      expect(onShake).toHaveBeenCalledWith(2);
     });
   });
 });
