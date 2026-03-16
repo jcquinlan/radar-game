@@ -166,7 +166,7 @@ function startRun() {
   keyRemapScreen.attach(canvas, abilitySystem.abilities);
   upgradePanel.attach(canvas, upgradeSystem, player);
   world.updateSpawning(player.x, player.y);
-  runTimer = 600; // 10 minutes
+  runTimer = 60; // 1 minute — compressed loop for rapid playtesting
   gameState = 'run_active';
 }
 

@@ -32,8 +32,8 @@ describe('resource_cache POI', () => {
       const entities = cache.spawn(1000, 1000, 1.5);
       const resources = entities.filter((e) => e.type === 'resource') as Resource[];
       const enemies = entities.filter((e) => e.type === 'enemy') as Enemy[];
-      expect(resources.length).toBeGreaterThanOrEqual(5);
-      expect(resources.length).toBeLessThanOrEqual(8);
+      expect(resources.length).toBeGreaterThanOrEqual(8);
+      expect(resources.length).toBeLessThanOrEqual(12);
       expect(enemies.length).toBeGreaterThanOrEqual(2);
       expect(enemies.length).toBeLessThanOrEqual(3);
     }
@@ -221,11 +221,11 @@ describe('selectPOI', () => {
 });
 
 describe('spawnResourceVein', () => {
-  it('spawns 3-5 resources clustered within scatter radius', () => {
+  it('spawns 5-8 resources clustered within scatter radius', () => {
     for (let i = 0; i < 20; i++) {
       const resources = spawnResourceVein(500, 500);
-      expect(resources.length).toBeGreaterThanOrEqual(3);
-      expect(resources.length).toBeLessThanOrEqual(5);
+      expect(resources.length).toBeGreaterThanOrEqual(5);
+      expect(resources.length).toBeLessThanOrEqual(8);
       for (const r of resources) {
         const dist = Math.sqrt((r.x - 500) ** 2 + (r.y - 500) ** 2);
         expect(dist).toBeLessThanOrEqual(40);

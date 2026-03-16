@@ -150,7 +150,7 @@ export function createResource(x: number, y: number): Resource {
     active: true,
     visible: true,
     pingedThisWave: false,
-    energyValue: 5 + Math.floor(Math.random() * 10),
+    energyValue: 10 + Math.floor(Math.random() * 15),
   };
 }
 
