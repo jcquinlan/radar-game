@@ -12,23 +12,27 @@ describe('spawnWave', () => {
     expect(enemies).toHaveLength(25);
   });
 
-  it('spawns enemies on an 800px circle around origin', () => {
+  it('spawns melee enemies at 800px and ranged at 400px', () => {
     const enemies = spawnWave(1);
     for (const e of enemies) {
       const dist = Math.sqrt(e.x * e.x + e.y * e.y);
-      expect(dist).toBeCloseTo(800, 0);
+      if (e.subtype === 'ranged') {
+        expect(dist).toBeCloseTo(400, 0);
+      } else {
+        expect(dist).toBeCloseTo(800, 0);
+      }
     }
   });
 
-  it('produces approximately 50% scouts, 30% brutes, 20% ranged', () => {
+  it('produces approximately 55% scouts, 35% brutes, 10% ranged', () => {
     const enemies = spawnWave(2); // 20 enemies
     const scouts = enemies.filter(e => e.subtype === 'scout').length;
     const brutes = enemies.filter(e => e.subtype === 'brute').length;
     const ranged = enemies.filter(e => e.subtype === 'ranged').length;
 
-    expect(scouts).toBe(10); // 50% of 20
-    expect(brutes).toBe(6);  // 30% of 20
-    expect(ranged).toBe(4);  // 20% of 20
+    expect(scouts).toBe(11); // 55% of 20
+    expect(brutes).toBe(7);  // 35% of 20
+    expect(ranged).toBe(2);  // 10% of 20
   });
 
   it('marks all enemies as waveEnemy', () => {
