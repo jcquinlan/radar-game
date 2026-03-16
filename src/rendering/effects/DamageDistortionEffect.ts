@@ -28,6 +28,7 @@ uniform float uDamageIntensity;
 uniform float uMaxAberration;
 uniform float uMaxCurvature;
 uniform float uMaxNoise;
+uniform float uFlipY;
 
 out vec4 fragColor;
 
@@ -47,7 +48,7 @@ vec2 barrelDistort(vec2 uv, float curvature) {
 
 void main() {
   vec2 uv = gl_FragCoord.xy / uResolution;
-  uv.y = 1.0 - uv.y;
+  if (uFlipY > 0.5) uv.y = 1.0 - uv.y;
 
   float intensity = uDamageIntensity;
 

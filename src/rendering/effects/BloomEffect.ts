@@ -26,6 +26,7 @@ uniform vec2 uResolution;
 uniform float uThreshold;
 uniform float uIntensity;
 uniform float uRadius;
+uniform float uFlipY;
 
 out vec4 fragColor;
 
@@ -37,7 +38,7 @@ vec3 sampleBright(vec2 uv) {
 
 void main() {
   vec2 uv = gl_FragCoord.xy / uResolution;
-  uv.y = 1.0 - uv.y;
+  if (uFlipY > 0.5) uv.y = 1.0 - uv.y;
 
   vec3 original = texture(uSource, uv).rgb;
 

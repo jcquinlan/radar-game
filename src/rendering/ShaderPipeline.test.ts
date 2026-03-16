@@ -44,6 +44,7 @@ function createMockGL() {
     useProgram: vi.fn(),
     getUniformLocation: vi.fn(() => ({ __loc: true })),
     uniform1i: vi.fn(),
+    uniform1f: vi.fn(),
     activeTexture: vi.fn(),
     drawArrays: vi.fn(),
     viewport: vi.fn(),

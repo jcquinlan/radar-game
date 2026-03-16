@@ -218,6 +218,14 @@ export class ShaderPipeline {
       gl.bindTexture(gl.TEXTURE_2D, inputTexture);
       gl.uniform1i(sourceLoc, 0);
 
+      // Tell the shader whether to flip Y (only first effect reads the canvas texture,
+      // which has opposite Y convention to WebGL. Subsequent effects read from FBOs
+      // which are already in WebGL's coordinate system.)
+      const flipLoc = gl.getUniformLocation(slot.program, 'uFlipY');
+      if (flipLoc) {
+        gl.uniform1f(flipLoc, i === 0 ? 1.0 : 0.0);
+      }
+
       // Set effect-specific uniforms
       slot.effect.setUniforms(gl, slot.program, time, [w, h]);
 
