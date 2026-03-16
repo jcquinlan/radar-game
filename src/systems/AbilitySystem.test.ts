@@ -421,5 +421,132 @@ describe('AbilitySystem', () => {
       expect(enemy.health).toBeLessThan(80);
       expect(onShake).toHaveBeenCalledWith(7);
     });
+
+    describe('distance-based aim directness', () => {
+      it('uses higher effective turn rate for close targets than far targets', () => {
+        // Measure turn per frame: record launch angle, advance one frame, measure angular change
+        // Use multiple trials and average to reduce randomness from launch spread
+
+        function measureAverageTurnRate(enemyDist: number, trials: number): number {
+          let totalTurn = 0;
+          for (let t = 0; t < trials; t++) {
+            const { system, player } = buildAbilitySystem();
+            player.x = 0;
+            player.y = 0;
+            player.heading = Math.PI / 2; // facing up, enemy is to the right
+            const enemy = createEnemy(enemyDist, 0, 'brute');
+            enemy.visible = true;
+            enemy.health = 80;
+
+            system.activate('homing_missile', [enemy], () => {});
+            const launchAngle = Math.atan2(system.missiles[0].vy, system.missiles[0].vx);
+
+            system.update(0.016, [enemy], () => {}); // One frame at 60Hz
+            const afterAngle = Math.atan2(system.missiles[0].vy, system.missiles[0].vx);
+            totalTurn += Math.abs(afterAngle - launchAngle);
+          }
+          return totalTurn / trials;
+        }
+
+        const closeTurn = measureAverageTurnRate(40, 20);
+        const farTurn = measureAverageTurnRate(300, 20);
+
+        // Close target should produce more turn per frame on average
+        expect(closeTurn).toBeGreaterThan(farTurn);
+      });
+
+      it('uses narrower launch spread for close targets', () => {
+        // Fire many missiles at a close target and check the spread is narrow
+        const launchAngles: number[] = [];
+        for (let i = 0; i < 50; i++) {
+          const { system, player } = buildAbilitySystem();
+          player.x = 0;
+          player.y = 0;
+          player.heading = 0; // facing right
+          const enemy = createEnemy(40, 0, 'scout'); // Very close
+          enemy.visible = true;
+          system.activate('homing_missile', [enemy], () => {});
+          const angle = Math.atan2(system.missiles[0].vy, system.missiles[0].vx);
+          launchAngles.push(angle);
+        }
+
+        // All angles should be within ±30° (±0.524 rad) of heading (0)
+        const maxSpread = Math.max(...launchAngles.map((a) => Math.abs(a)));
+        expect(maxSpread).toBeLessThan(Math.PI * 0.35); // ~63° — generous bound for ±30° random
+      });
+
+      it('uses wider launch spread for far targets', () => {
+        // Fire many missiles at a far target and verify wider spread
+        const launchAngles: number[] = [];
+        for (let i = 0; i < 50; i++) {
+          const { system, player } = buildAbilitySystem();
+          player.x = 0;
+          player.y = 0;
+          player.heading = 0; // facing right
+          const enemy = createEnemy(400, 0, 'scout'); // Far away
+          enemy.visible = true;
+          system.activate('homing_missile', [enemy], () => {});
+          const angle = Math.atan2(system.missiles[0].vy, system.missiles[0].vx);
+          launchAngles.push(angle);
+        }
+
+        // Should see angles with larger spread — at least some beyond ±30°
+        const maxSpread = Math.max(...launchAngles.map((a) => Math.abs(a)));
+        expect(maxSpread).toBeGreaterThan(Math.PI * 0.2); // At least ~36° spread seen
+      });
+
+      it('close-range missiles hit their target reliably', () => {
+        // Fire 10 missiles at a very close target — all should hit
+        let hits = 0;
+        for (let trial = 0; trial < 10; trial++) {
+          const { system, player } = buildAbilitySystem();
+          player.x = 0;
+          player.y = 0;
+          player.heading = 0;
+          const enemy = createEnemy(40, 0, 'brute');
+          enemy.visible = true;
+          enemy.health = 80;
+          const entities: GameEntity[] = [enemy];
+
+          system.activate('homing_missile', entities, () => {});
+          for (let i = 0; i < 80; i++) system.update(0.05, entities, () => {});
+          if (enemy.health < 80) hits++;
+        }
+        // All should hit at close range with direct aim
+        expect(hits).toBe(10);
+      });
+
+      it('smoothly interpolates turn rate — medium range gets intermediate value', () => {
+        // Measure average turn per frame at three distances
+        function measureAverageTurn(enemyDist: number, trials: number): number {
+          let totalTurn = 0;
+          for (let t = 0; t < trials; t++) {
+            const { system, player } = buildAbilitySystem();
+            player.x = 0;
+            player.y = 0;
+            player.heading = Math.PI / 2;
+            const enemy = createEnemy(enemyDist, 0, 'brute');
+            enemy.visible = true;
+            enemy.health = 80;
+
+            system.activate('homing_missile', [enemy], () => {});
+            const launchAngle = Math.atan2(system.missiles[0].vy, system.missiles[0].vx);
+
+            system.update(0.016, [enemy], () => {});
+            const afterAngle = Math.atan2(system.missiles[0].vy, system.missiles[0].vx);
+            totalTurn += Math.abs(afterAngle - launchAngle);
+          }
+          return totalTurn / trials;
+        }
+
+        const closeTurn = measureAverageTurn(40, 20);
+        const mediumTurn = measureAverageTurn(100, 20);
+        const farTurn = measureAverageTurn(300, 20);
+
+        // close > medium > far (smooth gradient)
+        expect(closeTurn).toBeGreaterThan(mediumTurn);
+        expect(mediumTurn).toBeGreaterThan(farTurn);
+      });
+    });
   });
 });

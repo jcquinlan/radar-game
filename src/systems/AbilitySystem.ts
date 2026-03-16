@@ -215,16 +215,28 @@ export class AbilitySystem {
   }
 
   private spawnMissile(entities: GameEntity[]): void {
-    // Check if any visible enemies exist to target
-    const hasTarget = entities.some(
-      (e) => e.active && e.type === 'enemy' && e.visible,
-    );
+    // Find nearest visible enemy and its distance
+    let nearestDist = Infinity;
+    let hasTarget = false;
+    for (const entity of entities) {
+      if (!entity.active || entity.type !== 'enemy' || !entity.visible) continue;
+      hasTarget = true;
+      const dx = entity.x - this.player.x;
+      const dy = entity.y - this.player.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < nearestDist) nearestDist = dist;
+    }
 
-    // With a target: random spread for arcing trajectory
-    // Without: fire straight ahead from the ship
-    const launchSpread = hasTarget
-      ? (Math.random() - 0.5) * Math.PI * 1.2 // ±108° spread
-      : 0;
+    // Distance-scaled launch spread: close targets get narrow spread, far targets get wide spread
+    // ±30° (0.524 rad half-spread) at <80px, ±108° (1.885 rad half-spread) at >250px, smooth lerp between
+    let launchSpread = 0;
+    if (hasTarget) {
+      const closeSpread = Math.PI * (30 / 180);  // ±30° half-spread
+      const farSpread = Math.PI * 1.2 * 0.5;     // ±108° half-spread (PI*1.2 total / 2)
+      const spreadT = Math.min(1, Math.max(0, (nearestDist - 80) / (250 - 80)));
+      const halfSpread = closeSpread + (farSpread - closeSpread) * spreadT;
+      launchSpread = (Math.random() - 0.5) * 2 * halfSpread;
+    }
     const launchAngle = this.player.heading + launchSpread;
     const launchSpeed = hasTarget ? 60 : 220; // Full speed ahead if no target
 
@@ -236,7 +248,7 @@ export class AbilitySystem {
       speed: 220,
       damage: 5, // TODO: restore to 25 after testing
       lifetime: 4,
-      turnRate: 3.5, // radians/sec — slightly higher to compensate for random launch
+      turnRate: 3.5, // base turn rate — effective rate scaled by distance in updateMissiles
       active: true,
     });
   }
@@ -321,8 +333,17 @@ export class AbilitySystem {
         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
         while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
-        // Clamp turn to turnRate * dt
-        const maxTurn = missile.turnRate * dt;
+        // Distance-scaled turn rate: close targets get much higher turn rate for direct shots
+        // effectiveTurnRate = baseTurnRate * max(1, closeRangeFactor / clamp(dist, minDist, maxDist))
+        // At 30px: 3.5 * (175/30) ≈ 20.4 rad/s (nearly instant aim)
+        // At 175px: 3.5 * (175/175) = 3.5 rad/s (standard)
+        // At 300px+: 3.5 * (175/300) ≈ 2.04 → clamped to 3.5 via max(1,...)
+        const dist = Math.sqrt(nearestDistSq);
+        const clampedDist = Math.min(300, Math.max(30, dist));
+        const effectiveTurnRate = missile.turnRate * Math.max(1, 175 / clampedDist);
+
+        // Clamp turn to effectiveTurnRate * dt
+        const maxTurn = effectiveTurnRate * dt;
         const turn = Math.max(-maxTurn, Math.min(maxTurn, angleDiff));
         newAngle = currentAngle + turn;
       }
