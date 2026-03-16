@@ -746,6 +746,7 @@ const loop = new GameLoop({
       (text, x, y, color) => floatingText.add(text, x, y, color),
       (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color),
       (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color, 5),
+      player,
     );
 
     // Combat — only if enabled

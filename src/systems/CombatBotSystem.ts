@@ -1,4 +1,5 @@
 import { Enemy, GameEntity, Projectile } from '../entities/Entity';
+import { Player } from '../entities/Player';
 import { getTheme } from '../themes/theme';
 
 type FloatingTextCallback = (text: string, x: number, y: number, color: string) => void;
@@ -97,6 +98,7 @@ export class CombatBotSystem {
     addFloatingText: FloatingTextCallback,
     onDeath: DeathCallback,
     onImpact: DeathCallback,
+    player?: Player,
   ): void {
     const rangeSq = BOT_RANGE * BOT_RANGE;
 
@@ -159,7 +161,7 @@ export class CombatBotSystem {
     }
 
     // Update projectiles
-    this.updateProjectiles(dt, entities, addFloatingText, onDeath, onImpact);
+    this.updateProjectiles(dt, entities, addFloatingText, onDeath, onImpact, player);
   }
 
   private fireProjectile(bot: CombatBot, target: Enemy): void {
@@ -193,6 +195,7 @@ export class CombatBotSystem {
     addFloatingText: FloatingTextCallback,
     onDeath: DeathCallback,
     onImpact: DeathCallback,
+    player?: Player,
   ): void {
     for (let i = 0; i < this.botProjectiles.length; i++) {
       const p = this.botProjectiles[i];
@@ -229,6 +232,11 @@ export class CombatBotSystem {
             enemy.active = false;
             const deathColor = enemy.subtype === 'ranged' ? theme.entities.enemyRanged : theme.entities.enemy;
             onDeath(enemy.x, enemy.y, p.x, p.y, deathColor);
+            if (player) {
+              player.addEnergy(enemy.energyDrop);
+              player.kills++;
+              player.score += 50;
+            }
             addFloatingText('+50', enemy.x, enemy.y - 15, theme.entities.salvage);
           }
           break;
