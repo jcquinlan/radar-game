@@ -748,16 +748,11 @@ const loop = new GameLoop({
         baseTarget = homeBase;
       }
       // Build salvage array for combat collision (reuse pre-allocated buffer)
+      // Towed salvage remains in world.entities, so this catches all active salvage
       salvageBuffer.length = 0;
       for (let i = 0; i < world.entities.length; i++) {
         const e = world.entities[i];
         if (e.active && e.type === 'salvage') salvageBuffer.push(e as import('./entities/Entity').Salvage);
-      }
-      // Also include towed salvage items (they're still in world.entities but let's be explicit)
-      const towedItems = towRopeSystem.getTowedItems();
-      for (let i = 0; i < towedItems.length; i++) {
-        const s = towedItems[i].salvage;
-        if (s.active && !salvageBuffer.includes(s)) salvageBuffer.push(s);
       }
 
       alive = combatSystem.update(
