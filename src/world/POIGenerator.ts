@@ -124,8 +124,8 @@ const resourceCache: POIType = {
   spawn(cx, cy, difficulty) {
     const entities: GameEntity[] = [];
 
-    // 5-8 clustered resources
-    const resourceCount = randInt(5, 8);
+    // 8-12 clustered resources
+    const resourceCount = randInt(8, 12);
     for (const pt of scatterAround(cx, cy, resourceCount, 60)) {
       entities.push(createResource(pt.x, pt.y));
     }
@@ -184,7 +184,7 @@ const enemyCamp: POIType = {
 
     // 1 high-value resource at center (2x normal max energy)
     const reward = createResource(cx, cy);
-    reward.energyValue = randInt(20, 30);
+    reward.energyValue = randInt(30, 50);
     entities.push(reward);
 
     return entities;
@@ -313,7 +313,7 @@ export function selectPOI(
  * Spawn a cluster of 3-5 resources within 40px of a center point.
  */
 export function spawnResourceVein(cx: number, cy: number): Resource[] {
-  const count = randInt(3, 5);
+  const count = randInt(5, 8);
   return scatterAround(cx, cy, count, 40).map((pt) =>
     createResource(pt.x, pt.y)
   );

@@ -123,8 +123,8 @@ export class HUD {
         ctx.shadowColor = 'rgba(255, 200, 60, 0.8)';
         ctx.shadowBlur = 8;
         ctx.fillText('FINAL WAVE', canvasWidth / 2, y + 20);
-      } else if (runTimer <= 60) {
-        // Pulsing red in the final 60 seconds
+      } else if (runTimer <= 20) {
+        // Pulsing red in the final 20 seconds (wave warning)
         const pulse = Math.sin(performance.now() / 500) * 0.5 + 0.5; // 0..1
         const alpha = 0.5 + pulse * 0.5; // 0.5..1.0
         ctx.fillStyle = `rgba(255, 60, 60, ${alpha})`;

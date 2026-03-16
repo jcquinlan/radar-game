@@ -28,7 +28,7 @@ export class UpgradeSystem {
         description: 'Shorter cooldown between pings',
         level: 0,
         maxLevel: 5,
-        cost: (lvl) => 20 + lvl * 30,
+        cost: (lvl) => 10 + lvl * 15,
         apply: (lvl) => {
           if (pingSystem) {
             pingSystem.setCooldown(DEFAULT_PING_CONFIG.cooldown * (1 - lvl * 0.12));
@@ -41,7 +41,7 @@ export class UpgradeSystem {
         description: 'Larger radar detection radius',
         level: 0,
         maxLevel: 5,
-        cost: (lvl) => 30 + lvl * 40,
+        cost: (lvl) => 15 + lvl * 20,
         apply: (lvl) => {
           const newRadius = 340 + lvl * 40;
           radar.setRadius(newRadius);
@@ -56,7 +56,7 @@ export class UpgradeSystem {
         description: 'Show entity type details on blips',
         level: 0,
         maxLevel: 3,
-        cost: (lvl) => 50 + lvl * 50,
+        cost: (lvl) => 25 + lvl * 25,
         apply: (lvl) => {
           onResolutionChange(lvl);
         },
@@ -67,7 +67,7 @@ export class UpgradeSystem {
         description: 'Reduce incoming damage',
         level: 0,
         maxLevel: 5,
-        cost: (lvl) => 35 + lvl * 40,
+        cost: (lvl) => 15 + lvl * 20,
         apply: (lvl) => {
           player.armor = lvl * 2;
         },
@@ -78,7 +78,7 @@ export class UpgradeSystem {
         description: 'Increase movement speed',
         level: 0,
         maxLevel: 5,
-        cost: (lvl) => 25 + lvl * 30,
+        cost: (lvl) => 10 + lvl * 15,
         apply: (lvl) => {
           player.speed = player.baseSpeed + lvl * 15;
         },
@@ -89,7 +89,7 @@ export class UpgradeSystem {
         description: 'Auto-collect nearby resources',
         level: 0,
         maxLevel: 5,
-        cost: (lvl) => 40 + lvl * 45,
+        cost: (lvl) => 20 + lvl * 20,
         apply: (lvl) => {
           player.magnetRange = 50 + lvl * 30;
         },
