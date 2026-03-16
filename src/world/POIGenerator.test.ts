@@ -5,7 +5,7 @@ import {
   isOnCorridor,
   spawnAsteroidVein,
 } from './POIGenerator';
-import { Enemy, Asteroid, Ally } from '../entities/Entity';
+import { Enemy, Asteroid } from '../entities/Entity';
 
 describe('POI type definitions', () => {
   it('every POI type has an id, base weight, and spawn function', () => {
@@ -78,38 +78,6 @@ describe('resource_cache POI', () => {
     for (const a of asteroids) {
       const dist = Math.sqrt((a.x - 1000) ** 2 + (a.y - 1000) ** 2);
       expect(dist).toBeLessThan(80);
-    }
-  });
-});
-
-describe('ally_outpost POI', () => {
-  it('spawns 1 ally and 3-4 asteroids', () => {
-    const outpost = POI_TYPES.find((p) => p.id === 'ally_outpost')!;
-    for (let i = 0; i < 20; i++) {
-      const entities = outpost.spawn(500, 500, 1);
-      const allies = entities.filter((e) => e.type === 'ally') as Ally[];
-      const asteroids = entities.filter((e) => e.type === 'asteroid') as Asteroid[];
-      expect(allies).toHaveLength(1);
-      expect(asteroids.length).toBeGreaterThanOrEqual(3);
-      expect(asteroids.length).toBeLessThanOrEqual(4);
-    }
-  });
-
-  it('ally is near the center, asteroids form a ring', () => {
-    const outpost = POI_TYPES.find((p) => p.id === 'ally_outpost')!;
-    const entities = outpost.spawn(500, 500, 1);
-    const ally = entities.find((e) => e.type === 'ally')!;
-    const asteroids = entities.filter((e) => e.type === 'asteroid');
-
-    // Ally should be very close to center
-    const allyDist = Math.sqrt((ally.x - 500) ** 2 + (ally.y - 500) ** 2);
-    expect(allyDist).toBeLessThan(20);
-
-    // Asteroids should be further out in a ring (60-100px from center)
-    for (const a of asteroids) {
-      const dist = Math.sqrt((a.x - 500) ** 2 + (a.y - 500) ** 2);
-      expect(dist).toBeGreaterThan(50);
-      expect(dist).toBeLessThan(110);
     }
   });
 });

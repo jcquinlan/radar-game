@@ -83,17 +83,6 @@ export class UpgradeSystem {
           player.speed = player.baseSpeed + lvl * 15;
         },
       },
-      {
-        id: 'energy_magnet',
-        name: 'Energy Magnet',
-        description: 'Auto-collect nearby resources',
-        level: 0,
-        maxLevel: 5,
-        cost: (lvl) => 20 + lvl * 20,
-        apply: (lvl) => {
-          player.magnetRange = 50 + lvl * 30;
-        },
-      },
     ];
   }
 

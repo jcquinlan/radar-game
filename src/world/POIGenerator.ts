@@ -5,7 +5,6 @@ import {
   Asteroid,
   createAsteroid,
   createEnemy,
-  createAlly,
   createDropoff,
 } from '../entities/Entity';
 
@@ -144,26 +143,6 @@ const resourceCache: POIType = {
   },
 };
 
-const allyOutpost: POIType = {
-  id: 'ally_outpost',
-  baseWeight: 2,
-  corridorBoost: false,
-  spawn(cx, cy) {
-    const entities: GameEntity[] = [];
-
-    // 1 ally near center
-    const allyOffset = scatterAround(cx, cy, 1, 15)[0];
-    entities.push(createAlly(allyOffset.x, allyOffset.y));
-
-    // 3-4 asteroids in a ring
-    const asteroidCount = randInt(3, 4);
-    for (const pt of ringAround(cx, cy, asteroidCount, 80)) {
-      entities.push(createAsteroid(pt.x, pt.y));
-    }
-
-    return entities;
-  },
-};
 
 const enemyCamp: POIType = {
   id: 'enemy_camp',
@@ -226,7 +205,6 @@ const emptyZone: POIType = {
 
 export const POI_TYPES: POIType[] = [
   resourceCache,
-  allyOutpost,
   enemyCamp,
   salvageDropoff,
   emptyZone,

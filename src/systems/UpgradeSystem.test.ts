@@ -21,8 +21,8 @@ describe('UpgradeSystem', () => {
     }, pingSystem);
   });
 
-  it('initializes with 6 upgrades at level 0', () => {
-    expect(upgrades.upgrades).toHaveLength(6);
+  it('initializes with 5 upgrades at level 0', () => {
+    expect(upgrades.upgrades).toHaveLength(5);
     for (const u of upgrades.upgrades) {
       expect(u.level).toBe(0);
     }
@@ -108,12 +108,6 @@ describe('UpgradeSystem', () => {
     player.addEnergy(100);
     upgrades.purchase('engine_speed', player);
     expect(player.speed).toBeGreaterThan(initialSpeed);
-  });
-
-  it('energy magnet upgrade sets magnet range', () => {
-    player.addEnergy(100);
-    upgrades.purchase('energy_magnet', player);
-    expect(player.magnetRange).toBeGreaterThan(0);
   });
 
   it('canPurchase returns correct values', () => {

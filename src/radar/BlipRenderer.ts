@@ -1,11 +1,10 @@
-import { GameEntity, Ally, Enemy, Salvage, Asteroid } from '../entities/Entity';
+import { GameEntity, Enemy, Salvage, Asteroid } from '../entities/Entity';
 import { getTheme } from '../themes/theme';
 
 
 const BLIP_SIZES: Record<string, number> = {
   resource: 3,
   enemy: 5,
-  ally: 4,
   salvage: 5,
   dropoff: 6,
   asteroid: 4,
@@ -63,20 +62,10 @@ export class BlipRenderer {
 
       let color = entity.type === 'resource' ? themeColors.resource
         : entity.type === 'enemy' ? themeColors.enemy
-        : entity.type === 'ally' ? themeColors.ally
         : entity.type === 'salvage' ? themeColors.salvage
         : entity.type === 'asteroid' ? themeColors.asteroid
         : themeColors.dropoff;
       const size = BLIP_SIZES[entity.type];
-
-      // Ally subtype colors
-      if (entity.type === 'ally') {
-        const subtype = (entity as Ally).subtype;
-        color = subtype === 'healer' ? themeColors.allyHealer
-          : subtype === 'shield' ? themeColors.allyShield
-          : subtype === 'beacon' ? themeColors.allyBeacon
-          : color;
-      }
 
       let currentSize = size;
 
@@ -95,28 +84,6 @@ export class BlipRenderer {
         // Bosses render at 1.5x size
         if (enemy.isBoss) {
           currentSize *= 1.5;
-        }
-      }
-
-      // Ally gentle pulsing aura
-      if (entity.type === 'ally') {
-        const auraSize = size + 6 + Math.sin(this.time * 2) * 3;
-        ctx.globalAlpha = 0.15 + Math.sin(this.time * 2) * 0.05;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, auraSize, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.globalAlpha = 1;
-
-        // Beacon range indicator
-        if ((entity as Ally).subtype === 'beacon') {
-          ctx.globalAlpha = 0.06;
-          ctx.beginPath();
-          ctx.arc(screenX, screenY, (entity as Ally).beaconRange, 0, Math.PI * 2);
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 1;
-          ctx.stroke();
-          ctx.globalAlpha = 1;
         }
       }
 
@@ -259,8 +226,7 @@ export class BlipRenderer {
         } else if (entity.type === 'salvage') {
           label = 'S';
         } else {
-          const ally = entity as Ally;
-          label = ally.subtype === 'healer' ? '+' : ally.subtype === 'shield' ? 'S' : 'B';
+          label = '';
         }
         ctx.fillText(label, screenX + size + 2, screenY + 3);
         ctx.restore();

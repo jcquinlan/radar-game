@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Minimap } from './Minimap';
 import { Player } from '../entities/Player';
-import { createAlly, createAsteroid, createDropoff, createEnemy, createResource, createSalvage, GameEntity } from '../entities/Entity';
+import { createAsteroid, createDropoff, createEnemy, createResource, createSalvage, GameEntity } from '../entities/Entity';
 
 describe('Minimap', () => {
   let minimap: Minimap;
@@ -16,12 +16,6 @@ describe('Minimap', () => {
       const result = minimap.getVisibleEntities([dropoff]);
       expect(result).toHaveLength(1);
       expect(result[0].type).toBe('dropoff');
-    });
-
-    it('excludes ally entities', () => {
-      const ally = createAlly(100, 200, 'healer');
-      const result = minimap.getVisibleEntities([ally]);
-      expect(result).toHaveLength(0);
     });
 
     it('excludes enemy entities', () => {
@@ -48,7 +42,6 @@ describe('Minimap', () => {
       const entities: GameEntity[] = [
         createResource(0, 0),
         createDropoff(100, 100),
-        createAlly(200, 200, 'beacon'),
         createEnemy(300, 300, 'brute'),
       ];
       const result = minimap.getVisibleEntities(entities);
@@ -68,12 +61,11 @@ describe('Minimap', () => {
       const entities: GameEntity[] = [
         createResource(0, 0),
         createDropoff(100, 100),
-        createAlly(200, 200, 'beacon'),
         createEnemy(300, 300, 'brute'),
         createSalvage(400, 400),
       ];
       const result = minimap.getVisibleEntities(entities);
-      expect(result).toHaveLength(5);
+      expect(result).toHaveLength(4);
     });
 
     it('still excludes inactive entities when expanded', () => {
@@ -256,11 +248,6 @@ describe('Minimap', () => {
     it('returns gold for dropoff entities', () => {
       const dropoff = createDropoff(0, 0);
       expect(minimap.getEntityColor(dropoff)).toBe('#ffdd00');
-    });
-
-    it('returns blue for ally entities', () => {
-      const ally = createAlly(0, 0, 'healer');
-      expect(minimap.getEntityColor(ally)).toBe('#4488ff');
     });
 
     it('returns red for enemy entities', () => {

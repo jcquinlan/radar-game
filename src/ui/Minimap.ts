@@ -124,7 +124,7 @@ export class Minimap {
       if (!e.active) return false;
       if (expanded) {
         // Show all major entity types when expanded
-        return e.type === 'dropoff' || e.type === 'resource' || e.type === 'asteroid' || e.type === 'enemy' || e.type === 'ally' || e.type === 'salvage';
+        return e.type === 'dropoff' || e.type === 'resource' || e.type === 'asteroid' || e.type === 'enemy' || e.type === 'salvage';
       }
       return e.type === 'dropoff';
     });
@@ -133,7 +133,6 @@ export class Minimap {
   getEntityColor(entity: GameEntity): string {
     const e = getTheme().entities;
     return entity.type === 'dropoff' ? e.dropoff
-      : entity.type === 'ally' ? e.ally
       : entity.type === 'enemy' ? e.enemy
       : entity.type === 'salvage' ? e.salvage
       : entity.type === 'resource' ? e.resource
