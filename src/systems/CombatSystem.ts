@@ -317,6 +317,8 @@ export class CombatSystem {
             s.hp -= p.damage;
             s.damageFlash = 0.15;
             addFloatingText(`-${p.damage}`, s.x, s.y, getTheme().entities.salvage);
+            onImpact(s.x, s.y, p.x, p.y, getTheme().entities.salvage);
+            this.onShake(4);
             if (s.hp <= 0) {
               s.hp = 0;
               s.active = false;
@@ -362,6 +364,7 @@ export class CombatSystem {
           enemy.health -= p.damage;
           enemy.aggro = true;
           addFloatingText(`-${p.damage}`, enemy.x, enemy.y, '#00ddff');
+          onImpact(enemy.x, enemy.y, p.x, p.y, '#00ddff');
           if (enemy.health <= 0 && enemy.active) {
             enemy.active = false;
             const deathColor = enemy.subtype === 'ranged' ? getTheme().entities.enemyRanged : getTheme().entities.enemy;

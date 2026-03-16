@@ -552,6 +552,24 @@ describe('CombatSystem', () => {
       expect(combat.turretProjectiles.length).toBe(0);
     });
 
+    it('turret projectile triggers impact particles on enemy hit', () => {
+      const onImpact = vi.fn();
+      const enemy = createEnemy(100, 0, 'scout');
+      enemy.health = 50;
+      combat.turretProjectiles.push({
+        x: 100, y: 0, vx: 0, vy: 0,
+        damage: 5, active: true, lifetime: 3,
+      });
+
+      combat.update([enemy], player, 0.016, false, 15, () => {}, () => {}, onImpact);
+
+      expect(onImpact).toHaveBeenCalledWith(
+        expect.any(Number), expect.any(Number),  // enemy position (may have moved)
+        expect.any(Number), expect.any(Number),  // projectile position
+        '#00ddff'
+      );
+    });
+
     it('turret projectiles do not damage the player', () => {
       combat.turretProjectiles.push({
         x: 5, y: 0,
@@ -798,6 +816,33 @@ describe('CombatSystem', () => {
       combat.update([], player, 0.1, false, 15, addFloatingText, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
 
       expect(addFloatingText).toHaveBeenCalledWith('-8', 100, 0, expect.any(String));
+    });
+
+    it('triggers screen shake when projectile hits salvage', () => {
+      const onShake = vi.fn();
+      combat.onShake = onShake;
+      const salvage = createSalvage(100, 0);
+      combat.projectiles.push({
+        x: 100, y: 0, vx: 0, vy: 0,
+        damage: 8, active: true, lifetime: 3,
+      });
+
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+
+      expect(onShake).toHaveBeenCalledWith(4);
+    });
+
+    it('triggers impact particles when projectile hits salvage', () => {
+      const onImpact = vi.fn();
+      const salvage = createSalvage(100, 0);
+      combat.projectiles.push({
+        x: 100, y: 0, vx: 0, vy: 0,
+        damage: 8, active: true, lifetime: 3,
+      });
+
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, onImpact, undefined, undefined, undefined, [salvage]);
+
+      expect(onImpact).toHaveBeenCalledWith(100, 0, 100, 0, expect.any(String));
     });
 
     it('inactive salvage is not hit by projectiles', () => {
