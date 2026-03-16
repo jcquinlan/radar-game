@@ -200,19 +200,7 @@ Add to each theme definition:
 
 ### P3 — Aspirational
 
-#### P3-1: CRT shader for deeper radar-console immersion
-
-**Problem:** The game has scanlines (Canvas 2D) and bloom (WebGL), but no CRT curvature, vignetting, or phosphor dot simulation. These would push the "radar console" aesthetic further.
-
-**Recommendation:**
-- Add an optional CRT shader effect to the pipeline:
-  - Subtle barrel distortion (reuse the math from DamageDistortionEffect, but permanent at low curvature ~0.01)
-  - Corner vignetting (darken edges by ~15%)
-  - Phosphor dot pattern (RGB subpixel simulation at low opacity)
-- This is **purely cosmetic** and should be toggleable independently from other shaders
-- Low priority — the game looks good without it
-
-#### P3-2: Dynamic radar ring response
+#### P3-1: Dynamic radar ring response
 
 **Problem:** The radar rings are static. They don't respond to anything happening in the game — they're just backdrop.
 
@@ -453,6 +441,232 @@ Add to each theme definition:
 12. **Motion sensitivity:** Screen shake toggle, reduced motion mode
 
 ### Phase 4 — Aspirational
-13. **P3-1:** CRT shader effect
-14. **P3-2:** Dynamic radar ring response
-15. **J5:** Thrust particles
+13. **P3-1:** Dynamic radar ring response
+14. **J5:** Thrust particles
+
+---
+
+## 9. GAME DIRECTION PROPOSALS
+
+Three complete proposals for where this game goes next. Each one covers both **art direction** (the visual identity question) and **gameplay loop structure** (the "what am I actually doing for 10 minutes and why does every mechanic earn its place" question).
+
+The current state: the foundation is strong. Tank controls feel good. Ping-as-perception is a great core conceit. Salvage towing has satisfying physics. The base → run → wave → results loop exists. But right now the 60-second run is mostly unstructured — you fly around, grab stuff, the timer expires, you fight a wave. The mechanics exist side-by-side rather than interlocking. These proposals aim to make every system *need* the others.
+
+---
+
+### Proposal A: "The Salvage Run" — Lean Into What Works
+
+**Art Direction: Refined Radar Console**
+
+Don't reinvent the visual identity — just commit to it harder. The neon-on-black radar aesthetic is well-trodden but *this game has a reason to use it*: the radar isn't decoration, it's the game mechanic. The visual direction should feel less "Geometry Wars neon party" and more "the last working console on a derelict station."
+
+Key shifts:
+- **Desaturate the palette 20-30%.** Current colors are screaming-bright. Pull them down so that *only* gameplay-critical elements (enemies, your own ping) are at full saturation. Ambient elements, UI chrome, and decorative effects should feel dim and tired — a console that's been running too long.
+- **Introduce noise/grain to the background.** Not a shader — just a subtle per-frame random variation (±2%) in the background fill color. Makes the void feel like a CRT that's slightly unstable, not a clean digital display.
+- **Warm the greens toward amber.** Instead of pure phosphor green (#00ff41), shift to a warmer green-gold (#44cc44 or even #66aa33). This reads as "old CRT phosphor" rather than "Matrix screensaver." The Ocean and Ember themes already show this can work with different hues.
+- **Typography as world-building.** The monospace text is correct but generic. Lean into the console aesthetic: angular brackets around labels (`[HP] 85/100`), dot-leader padding between label and value (`RANGE....1250m`), abbreviated military-style labels (`TGT: 3 HOSTILE`, `SALVAGE: 2 TOW`).
+
+Why this and not something new: The radar conceit is the game's best idea. The art direction should *serve* it, not compete with it. Making it look more authentic is more impactful than making it look different.
+
+**Gameplay Loop: Salvage as the Spine**
+
+The core insight: **salvage should be the verb that connects every other system.** Right now salvage is one of several things you can do during a run. It should be *the* thing. Everything else exists to support or complicate it.
+
+**The run, redesigned:**
+
+The 60-second timer stays (or stretches to 90-120s after tuning). But now there's a clear objective structure within the run, not just "do stuff until the timer expires."
+
+**Pre-run (base mode):**
+- You see the home base, your defenses, your currency.
+- You see a **salvage manifest**: "This run: 5 salvage targets." These are pre-placed in the world at the start of the run — they don't spawn randomly per-chunk. The player sees approximate directions on the minimap (N, NE, SE, etc.) but not exact positions. This gives the run *direction* — you're not just wandering.
+- Start the run.
+
+**During the run — the tension triangle:**
+
+Every second of the run, the player is navigating a three-way tension:
+
+1. **Salvage retrieval** — find salvage, fly to it, attach it, haul it back. This is the primary objective. Salvage is the only way to earn meaningful currency. Resources (energy blips) are pocket change by comparison.
+
+2. **Preparation spending** — energy collected from resources and enemy kills buys in-run upgrades and defenses. But every second spent farming energy or placing turrets is a second *not* spent retrieving salvage. The player must decide: "Do I grab one more salvage from the far side of the map, or do I head home early and spend my remaining time fortifying?"
+
+3. **Clock pressure** — the timer is always ticking. The further out you go for salvage, the more time you spend traveling, and the less time you have to prepare defenses. Distance = risk.
+
+**Why every mechanic earns its place:**
+
+| Mechanic | Role in the Loop | What Happens If You Remove It |
+|---|---|---|
+| **Ping/radar** | Your only way to *find* salvage and enemies. Upgrading ping range/speed directly determines how efficiently you can locate targets. | You can't find anything. Game doesn't work. |
+| **Tank controls + inertia** | Makes navigation a *skill*. Tight corridors between enemy camps require real piloting. Towing salvage while maneuvering around threats is the game's core challenge. | Movement becomes trivial, salvage towing loses tension. |
+| **Salvage towing** | The primary objective. Salvage drags behind you, slows you down, attracts enemies (see below). Depositing it at base is the main score/currency source. | No objective. Just killing enemies until timer runs out. |
+| **Enemy subtypes (scout/brute/ranged)** | Each threatens salvage runs differently. Scouts chase you down — dangerous when towing because you're slower. Brutes block paths — you must go around or blast through. Ranged enemies shoot your salvage from a distance, forcing you to either kill them or shield the cargo. | Combat becomes uniform. No reason to approach different encounters differently. |
+| **Energy + upgrades** | The decision currency. Energy comes from resources and kills. You spend it on in-run upgrades (ping range to find more salvage, engine speed to haul faster, armor to survive the trip). Every energy point spent on upgrades is a point *not* spent on defenses. | No progression within a run. First minute feels the same as last minute. |
+| **Abilities (blast/heal/dash/missile)** | Tactical tools for salvage protection. Blast clears a path. Heal sustains you through damage while towing. Dash covers ground fast (but hard to control with salvage trailing). Missile picks off ranged enemies threatening your cargo from afar. | Combat is passive (just fly into enemies). No skill expression. |
+| **Defenses (turret/repair)** | Investment in the final wave. Turrets placed during the run persist into the wave. More turrets = easier wave. But turrets cost energy you could spend on upgrades. Repair stations keep you alive during defense. | Final wave is pure ability-spam. No strategic layer to base defense. |
+| **Final wave** | The payoff. Everything you did during the run — salvage deposited, defenses placed, upgrades purchased — determines whether you survive. The wave tests your preparation. | No climax. The run just... ends. |
+| **Home base HP** | Stakes. If the base dies, you lose most of your currency. This makes defense placement meaningful — it's not just about the player surviving, it's about protecting the reward. | No consequence for ignoring defenses. Just kite enemies forever. |
+| **Allies (healer/shield/beacon)** | Safety nets in the field. Healer patches you up between salvage runs. Shield gives you damage reduction for a risky grab. Beacon provides passive energy while you're nearby — a rest stop. | Field exploration is pure attrition. No recovery options outside abilities. |
+| **Difficulty scaling (distance)** | Salvage further from base is worth more (currently flat 50E — this would need to change). Far salvage is harder to retrieve because enemies are tougher, the trip is longer, and you're further from your defenses if things go wrong. | No reason to explore further. Grab the closest salvage and camp. |
+
+**What changes from current implementation:**
+- Salvage spawns pre-determined per run (5-8 targets), shown on minimap as approximate directions
+- Salvage value scales with distance from base (50E at close range, up to 150E at far range)
+- Enemies are mildly attracted to towed salvage (aggro range +50% when player is towing) — this makes hauling feel dangerous
+- Remove dropoff zones entirely — home base is the only deposit point. This simplifies the map and makes "getting back" always the objective.
+- Remove beacons (ally subtype). The passive energy mechanic doesn't serve the loop — it encourages camping, not moving. Healers and shields stay because they serve the "patch up and head back out" rhythm.
+
+**What to cut entirely:**
+- Beacon allies (encourages static play)
+- Dropoff zones (redundant with home base deposit)
+- Score display (replace with "Salvage: 2/5 deposited" — a clear objective counter)
+- Coordinates display (thematic but adds no gameplay value — minimap does this better)
+
+---
+
+### Proposal B: "Deep Signal" — Something Stranger
+
+**Art Direction: Sonar/Hydrophone — Pressure and Depth**
+
+Drop the CRT/military radar metaphor entirely. Instead: **you are a deep-sea probe descending into an ocean trench.** The visual language shifts from "radar screen in a dark room" to "bioluminescent shapes in crushing blackness."
+
+Key shifts:
+- **No grid lines or rings.** The radar display chrome disappears. Instead, the ping is a sonar pulse — same expanding circle mechanic, but it renders as a pressure wave: a subtle ripple distortion that reveals entities as they're washed over. Entities don't appear as blips on a screen — they *glow into existence* as the sonar touches them and then *fade back into darkness* over 2-3 seconds.
+- **Color palette: bioluminescent.** Deep blue-black background (#040812). Entities glow in organic colors: resources are soft blue-white (like plankton), enemies are deep red-orange (like anglerfish lures), allies are gentle green (like phosphorescent algae), salvage is bright amber-gold (like volcanic thermal vents). No neon. Everything emits its own light rather than being illuminated by a radar sweep.
+- **Parallax becomes depth.** The two ambient particle layers are no longer "foreground/background" — they're "shallow/deep." Deep particles are large, slow, faint (like distant whale shapes). Foreground particles are tiny, fast, bright (like disturbed plankton).
+- **Pressure vignette replaces radar vignette.** Instead of darkness outside the ping range, the edges of the screen have a subtle blue-shift and barrel distortion — like looking through a diving helmet. The deeper (further from base) you go, the more pronounced this effect becomes.
+- **Sound design language (even without audio).** Floating text for damage should feel different: instead of sharp red numbers, show pressure cracks — brief white fracture lines radiating from the impact point. Healing shows gentle bubble particles rising.
+
+Why this might work: It's genuinely different from every other neon-radar-game on itch.io. The deep-sea pressure metaphor gives the distance-scaling mechanic a *physical* justification — you're descending deeper, where the creatures are more dangerous. And it opens visual territory that's underexplored in code-art games.
+
+Why it might not: It's a much bigger visual overhaul. The current radar-ring rendering, scanlines, and CRT aesthetic would all need reworking. And "deep sea" is harder to render procedurally than "radar screen" — organic bioluminescence is harder to fake with geometric shapes than phosphor dots.
+
+**Gameplay Loop: Depth as Progression**
+
+Same structural bones as Proposal A (salvage is the verb, timer creates pressure, wave is the climax), but the metaphor of *depth* replaces *distance* and adds a vertical dimension to decision-making.
+
+**The depth mechanic:**
+
+The world isn't just a flat plane — it has conceptual "depth layers" that increase with distance from base. These aren't literal 3D — they're zones rendered with increasing visual intensity (darker background, more particles, more distortion).
+
+- **Shallows (0-500px from base):** Safe. Low-value salvage (30E). Weak enemies. Bright, clear visibility.
+- **Midwater (500-1500px):** Moderate. Standard salvage (50-80E). Mixed enemy types. Slight blue-shift vignette.
+- **Deep zone (1500-3000px):** Dangerous. High-value salvage (100-150E). Strong enemies, more of them. Heavy vignette, reduced effective visibility (entities fade faster after ping).
+- **Abyss (3000px+):** Extreme. Rare ultra-salvage (200E+). Elite enemies. Visibility severely limited — entities only stay visible for 1 second after ping instead of the normal duration. The screen edges pulse with pressure warnings.
+
+This makes the exploration/risk tradeoff *visible*. The player can *see* they're going deeper. The screen itself tells them they're in danger.
+
+**Changes from current implementation:**
+- Same salvage-as-spine design as Proposal A
+- Add depth-zone rendering (4 zones, visual intensity scales with distance)
+- Entity visibility duration decreases with depth (currently entities stay visible until next ping — in deep zones, they'd fade after 1-2 seconds)
+- Ping range decreases in deep zones (pressure interference) — upgradeable to counteract
+- Replace corridors (8 cardinal axes) with "thermal vents" — specific deep-zone paths that have higher salvage density but also higher enemy density
+- Remove turrets/repair stations (don't fit the probe metaphor). Replace with consumable items: **sonar buoys** (placed in the world, provide persistent visibility in a radius — like a turret but for information instead of damage) and **repair drones** (follow you for 30 seconds, auto-heal)
+
+**What to cut:**
+- Radar rings, scanlines, center crosshair (replace with sonar pulse aesthetic)
+- Turrets and repair stations (replaced by buoys and drones)
+- Beacon allies (same reasoning as Proposal A)
+- Corridors (replaced by thermal vents)
+- Home arrow indicator (replaced by a "depth gauge" on the HUD showing distance from base as a vertical bar)
+
+---
+
+### Proposal C: "Tighten the Screws" — Same Vision, Stripped Down
+
+**Art Direction: Neon Radar, Done Right**
+
+Keep the current visual identity but subtract rather than add. The problem with the current look isn't that it's neon-on-black — it's that it's *too much* neon-on-black. Everything glows. Everything pulses. When everything is bright, nothing is bright.
+
+Key shifts:
+- **Strict brightness budget.** Only 3 things on screen should be at full brightness at any given time: the player, the nearest threat, and whatever objective element matters right now (salvage you're towing, dropoff you're approaching, base you're defending). Everything else drops to 60% brightness or lower. This creates a natural focus hierarchy without changing any colors.
+- **Kill the glow creep.** Currently: ping has shadowBlur 20, sweep effects have shadowBlur 20, ability effects have shadowBlur 12-15, missiles have shadowBlur 10, orbit bots have shadowBlur 10, dropoff zones have shadowBlur 8. That's 6+ glow sources competing for attention. Rule: **maximum 2 active shadowBlur elements at any time.** Ping glow is always one of them (it's the heartbeat). The second slot goes to whatever just happened (damage, ability, collection). Everything else uses the faked-glow technique (larger low-alpha circle behind the blip) which already exists in BlipRenderer.
+- **Reduce motion trails to player-only.** Currently every fast entity leaves trails. This is visual noise. Only the player's trail matters — it communicates your speed and heading to you. Enemy trails just clutter the radar.
+- **Scanlines: every 4px instead of 3px, opacity down 30%.** They should be barely perceptible — felt, not seen.
+
+Why this works: You already have a good-looking game. The art direction doesn't need reinvention — it needs *editing*. The current version is a first draft where every visual idea that worked in isolation got included. The second draft is about removing things until only the essential visual language remains.
+
+**Gameplay Loop: The Taut Run**
+
+Same core structure (base → run → wave), but aggressively trimmed to eliminate dead time, redundant mechanics, and anything that doesn't create a *decision*.
+
+**The problem with the current loop:** During a run, you can do too many things that don't interact. You can: explore, collect resources, fight enemies, find allies, pick up salvage, deposit salvage at dropoff zones, deposit at home base, place defenses, buy upgrades, use abilities. That's 10+ activities, and for most of the run, several of them don't matter. Resource collection is mindless (ping and fly through). Ally interaction is passive (just fly near them). Dropoff zones are disconnected from the base defense goal.
+
+**Principle: every second of the run should present a choice between two things you want to do.**
+
+**Stripped-down mechanic list (what stays):**
+
+| Mechanic | Why It Stays |
+|---|---|
+| Ping/radar | Core perception mechanic. The game. |
+| Tank controls + towing physics | Core navigation challenge. |
+| Salvage (pre-placed, 5-6 per run) | Primary objective. |
+| Home base (only deposit point) | Creates the "outbound/return" rhythm. |
+| Energy + 4 upgrades (cut from 6) | In-run progression. See below. |
+| 3 abilities (cut from 4) | Combat tools. See below. |
+| 2 enemy types (cut from 3) | Enough variety without diluting. See below. |
+| Defenses (turrets only) | Wave preparation. |
+| Final wave | Climax. |
+
+**What gets cut and why:**
+
+| Cut | Reason |
+|---|---|
+| **Dropoff zones** | Redundant with home base deposit. Having two deposit mechanisms splits the player's attention without adding a real choice. One deposit point = one clear "home" direction. |
+| **Beacon allies** | Passive energy gain rewards standing still. Antithetical to the time-pressure design. |
+| **Ranged enemies** | Three enemy subtypes is one too many for 10 minutes of gameplay. Scouts (fast, fragile, chase you) and brutes (slow, tanky, block paths) create enough tactical variety. Ranged enemies add complexity without adding a meaningfully different *player decision*. Cut them, and the projectile rendering/collision code simplifies significantly. |
+| **Homing missile ability** | Four abilities is one too many to keep track of in a panic. Three is the sweet spot (one offensive, one defensive, one mobility). Blast, Heal, and Dash stay. Missile is the most complex ability with the least intuitive behavior (launch spread? turn rate? distance-scaled tracking?). |
+| **Radar resolution upgrade** | Shows entity labels. This is quality-of-life, not a meaningful power increase. The player learns to read the radar by playing — they don't need text labels. |
+| **Energy magnet upgrade** | Auto-collection removes the decision of "do I detour for that resource cluster?" If energy is scarce enough to matter, the player should have to *choose* to collect it. |
+| **Repair stations** | With only turrets as defenses, the defense placement decision is simpler: "where do I put my guns?" Repair stations add a second dimension (healing) that isn't necessary for the wave to feel strategic. The heal ability already covers personal sustain. |
+
+**Remaining 4 upgrades:**
+
+| Upgrade | What It Does | Why It's a Decision |
+|---|---|---|
+| Ping Frequency | Faster pings = find salvage faster, see enemies sooner | Competes with other upgrades for limited energy |
+| Ping Range | Wider detection = safer navigation, find salvage from further | Range vs. frequency is a real choice (wide/slow vs. narrow/fast) |
+| Hull Armor | Take less damage = survive longer trips into danger | Defensive investment vs. offensive/utility |
+| Engine Speed | Move faster = more efficient runs, but harder to control when towing | Speed vs. control tradeoff is felt immediately |
+
+**Remaining 3 abilities:**
+
+| Ability | Role | Why It's a Decision |
+|---|---|---|
+| Blast | AOE clear — kills scouts, damages brutes | Offensive. "Do I blast now or save it for a bigger cluster?" |
+| Heal (HoT) | Sustain — keeps you alive during risky salvage grabs | Defensive. "Do I heal now or save it for the trip home?" |
+| Dash | Mobility — covers ground fast, rams through enemies | Utility. "Do I dash to save time, or save charges for the wave?" |
+
+**The run, second-by-second:**
+
+0:00 — Run starts. 5 salvage targets shown as direction indicators on minimap. Timer: 90 seconds.
+
+0:00-0:20 — **Scouting phase.** Player pings outward, identifies nearest salvage and enemy positions. Decision: "Which salvage do I go for first? The close easy one, or the far valuable one?"
+
+0:20-0:50 — **First retrieval.** Player navigates to salvage, picks it up, hauls it back. Encounters 2-3 enemies on the route. Decision: "Fight through or go around? Use blast now or save it?" Deposits salvage at base. Gets energy from the deposit + any resource clusters collected along the way.
+
+0:50-0:55 — **At base, brief.** Decision: "Spend energy on an upgrade (ping range to find the next target faster?) or a turret (better wave defense?) or just go?" Every second here is a second not salvaging.
+
+0:55-1:20 — **Second retrieval.** Harder — further out, tougher enemies. Player now has an upgrade or two. The trip tests whether they invested well. Decision: "I can see a third salvage nearby but I'm at 40% HP. Head home or push for one more?"
+
+1:20-1:30 — **Final prep.** Timer warning. Player deposits remaining salvage. Places any turrets they can afford. Positions near base.
+
+1:30 — **Wave.** Everything the player did is tested. Number of turrets placed, upgrades purchased, HP remaining. The wave is 12-20 enemies (scouts + brutes + one boss brute) converging on the base.
+
+Win → Currency → Next run (harder wave, same loop).
+
+**The key difference from current:** nothing in this loop exists "just because." There are no mechanics the player can ignore. You *will* ping, *will* tow salvage, *will* fight enemies, *will* upgrade, *will* defend. And at every moment, you're choosing between two things you genuinely want to do.
+
+---
+
+### Comparing the Three
+
+| Dimension | A: Salvage Run | B: Deep Signal | C: Tighten the Screws |
+|---|---|---|---|
+| **Art risk** | Low. Refine what exists. | High. Major visual overhaul. | Low. Edit what exists. |
+| **Code risk** | Medium. Pre-placed salvage, aggro changes, remove dropoffs. | High. New rendering for depth zones, entity fading, sonar aesthetic. | Low. Mostly removals and rebalancing. |
+| **Gameplay novelty** | Medium. Same actions, better structured. | High. Depth layers add a new dimension. | Low. Fewer actions, tighter structure. |
+| **"Fun in 30 seconds" factor** | High. First salvage grab feels purposeful. | Medium. Need to experience depth zones to feel the difference. | High. Every second has a decision. |
+| **Scope to ship** | 2-3 weeks | 5-6 weeks | 1-2 weeks |
+| **Biggest risk** | Salvage manifest might feel prescribed, not exploratory. | Visual overhaul might not land. Organic bioluminescence is hard to do procedurally. | Cutting too much might make the game feel thin. 2 enemy types and 3 abilities might not sustain interest past run 5. |
+
+**My recommendation:** Start with **C** (tighten). It ships fastest and its cuts are reversible — you can always add ranged enemies, missiles, and repair stations back if the stripped-down version feels too spare. Then layer on **A**'s salvage manifest system (pre-placed salvage with distance-based value) once the core loop feels airtight. **B** is a great idea for a sequel or major update but is too much visual risk for where the project is right now.
