@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createResource, createEnemy, createAlly, createHomeBase, createTurret, createRepairStation } from './Entity';
+import { createResource, createEnemy, createAlly, createHomeBase, createTurret, createRepairStation, createSalvage } from './Entity';
 
 describe('Entity factories', () => {
   it('creates a resource at the given position', () => {
@@ -117,6 +117,16 @@ describe('Entity factories', () => {
     expect(rs.healRate).toBe(3);
     expect(rs.range).toBe(100);
     expect(rs.active).toBe(true);
+  });
+
+  it('creates salvage with HP, maxHp, and damageFlash fields', () => {
+    const s = createSalvage(50, 75);
+    expect(s.type).toBe('salvage');
+    expect(s.hp).toBe(30);
+    expect(s.maxHp).toBe(30);
+    expect(s.damageFlash).toBe(0);
+    expect(s.towedByPlayer).toBe(false);
+    expect(s.active).toBe(true);
   });
 
   it('Defense union type discriminates turret from repair station', () => {
