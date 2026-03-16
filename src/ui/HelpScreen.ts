@@ -40,17 +40,8 @@ const SECTIONS: { title: string; lines: string[] }[] = [
     lines: [
       '[1] Blast — AoE damage around you',
       '[2] Regen — heal over time',
-      '[3] Drone — spawns a helper that chases enemies',
-      '[4] Dash — burst of speed in current direction',
-    ],
-  },
-  {
-    title: 'COMBOS',
-    lines: [
-      'Use two abilities within 3s for a bonus:',
-      'Blast → Drone = drone deals 2x damage',
-      'Regen → Dash = 50% longer dash',
-      'Dash → Blast = 50% larger blast radius',
+      '[3] Dash — burst of speed in current direction',
+      '[4] Missile — homing projectile that tracks enemies',
     ],
   },
   {

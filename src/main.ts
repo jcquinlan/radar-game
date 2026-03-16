@@ -228,6 +228,7 @@ function init() {
   deathParticles = new DeathParticles(200);
   towRopeSystem = new TowRopeSystem();
   minimap = new Minimap();
+  minimap.initBounds(canvas.width, canvas.height);
   keyRemapScreen = new KeyRemapScreen();
   keyRemapScreen.addExtraBinding({
     id: 'upgrades',
@@ -463,6 +464,10 @@ window.addEventListener('keydown', (e) => {
     helpScreen.toggle();
     return;
   }
+  if ((e.key === 'm' || e.key === 'M') && (isActiveGameplay(gameState) || gameState === 'base_mode')) {
+    minimap.toggle();
+    return;
+  }
 
   // Ability keybinds — only if abilities are enabled
   if (!isActiveGameplay(gameState) || keyRemapScreen.isVisible()) return;
@@ -485,12 +490,6 @@ window.addEventListener('keydown', (e) => {
           const t = getTheme();
           floatingText.add('REGEN!', player.x, player.y - 25, t.abilities.heal_over_time);
         }
-      } else if (ability.id === 'helper_drone') {
-        if (abilitySystem.activate('helper_drone', world.entities, addText, onDeath)) {
-          const t = getTheme();
-          abilityEffects.triggerDroneSpawn(player.x, player.y);
-          floatingText.add('DRONE!', player.x, player.y - 25, t.abilities.helper_drone);
-        }
       } else if (ability.id === 'dash') {
         if (abilitySystem.activate('dash', world.entities, addText, onDeath)) {
           const t = getTheme();
@@ -510,12 +509,35 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
+// Minimap click handler: click inside to expand, click outside to collapse
+canvas.addEventListener('click', (e) => {
+  if (!isActiveGameplay(gameState) && gameState !== 'base_mode') return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+  if (minimap.isExpanded()) {
+    // Click outside the expanded minimap to collapse
+    if (!minimap.hitTest(mx, my)) {
+      minimap.collapse();
+    }
+  } else {
+    // Click inside the collapsed minimap to expand
+    if (minimap.hitTest(mx, my)) {
+      minimap.expand();
+    }
+  }
+});
+
 // Start on main menu
 showMainMenu();
 
 const loop = new GameLoop({
   update(dt) {
     if (!isActiveGameplay(gameState)) return;
+
+    // Minimap animation
+    minimap.update(dt);
 
     // Run timer countdown — only during timed runs
     if (gameState === 'run_active' && runTimer >= 0) {
@@ -777,12 +799,6 @@ const loop = new GameLoop({
       }
     }
     if (features?.abilities !== false) {
-      for (let i = 0; i < abilitySystem.drones.length; i++) {
-        const drone = abilitySystem.drones[i];
-        const did = `d${i}`;
-        motionTrail.track(did, drone.x, drone.y, drone.vx, drone.vy, theme.effects.drone, dt);
-        activeTrailIds.add(did);
-      }
       for (let i = 0; i < abilitySystem.missiles.length; i++) {
         const missile = abilitySystem.missiles[i];
         const mid = `m${i}`;
@@ -1026,7 +1042,7 @@ const loop = new GameLoop({
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Radar (drawn without rotation — rings/crosshair are fixed)
-    radar.render(ctx, cx, cy);
+    radar.render(ctx, cx, cy, player.x, player.y, player.heading);
 
     // Rotated world layer — full screen visibility, no circular clip
     ctx.save();
@@ -1291,23 +1307,6 @@ const loop = new GameLoop({
       ctx.restore();
     }
 
-    // Render drones
-    for (const drone of abilitySystem.drones) {
-      const drx = drone.x - player.x;
-      const dry = drone.y - player.y;
-      if (drx * drx + dry * dry > viewRadiusSq) continue;
-      const droneX = cx + drx;
-      const droneY = cy + dry;
-      ctx.save();
-      ctx.shadowColor = theme.effects.drone;
-      ctx.shadowBlur = 8;
-      ctx.beginPath();
-      ctx.arc(droneX, droneY, 4, 0, Math.PI * 2);
-      ctx.fillStyle = theme.effects.drone;
-      ctx.fill();
-      ctx.restore();
-    }
-
     // Render orbit bot
     {
       const ob = orbitBotSystem.bot;
@@ -1322,6 +1321,35 @@ const loop = new GameLoop({
         ctx.beginPath();
         ctx.arc(obX, obY, 3.5, 0, Math.PI * 2);
         ctx.fillStyle = '#00ffff';
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // Render orbit bot projectiles
+    {
+      const projs = orbitBotSystem.botProjectiles;
+      let hasActive = false;
+      for (let i = 0; i < projs.length; i++) {
+        if (projs[i].active) { hasActive = true; break; }
+      }
+      if (hasActive) {
+        ctx.save();
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur = 6;
+        ctx.fillStyle = '#00ffff';
+        ctx.beginPath();
+        for (let i = 0; i < projs.length; i++) {
+          const p = projs[i];
+          if (!p.active) continue;
+          const prx = p.x - player.x;
+          const pry = p.y - player.y;
+          if (prx * prx + pry * pry > viewRadiusSq) continue;
+          const px = cx + prx;
+          const py = cy + pry;
+          ctx.moveTo(px + 2, py);
+          ctx.arc(px, py, 2, 0, Math.PI * 2);
+        }
         ctx.fill();
         ctx.restore();
       }

@@ -52,7 +52,6 @@ describe('theme system', () => {
     // Ability colors
     expect(theme.abilities.damage_blast).toBeDefined();
     expect(theme.abilities.heal_over_time).toBeDefined();
-    expect(theme.abilities.helper_drone).toBeDefined();
     expect(theme.abilities.dash).toBeDefined();
     expect(theme.abilities.homing_missile).toBeDefined();
 

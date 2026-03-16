@@ -32,13 +32,4 @@ describe('AbilityEffects', () => {
     });
   });
 
-  describe('drone spawn flash', () => {
-    it('creates a flash at the given world position', () => {
-      const effects = new AbilityEffects();
-      effects.triggerDroneSpawn(100, 200);
-      // Should be cleaned up after duration
-      effects.update(0.6);
-      expect(() => effects.update(0.1)).not.toThrow();
-    });
-  });
 });

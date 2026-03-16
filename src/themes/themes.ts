@@ -44,7 +44,6 @@ const classic: ColorTheme = {
   abilities: {
     damage_blast: '#ff4141',
     heal_over_time: '#00ff41',
-    helper_drone: '#00ffff',
     dash: '#ffff00',
     homing_missile: '#ff8800',
   },
@@ -119,7 +118,6 @@ const ocean: ColorTheme = {
   abilities: {
     damage_blast: '#ff5566',
     heal_over_time: '#44ff88',
-    helper_drone: '#88ffdd',
     dash: '#ffee55',
     homing_missile: '#ff8855',
   },
@@ -194,7 +192,6 @@ const ember: ColorTheme = {
   abilities: {
     damage_blast: '#ff2244',
     heal_over_time: '#ffaa22',
-    helper_drone: '#ffdd44',
     dash: '#ffee88',
     homing_missile: '#ff4488',
   },
