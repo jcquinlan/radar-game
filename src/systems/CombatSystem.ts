@@ -133,8 +133,8 @@ export class CombatSystem {
       // Stop at standoff distance instead of stacking on top of the target
       const standoffDist = enemy.subtype === 'brute' ? 20 : 25;
       const enemyAccel = enemy.speed * enemy.friction;
-      // Wave enemies always chase (infinite range); normal enemies use chaseRange
-      const inChaseRange = enemy.waveEnemy || targetDistSq < enemy.chaseRange * enemy.chaseRange;
+      // Wave enemies and aggroed enemies always chase; normal enemies use chaseRange
+      const inChaseRange = enemy.waveEnemy || enemy.aggro || targetDistSq < enemy.chaseRange * enemy.chaseRange;
 
       if (enemy.subtype !== 'ranged' && inChaseRange && targetDistSq > standoffDist * standoffDist) {
         const dist = Math.sqrt(targetDistSq);
@@ -195,6 +195,7 @@ export class CombatSystem {
           // Ram: one hit per enemy per dash
           this.ramHitEnemies.add(enemy);
           enemy.health -= ramDamage;
+          enemy.aggro = true;
           addFloatingText(`-${ramDamage}`, enemy.x, enemy.y, getTheme().effects.missile);
           // Knockback: blend player movement direction with player→enemy direction
           // so enemies deflect outward to whichever side they're on
@@ -307,6 +308,7 @@ export class CombatSystem {
         const edy = p.y - enemy.y;
         if (edx * edx + edy * edy < 20 * 20) {
           enemy.health -= p.damage;
+          enemy.aggro = true;
           addFloatingText(`-${p.damage}`, enemy.x, enemy.y, '#00ddff');
           if (enemy.health <= 0 && enemy.active) {
             enemy.active = false;

@@ -46,6 +46,8 @@ export interface Enemy extends Entity {
   waveEnemy: boolean;
   /** Whether this enemy is a wave boss (renders larger) */
   isBoss: boolean;
+  /** Whether this enemy has been aggro'd by taking player damage (chases regardless of range) */
+  aggro: boolean;
 }
 
 export type AllySubtype = 'healer' | 'shield' | 'beacon';
@@ -187,6 +189,7 @@ export function createEnemy(x: number, y: number, subtype?: EnemySubtype): Enemy
     wanderTimer: 1 + Math.random() * 2,
     waveEnemy: false,
     isBoss: false,
+    aggro: false,
   };
 }
 
