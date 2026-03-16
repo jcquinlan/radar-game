@@ -126,9 +126,18 @@ export class TowRopeSystem {
       item.salvage.towVy = item.vy;
     }
 
-    // Process fade-outs
+    // Remove destroyed salvage (hp <= 0 or deactivated by combat system)
+    // and process fade-outs
     for (let i = this.items.length - 1; i >= 0; i--) {
       const item = this.items[i];
+
+      // Destroyed by enemy damage
+      if (!item.salvage.active || item.salvage.hp <= 0) {
+        item.salvage.towedByPlayer = false;
+        this.items.splice(i, 1);
+        continue;
+      }
+
       if (item.fadeOut !== null) {
         item.fadeOut -= dt;
         if (item.fadeOut <= 0) {
