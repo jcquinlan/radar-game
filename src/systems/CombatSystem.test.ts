@@ -815,6 +815,49 @@ describe('CombatSystem', () => {
     });
   });
 
+  describe('salvage projectile edge cases', () => {
+    it('only one salvage is hit per projectile', () => {
+      const s1 = createSalvage(100, 0);
+      const s2 = createSalvage(100, 5); // Both within 15px
+      combat.projectiles.push({
+        x: 100, y: 0, vx: 0, vy: 0,
+        damage: 8, active: true, lifetime: 3,
+      });
+
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [s1, s2]);
+
+      // Only one should be damaged
+      const totalDamage = (30 - s1.hp) + (30 - s2.hp);
+      expect(totalDamage).toBe(8);
+    });
+
+    it('already-destroyed salvage is not hit by subsequent projectiles', () => {
+      const salvage = createSalvage(100, 0);
+      salvage.hp = 0;
+      salvage.active = false;
+      combat.projectiles.push({
+        x: 100, y: 0, vx: 0, vy: 0,
+        damage: 8, active: true, lifetime: 3,
+      });
+
+      combat.update([], player, 0.1, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+
+      // Projectile should pass through
+      expect(combat.projectiles).toHaveLength(1);
+    });
+
+    it('contact damage is proportional to dt', () => {
+      const enemy = createEnemy(502, 0, 'scout');
+      enemy.damage = 10;
+      const salvage = createSalvage(500, 0);
+
+      combat.update([enemy], player, 0.5, false, 15, () => {}, () => {}, () => {}, undefined, undefined, undefined, [salvage]);
+
+      // damage = 10 * 0.5 = 5
+      expect(salvage.hp).toBe(25);
+    });
+  });
+
   describe('salvage damage from enemy contact', () => {
     it('melee enemy within 25px deals contact damage to salvage', () => {
       const enemy = createEnemy(505, 0, 'scout');
