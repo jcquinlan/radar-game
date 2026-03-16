@@ -438,7 +438,9 @@ const loop = new GameLoop({
         floatingText.add(text, x, y, color);
       const onAbilityDeath = (x: number, y: number, srcX: number, srcY: number, color: string) =>
         deathParticles.emitFromSource(x, y, srcX, srcY, color);
-      abilitySystem.update(dt, world.entities, addText, onAbilityDeath);
+      const onAbilityImpact = (x: number, y: number, srcX: number, srcY: number, color: string) =>
+        deathParticles.emitFromSource(x, y, srcX, srcY, color, 5);
+      abilitySystem.update(dt, world.entities, addText, onAbilityDeath, onAbilityImpact);
 
       const hotAbility = abilitySystem.getAbility('heal_over_time');
       if (hotAbility) {
@@ -454,6 +456,7 @@ const loop = new GameLoop({
         world.entities, player, dt, abilitySystem.isDashing(), 15,
         (text, x, y, color) => floatingText.add(text, x, y, color),
         (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color),
+        (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color, 5),
       );
     }
 

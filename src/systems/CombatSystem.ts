@@ -23,6 +23,7 @@ export class CombatSystem {
     ramDamage: number = 15,
     addFloatingText: FloatingTextCallback = () => {},
     onDeath: DeathCallback = () => {},
+    onImpact: DeathCallback = () => {},
   ): boolean {
     this.gameTime += dt;
 
@@ -159,6 +160,7 @@ export class CombatSystem {
       const pdy = p.y - player.y;
       if (pdx * pdx + pdy * pdy < 20 * 20) {
         player.takeDamage(p.damage);
+        onImpact(player.x, player.y, p.x, p.y, getTheme().effects.projectile);
         this.projectiles.splice(i, 1);
       }
     }

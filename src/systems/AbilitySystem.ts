@@ -166,6 +166,7 @@ export class AbilitySystem {
     entities: GameEntity[],
     addFloatingText: FloatingTextCallback,
     onDeath: DeathCallback = () => {},
+    onImpact: DeathCallback = () => {},
   ): void {
     for (const ability of this.abilities) {
       if (ability.cooldownRemaining > 0) {
@@ -200,7 +201,7 @@ export class AbilitySystem {
     this.updateDrones(dt, entities, addFloatingText, onDeath);
 
     // Update missiles
-    this.updateMissiles(dt, entities, addFloatingText, onDeath);
+    this.updateMissiles(dt, entities, addFloatingText, onDeath, onImpact);
   }
 
   private activateBlast(
@@ -362,6 +363,7 @@ export class AbilitySystem {
     entities: GameEntity[],
     addFloatingText: FloatingTextCallback,
     onDeath: DeathCallback,
+    onImpact: DeathCallback,
   ): void {
     for (const missile of this.missiles) {
       if (!missile.active) continue;
@@ -402,6 +404,7 @@ export class AbilitySystem {
       if (hitEnemy) {
         hitEnemy.health -= missile.damage;
         addFloatingText(`-${missile.damage}`, hitEnemy.x, hitEnemy.y, getTheme().effects.missile);
+        onImpact(hitEnemy.x, hitEnemy.y, missile.x, missile.y, getTheme().effects.missile);
         missile.active = false;
 
         if (hitEnemy.health <= 0 && hitEnemy.active) {
