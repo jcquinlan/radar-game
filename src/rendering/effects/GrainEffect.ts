@@ -8,15 +8,14 @@ export interface GrainEffectConfig {
 }
 
 export const DEFAULT_GRAIN_CONFIG: GrainEffectConfig = {
-  intensity: 0.06,
+  intensity: 0.15,
   scale: 1.0,
 };
 
 // Film grain shader: applies sharp, animated noise that gives a colored-paper texture.
 // Uses a high-frequency hash function for crisp per-pixel grain (no blur, no smoothing).
-// The grain is mixed multiplicatively so it tints darks and lights differently,
-// giving the "colored paper" look where brighter areas show lighter grain and
-// darker areas show darker grain — like ink printed on textured stock.
+// Additive blend ensures grain is visible across the full luminance range — on the dark
+// radar background and on bright bloomed elements alike.
 const GRAIN_FRAGMENT = `#version 300 es
 precision mediump float;
 
@@ -53,11 +52,11 @@ void main() {
   float grainG = hash(grainCoord + t * 1.3 + 100.0) - 0.5;
   float grainB = hash(grainCoord + t * 1.7 + 200.0) - 0.5;
 
-  // Multiplicative blend: grain modulates the existing color rather than
-  // adding flat noise. This keeps dark areas dark-grained and bright areas
-  // light-grained, like real paper texture under colored ink.
+  // Hybrid blend: additive grain ensures visibility on both the dark background
+  // and bright bloomed elements. The grain is added directly to the color,
+  // giving a sharp paper-fiber texture across the full luminance range.
   vec3 grain = vec3(grainR, grainG, grainB) * uIntensity;
-  color.rgb += color.rgb * grain;
+  color.rgb += grain;
 
   fragColor = vec4(clamp(color.rgb, 0.0, 1.0), color.a);
 }
