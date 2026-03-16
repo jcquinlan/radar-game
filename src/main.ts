@@ -228,6 +228,7 @@ function init() {
   deathParticles = new DeathParticles(200);
   towRopeSystem = new TowRopeSystem();
   minimap = new Minimap();
+  minimap.initBounds(canvas.width, canvas.height);
   keyRemapScreen = new KeyRemapScreen();
   keyRemapScreen.addExtraBinding({
     id: 'upgrades',
@@ -463,6 +464,10 @@ window.addEventListener('keydown', (e) => {
     helpScreen.toggle();
     return;
   }
+  if ((e.key === 'm' || e.key === 'M') && (isActiveGameplay(gameState) || gameState === 'base_mode')) {
+    minimap.toggle();
+    return;
+  }
 
   // Ability keybinds — only if abilities are enabled
   if (!isActiveGameplay(gameState) || keyRemapScreen.isVisible()) return;
@@ -504,12 +509,35 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
+// Minimap click handler: click inside to expand, click outside to collapse
+canvas.addEventListener('click', (e) => {
+  if (!isActiveGameplay(gameState) && gameState !== 'base_mode') return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+  if (minimap.isExpanded()) {
+    // Click outside the expanded minimap to collapse
+    if (!minimap.hitTest(mx, my)) {
+      minimap.collapse();
+    }
+  } else {
+    // Click inside the collapsed minimap to expand
+    if (minimap.hitTest(mx, my)) {
+      minimap.expand();
+    }
+  }
+});
+
 // Start on main menu
 showMainMenu();
 
 const loop = new GameLoop({
   update(dt) {
     if (!isActiveGameplay(gameState)) return;
+
+    // Minimap animation
+    minimap.update(dt);
 
     // Run timer countdown — only during timed runs
     if (gameState === 'run_active' && runTimer >= 0) {
