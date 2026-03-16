@@ -485,12 +485,6 @@ window.addEventListener('keydown', (e) => {
           const t = getTheme();
           floatingText.add('REGEN!', player.x, player.y - 25, t.abilities.heal_over_time);
         }
-      } else if (ability.id === 'helper_drone') {
-        if (abilitySystem.activate('helper_drone', world.entities, addText, onDeath)) {
-          const t = getTheme();
-          abilityEffects.triggerDroneSpawn(player.x, player.y);
-          floatingText.add('DRONE!', player.x, player.y - 25, t.abilities.helper_drone);
-        }
       } else if (ability.id === 'dash') {
         if (abilitySystem.activate('dash', world.entities, addText, onDeath)) {
           const t = getTheme();
@@ -777,12 +771,6 @@ const loop = new GameLoop({
       }
     }
     if (features?.abilities !== false) {
-      for (let i = 0; i < abilitySystem.drones.length; i++) {
-        const drone = abilitySystem.drones[i];
-        const did = `d${i}`;
-        motionTrail.track(did, drone.x, drone.y, drone.vx, drone.vy, theme.effects.drone, dt);
-        activeTrailIds.add(did);
-      }
       for (let i = 0; i < abilitySystem.missiles.length; i++) {
         const missile = abilitySystem.missiles[i];
         const mid = `m${i}`;
@@ -1287,23 +1275,6 @@ const loop = new GameLoop({
       ctx.beginPath();
       ctx.arc(tpx, tpy, 2, 0, Math.PI * 2);
       ctx.fillStyle = '#00ddff';
-      ctx.fill();
-      ctx.restore();
-    }
-
-    // Render drones
-    for (const drone of abilitySystem.drones) {
-      const drx = drone.x - player.x;
-      const dry = drone.y - player.y;
-      if (drx * drx + dry * dry > viewRadiusSq) continue;
-      const droneX = cx + drx;
-      const droneY = cy + dry;
-      ctx.save();
-      ctx.shadowColor = theme.effects.drone;
-      ctx.shadowBlur = 8;
-      ctx.beginPath();
-      ctx.arc(droneX, droneY, 4, 0, Math.PI * 2);
-      ctx.fillStyle = theme.effects.drone;
       ctx.fill();
       ctx.restore();
     }

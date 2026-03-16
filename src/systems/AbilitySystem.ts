@@ -11,7 +11,7 @@ export interface Ability {
   keybind: string;
   cooldown: number;
   cooldownRemaining: number;
-  /** For abilities with duration (HoT, drone) */
+  /** For abilities with duration (HoT, dash) */
   duration: number;
   durationRemaining: number;
   active: boolean;
@@ -19,18 +19,6 @@ export interface Ability {
   maxCharges: number;
   /** Current available charges */
   charges: number;
-}
-
-export interface Drone {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  speed: number;
-  damage: number;
-  lifetime: number;
-  active: boolean;
-  friction: number;
 }
 
 export interface Missile {
@@ -47,7 +35,6 @@ export interface Missile {
 
 export class AbilitySystem {
   abilities: Ability[];
-  drones: Drone[] = [];
   missiles: Missile[] = [];
   onShake: (intensity: number) => void = () => {};
   private player: Player;
@@ -80,21 +67,9 @@ export class AbilitySystem {
         charges: 1,
       },
       {
-        id: 'helper_drone',
-        name: 'Drone',
-        keybind: '3',
-        cooldown: 15,
-        cooldownRemaining: 0,
-        duration: 10,
-        durationRemaining: 0,
-        active: false,
-        maxCharges: 1,
-        charges: 1,
-      },
-      {
         id: 'dash',
         name: 'Dash',
-        keybind: '4',
+        keybind: '3',
         cooldown: 5,
         cooldownRemaining: 0,
         duration: 1.5,
@@ -106,7 +81,7 @@ export class AbilitySystem {
       {
         id: 'homing_missile',
         name: 'Missile',
-        keybind: '5',
+        keybind: '4',
         cooldown: 1, // TODO: restore to 8 after testing
         cooldownRemaining: 0,
         duration: 0,
@@ -147,10 +122,6 @@ export class AbilitySystem {
     } else if (id === 'heal_over_time') {
       ability.active = true;
       ability.durationRemaining = ability.duration;
-    } else if (id === 'helper_drone') {
-      ability.active = true;
-      ability.durationRemaining = ability.duration;
-      this.spawnDrone();
     } else if (id === 'dash') {
       this.activateDash();
       ability.active = true;
@@ -198,9 +169,6 @@ export class AbilitySystem {
       }
     }
 
-    // Update drones
-    this.updateDrones(dt, entities, addFloatingText, onDeath);
-
     // Update missiles
     this.updateMissiles(dt, entities, addFloatingText, onDeath, onImpact);
   }
@@ -244,94 +212,6 @@ export class AbilitySystem {
     // Dash forward in the direction the ship is facing
     this.player.vx = Math.cos(this.player.heading) * dashSpeed;
     this.player.vy = Math.sin(this.player.heading) * dashSpeed;
-  }
-
-  private spawnDrone(): void {
-    this.drones.push({
-      x: this.player.x,
-      y: this.player.y,
-      vx: 0,
-      vy: 0,
-      speed: 120,
-      damage: 5,
-      lifetime: 10,
-      active: true,
-      friction: 2.0,
-    });
-  }
-
-  private updateDrones(
-    dt: number,
-    entities: GameEntity[],
-    addFloatingText: FloatingTextCallback,
-    onDeath: DeathCallback,
-  ): void {
-    for (const drone of this.drones) {
-      if (!drone.active) continue;
-
-      drone.lifetime -= dt;
-      if (drone.lifetime <= 0) {
-        drone.active = false;
-        onDeath(drone.x, drone.y, NaN, NaN, getTheme().effects.drone);
-        continue;
-      }
-
-      // Find nearest enemy
-      let nearest: Enemy | null = null;
-      let nearestDistSq = 300 * 300; // 300px chase range
-
-      for (const entity of entities) {
-        if (!entity.active || entity.type !== 'enemy') continue;
-        const enemy = entity as Enemy;
-        const dx = enemy.x - drone.x;
-        const dy = enemy.y - drone.y;
-        const distSq = dx * dx + dy * dy;
-        if (distSq < nearestDistSq) {
-          nearestDistSq = distSq;
-          nearest = enemy;
-        }
-      }
-
-      // Chase nearest enemy with inertia
-      if (nearest) {
-        const dx = nearest.x - drone.x;
-        const dy = nearest.y - drone.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 0) {
-          const droneAccel = drone.speed * drone.friction;
-          drone.vx += (dx / dist) * droneAccel * dt;
-          drone.vy += (dy / dist) * droneAccel * dt;
-        }
-
-        // Contact damage
-        if (dist < 20) {
-          const dmg = drone.damage * dt;
-          nearest.health -= dmg;
-          nearest.aggro = true;
-          if (nearest.health <= 0 && nearest.active) {
-            nearest.active = false;
-            const deathColor = nearest.subtype === 'ranged' ? getTheme().entities.enemyRanged : getTheme().entities.enemy;
-            onDeath(nearest.x, nearest.y, drone.x, drone.y, deathColor);
-            this.player.addEnergy(nearest.energyDrop);
-            this.player.kills++;
-            this.player.score += 50;
-            addFloatingText('+50', nearest.x, nearest.y - 15, getTheme().entities.salvage);
-          }
-        }
-      }
-
-      // Apply exponential friction and update position
-      const droneDecay = Math.exp(-drone.friction * dt);
-      drone.vx *= droneDecay;
-      drone.vy *= droneDecay;
-      drone.x += drone.vx * dt;
-      drone.y += drone.vy * dt;
-    }
-
-    // Clean up dead drones (backward splice avoids .filter() allocation)
-    for (let i = this.drones.length - 1; i >= 0; i--) {
-      if (!this.drones[i].active) this.drones.splice(i, 1);
-    }
   }
 
   private spawnMissile(entities: GameEntity[]): void {

@@ -244,7 +244,6 @@ export class KeyRemapScreen {
     const descriptions: Record<string, string> = {
       damage_blast: 'AoE damage to nearby enemies',
       heal_over_time: 'Heal over time',
-      helper_drone: 'Spawn a helper drone',
       dash: 'Dash forward, rams enemies',
       homing_missile: 'Fire a homing missile at nearest enemy',
     };
