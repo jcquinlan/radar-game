@@ -49,7 +49,6 @@ export interface ColorTheme {
   abilities: {
     damage_blast: string;
     heal_over_time: string;
-    helper_drone: string;
     dash: string;
     homing_missile: string;
   };

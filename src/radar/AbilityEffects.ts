@@ -43,16 +43,6 @@ export class AbilityEffects {
     }
   }
 
-  triggerDroneSpawn(worldX: number, worldY: number): void {
-    this.spawnFlashes.push({
-      x: worldX,
-      y: worldY,
-      remaining: SPAWN_FLASH_DURATION,
-      maxDuration: SPAWN_FLASH_DURATION,
-      color: getTheme().effects.drone,
-    });
-  }
-
   triggerMissileLaunch(worldX: number, worldY: number): void {
     this.spawnFlashes.push({
       x: worldX,
@@ -129,7 +119,7 @@ export class AbilityEffects {
       ctx.restore();
     }
 
-    // Drone spawn flash: expanding cyan burst at spawn point
+    // Spawn flash: expanding burst at spawn point (e.g. missile launch)
     for (const flash of this.spawnFlashes) {
       const progress = 1 - flash.remaining / flash.maxDuration;
       const radius = 30 * progress;
