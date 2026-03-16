@@ -245,6 +245,56 @@ describe('CombatBotSystem', () => {
     });
   });
 
+  describe('edge cases', () => {
+    it('handles empty entity list without errors', () => {
+      system.deployBot(0, 0);
+      const entities: GameEntity[] = [];
+      // Should not throw
+      for (let i = 0; i < 10; i++) {
+        system.update(1 / 60, entities, addFloatingText, onDeath, onImpact);
+      }
+      expect(system.bots[0].active).toBe(true);
+    });
+
+    it('ranged enemies do not deal contact damage to bots', () => {
+      system.deployBot(0, 0);
+      const enemy = makeEnemy(5, 0, 30);
+      enemy.subtype = 'ranged';
+      enemy.damage = 100;
+      const entities: GameEntity[] = [enemy];
+      const initialHealth = system.bots[0].health;
+
+      for (let i = 0; i < 30; i++) {
+        system.update(1 / 60, entities, addFloatingText, onDeath, onImpact);
+      }
+
+      // Ranged enemies should not deal contact damage
+      expect(system.bots[0].health).toBe(initialHealth);
+    });
+
+    it('handles zero dt gracefully', () => {
+      system.deployBot(0, 0);
+      const entities: GameEntity[] = [];
+      // Should not throw or change state
+      system.update(0, entities, addFloatingText, onDeath, onImpact);
+      expect(system.bots[0].active).toBe(true);
+      expect(system.bots[0].lifetime).toBe(20);
+    });
+
+    it('bot destroyed emits floating text', () => {
+      system.deployBot(0, 0);
+      const enemy = makeEnemy(5, 0);
+      enemy.damage = 10000;
+      enemy.subtype = 'brute';
+      const entities: GameEntity[] = [enemy];
+
+      system.update(1 / 60, entities, addFloatingText, onDeath, onImpact);
+
+      const destroyedText = floatingTexts.find(t => t.text === 'BOT DESTROYED');
+      expect(destroyedText).toBeDefined();
+    });
+  });
+
   describe('maxBots property', () => {
     it('defaults to 2', () => {
       expect(system.maxBots).toBe(2);
