@@ -10,7 +10,7 @@ echo "Deploying to GitHub Pages..."
 cd dist
 
 git init
-git checkout -b gh-pages
+git checkout -B gh-pages
 git add -A
 git commit -m "deploy"
 git push -f git@github.com:jcquinlan/radar-game.git gh-pages:gh-pages
