@@ -464,7 +464,7 @@ describe('AbilitySystem', () => {
       for (let i = 0; i < 80; i++) system.update(0.05, entities, () => {});
 
       expect(enemy.health).toBeLessThan(80);
-      expect(onShake).toHaveBeenCalledWith(4);
+      expect(onShake).toHaveBeenCalledWith(6);
     });
   });
 });

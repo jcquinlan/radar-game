@@ -406,7 +406,7 @@ export class AbilitySystem {
         hitEnemy.health -= missile.damage;
         addFloatingText(`-${missile.damage}`, hitEnemy.x, hitEnemy.y, getTheme().effects.missile);
         onImpact(hitEnemy.x, hitEnemy.y, missile.x, missile.y, getTheme().effects.missile);
-        this.onShake(4);
+        this.onShake(6);
         missile.active = false;
 
         if (hitEnemy.health <= 0 && hitEnemy.active) {
