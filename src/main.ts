@@ -27,6 +27,7 @@ import { HelpScreen } from './ui/HelpScreen';
 import { MotionTrail } from './radar/MotionTrail';
 import { DeathParticles } from './radar/DeathParticles';
 import { TowRopeSystem } from './systems/TowRopeSystem';
+import { OrbitBotSystem } from './systems/OrbitBotSystem';
 import { Minimap } from './ui/Minimap';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
 import { CRTEffect } from './rendering/effects/CRTEffect';
@@ -82,6 +83,7 @@ let keyRemapScreen: KeyRemapScreen;
 let motionTrail: MotionTrail;
 let deathParticles: DeathParticles;
 let towRopeSystem: TowRopeSystem;
+let orbitBotSystem: OrbitBotSystem;
 let minimap: Minimap;
 let homeBase: HomeBase;
 let defenses: Defense[] = [];
@@ -143,6 +145,7 @@ function startRun() {
   abilitySystem = new AbilitySystem(player);
   abilitySystem.onShake = (intensity) => screenShake.trigger(intensity);
   abilityEffects = new AbilityEffects();
+  orbitBotSystem = new OrbitBotSystem(player);
   pingSystem = new PingSystem({ maxRadius: radar.getRadius() });
   upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
     resolutionLevel = lvl;
@@ -216,6 +219,7 @@ function init() {
   abilitySystem = new AbilitySystem(player);
   abilitySystem.onShake = (intensity) => screenShake.trigger(intensity);
   abilityEffects = new AbilityEffects();
+  orbitBotSystem = new OrbitBotSystem(player);
   abilityBar = new AbilityBar();
   motionTrail = new MotionTrail();
   deathParticles = new DeathParticles(200);
@@ -688,6 +692,13 @@ const loop = new GameLoop({
         deathParticles.emitFromSource(x, y, srcX, srcY, color, 5);
       abilitySystem.update(dt, world.entities, addText, onAbilityDeath, onAbilityImpact);
 
+      // Orbit bot — permanent companion
+      orbitBotSystem.update(
+        dt, world.entities,
+        (text, x, y, color) => floatingText.add(text, x, y, color),
+        (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color),
+      );
+
       const hotAbility = abilitySystem.getAbility('heal_over_time');
       if (hotAbility) {
         abilityEffects.setRegenActive(hotAbility.active, hotAbility.durationRemaining);
@@ -778,6 +789,12 @@ const loop = new GameLoop({
         motionTrail.track(mid, missile.x, missile.y, missile.vx, missile.vy, theme.effects.missile, dt);
         activeTrailIds.add(mid);
       }
+    }
+    // Orbit bot trail
+    {
+      const ob = orbitBotSystem.bot;
+      motionTrail.track('ob0', ob.x, ob.y, ob.vx, ob.vy, theme.effects.drone, dt);
+      activeTrailIds.add('ob0');
     }
     motionTrail.prune(activeTrailIds);
 
@@ -1286,6 +1303,25 @@ const loop = new GameLoop({
       ctx.fillStyle = theme.effects.drone;
       ctx.fill();
       ctx.restore();
+    }
+
+    // Render orbit bot
+    {
+      const ob = orbitBotSystem.bot;
+      const obrx = ob.x - player.x;
+      const obry = ob.y - player.y;
+      if (obrx * obrx + obry * obry <= viewRadiusSq) {
+        const obX = cx + obrx;
+        const obY = cy + obry;
+        ctx.save();
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(obX, obY, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#00ffff';
+        ctx.fill();
+        ctx.restore();
+      }
     }
 
     // Render missiles
