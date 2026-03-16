@@ -1085,8 +1085,8 @@ const loop = new GameLoop({
     ctx.fillStyle = theme.radar.background;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Radar (drawn without rotation — rings/crosshair are fixed)
-    radar.render(ctx, cx, cy, player.x, player.y, player.heading);
+    // Radar (drawn without rotation — rings/crosshair are fixed, but scaled with zoom)
+    radar.render(ctx, cx, cy, player.x, player.y, player.heading, zoom.current);
 
     // Rotated world layer — full screen visibility, no circular clip
     ctx.save();
@@ -1440,7 +1440,7 @@ const loop = new GameLoop({
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, canvas.width, canvas.height);
-    ctx.arc(cx, cy, radar.getRadius(), 0, Math.PI * 2, true);
+    ctx.arc(cx, cy, radar.getRadius() * zoom.current, 0, Math.PI * 2, true);
     ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
     ctx.fill();
     ctx.restore();

@@ -65,8 +65,9 @@ export class RadarDisplay {
     playerX = 0,
     playerY = 0,
     playerHeading = 0,
+    zoomLevel = 1,
   ): void {
-    const { radius } = this.config;
+    const radius = this.config.radius * zoomLevel;
     const theme = getTheme();
     const color = theme.radar.primary;
     const pingRgb = theme.radar.pingRgb;
