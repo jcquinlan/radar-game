@@ -168,6 +168,8 @@ function startRun() {
 
 
   input.attach();
+  input.attachMouse(canvas);
+  input.setCoordinateConverter(canvasToWorld);
   keyRemapScreen.load(abilitySystem.abilities);
   keyRemapScreen.attach(canvas, abilitySystem.abilities);
   upgradePanel.attach(canvas, upgradeSystem, player);
@@ -269,9 +271,31 @@ function init() {
 
 
   input.attach();
+  input.attachMouse(canvas);
+  input.setCoordinateConverter(canvasToWorld);
   keyRemapScreen.attach(canvas, abilitySystem.abilities);
   upgradePanel.attach(canvas, upgradeSystem, player);
   world.updateSpawning(player.x, player.y);
+}
+
+/** Convert canvas pixel coordinates to world coordinates, inverting the render transform */
+function canvasToWorld(canvasX: number, canvasY: number): { worldX: number; worldY: number } {
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const z = zoom.current;
+  const R = -player.heading - Math.PI / 2;
+
+  // Undo translate(cx,cy) and scale
+  const dx = (canvasX - cx) / z;
+  const dy = (canvasY - cy) / z;
+
+  // Undo rotate(R) by rotating by -R
+  const cosNR = Math.cos(-R);
+  const sinNR = Math.sin(-R);
+  const offX = cosNR * dx - sinNR * dy;
+  const offY = sinNR * dx + cosNR * dy;
+
+  return { worldX: player.x + offX, worldY: player.y + offY };
 }
 
 /** Show results screen after a successful run (wave survived) */
@@ -319,7 +343,10 @@ function showRunFailed() {
 }
 
 function cleanupCurrentGame() {
-  if (input) input.detach();
+  if (input) {
+    input.detach();
+    input.detachMouse(canvas);
+  }
   if (upgradePanel) upgradePanel.detach(canvas);
   if (keyRemapScreen) keyRemapScreen.detach(canvas);
   if (towRopeSystem) towRopeSystem.clear();
@@ -1425,6 +1452,24 @@ const loop = new GameLoop({
       ctx.fillStyle = theme.effects.missile;
       ctx.fill();
       ctx.restore();
+    }
+
+    // Mouse cursor indicator (crosshair at mouse world position)
+    if (input.mouseOver) {
+      const cursorSX = cx + (input.mouseWorldX - player.x);
+      const cursorSY = cy + (input.mouseWorldY - player.y);
+      ctx.globalAlpha = 0.3;
+      ctx.strokeStyle = theme.radar.primary;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      // Horizontal line
+      ctx.moveTo(cursorSX - 8, cursorSY);
+      ctx.lineTo(cursorSX + 8, cursorSY);
+      // Vertical line
+      ctx.moveTo(cursorSX, cursorSY - 8);
+      ctx.lineTo(cursorSX, cursorSY + 8);
+      ctx.stroke();
+      ctx.globalAlpha = 1.0;
     }
 
     // Floating text (counter-rotated so text stays upright)
