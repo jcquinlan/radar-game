@@ -661,11 +661,38 @@ const loop = new GameLoop({
     // Spawn entities in new areas
     world.updateSpawning(player.x, player.y);
 
-    // Click-to-deploy mining bots
+    // Click-to-deploy: mining bot if near asteroid, combat bot otherwise
     const click = input.consumeClick();
     if (click) {
-      if (miningBotSystem.deployBot(click.worldX, click.worldY, world.entities, player)) {
-        floatingText.add('MINER DEPLOYED', click.worldX, click.worldY - 15, '#ffaa00');
+      // Check if click is near an asteroid (within mining deploy range)
+      let nearAsteroid = false;
+      const deployRangeSq = miningBotSystem.deployRange * miningBotSystem.deployRange;
+      for (let i = 0; i < world.entities.length; i++) {
+        const e = world.entities[i];
+        if (!e.active || e.type !== 'asteroid') continue;
+        const adx = e.x - click.worldX;
+        const ady = e.y - click.worldY;
+        if (adx * adx + ady * ady < deployRangeSq) {
+          nearAsteroid = true;
+          break;
+        }
+      }
+
+      if (nearAsteroid) {
+        // Priority: deploy mining bot near asteroid
+        if (miningBotSystem.deployBot(click.worldX, click.worldY, world.entities, player)) {
+          floatingText.add('MINING BOT DEPLOYED', click.worldX, click.worldY - 15, '#ffaa00');
+        } else {
+          floatingText.add('NO CHARGES', click.worldX, click.worldY - 15, '#ff4444');
+        }
+      } else {
+        // No asteroid nearby: deploy combat bot
+        if (combatBotSystem.deployBot(click.worldX, click.worldY)) {
+          floatingText.add('COMBAT BOT DEPLOYED', click.worldX, click.worldY - 15, '#ff8844');
+          screenShake.trigger(2);
+        } else {
+          floatingText.add('NO CHARGES', click.worldX, click.worldY - 15, '#ff4444');
+        }
       }
     }
 
@@ -745,31 +772,6 @@ const loop = new GameLoop({
         abilityEffects.setRegenActive(hotAbility.active, hotAbility.durationRemaining);
       }
       abilityEffects.update(dt);
-    }
-
-    // Combat bot deployment — click to place area defender
-    {
-      const click = input.consumeClick();
-      if (click) {
-        // Check if click is near an asteroid (60px) — don't deploy there
-        let nearAsteroid = false;
-        for (let i = 0; i < world.entities.length; i++) {
-          const e = world.entities[i];
-          if (!e.active || e.type !== 'asteroid') continue;
-          const adx = e.x - click.worldX;
-          const ady = e.y - click.worldY;
-          if (adx * adx + ady * ady < 60 * 60) {
-            nearAsteroid = true;
-            break;
-          }
-        }
-        if (!nearAsteroid) {
-          if (combatBotSystem.deployBot(click.worldX, click.worldY)) {
-            floatingText.add('BOT DEPLOYED', click.worldX, click.worldY - 15, '#ff8844');
-            screenShake.trigger(2);
-          }
-        }
-      }
     }
 
     // Combat bot AI — auto-attack nearby enemies
