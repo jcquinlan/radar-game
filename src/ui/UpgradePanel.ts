@@ -31,6 +31,7 @@ export class UpgradePanel {
     canvas: HTMLCanvasElement,
     upgradeSystem: HomebaseUpgradeSystem,
     saveData: SaveData,
+    onPurchase?: () => void,
   ): void {
     this.clickHandler = (e: MouseEvent) => {
       if (!this.visible) return;
@@ -52,7 +53,9 @@ export class UpgradePanel {
       for (let i = 0; i < this.itemBounds.length; i++) {
         const b = this.itemBounds[i];
         if (mx >= b.x && mx <= b.x + b.width && my >= b.y && my <= b.y + b.height) {
-          upgradeSystem.purchase(b.upgradeId, saveData);
+          if (upgradeSystem.purchase(b.upgradeId, saveData)) {
+            if (onPurchase) onPurchase();
+          }
           break;
         }
       }
