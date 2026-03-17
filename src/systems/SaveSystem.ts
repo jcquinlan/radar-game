@@ -26,15 +26,39 @@ export function calculateReducedCurrency(salvageDeposited: number, enemiesKilled
   return Math.floor(calculateCurrency(salvageDeposited, enemiesKilled, baseHpPercent) * 0.25);
 }
 
+/**
+ * Migrate legacy upgrade IDs to current ones.
+ * - max_mining_bots + max_combat_bots -> max_bot_slots (sum, capped at 5)
+ */
+export function migrateUpgrades(upgrades: Record<string, number>): Record<string, number> {
+  const result = { ...upgrades };
+
+  const oldMining = result['max_mining_bots'];
+  const oldCombat = result['max_combat_bots'];
+
+  if (oldMining != null || oldCombat != null) {
+    // Only migrate if max_bot_slots is not already set
+    if (result['max_bot_slots'] == null) {
+      const sum = (oldMining ?? 0) + (oldCombat ?? 0);
+      result['max_bot_slots'] = Math.min(sum, 5);
+    }
+    delete result['max_mining_bots'];
+    delete result['max_combat_bots'];
+  }
+
+  return result;
+}
+
 export function loadSaveData(): SaveData {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return { ...DEFAULT_SAVE, baseUpgrades: {} };
     const parsed = JSON.parse(raw);
+    const baseUpgrades = migrateUpgrades(parsed.baseUpgrades ?? {});
     return {
       currency: parsed.currency ?? 0,
       runCount: parsed.runCount ?? 0,
-      baseUpgrades: parsed.baseUpgrades ?? {},
+      baseUpgrades,
     };
   } catch {
     return { ...DEFAULT_SAVE, baseUpgrades: {} };

@@ -1,6 +1,7 @@
 import { Player } from '../entities/Player';
 import { MiningBotSystem } from './MiningBotSystem';
 import { CombatBotSystem } from './CombatBotSystem';
+import { BotSlotSystem } from './BotSlotSystem';
 import { PingSystem, DEFAULT_PING_CONFIG } from './PingSystem';
 import { RadarDisplay } from '../radar/RadarDisplay';
 import { SaveData } from './SaveSystem';
@@ -64,10 +65,10 @@ function createPlayerUpgrades(): HomebaseUpgrade[] {
 function createMiningUpgrades(): HomebaseUpgrade[] {
   return [
     {
-      id: 'max_mining_bots',
+      id: 'max_bot_slots',
       building: 'mining',
-      name: 'Mining Fleet',
-      description: '+1 max mining bot per level',
+      name: 'Bot Fleet',
+      description: '+1 max bot slot per level',
       level: 0,
       maxLevel: 5,
       cost: (lvl) => 40 + lvl * 35,
@@ -96,10 +97,10 @@ function createMiningUpgrades(): HomebaseUpgrade[] {
 function createCombatUpgrades(): HomebaseUpgrade[] {
   return [
     {
-      id: 'max_combat_bots',
+      id: 'bot_cooldown',
       building: 'combat',
-      name: 'Combat Fleet',
-      description: '+1 max combat bot per level',
+      name: 'Quick Recharge',
+      description: '-1s bot slot cooldown per level',
       level: 0,
       maxLevel: 5,
       cost: (lvl) => 40 + lvl * 35,
@@ -214,6 +215,7 @@ export class HomebaseUpgradeSystem {
     pingSystem: PingSystem,
     miningBotSystem: MiningBotSystem,
     combatBotSystem: CombatBotSystem,
+    botSlotSystem: BotSlotSystem,
   ): void {
     for (const upgrade of this.upgrades) {
       if (upgrade.level === 0) continue;
@@ -237,8 +239,8 @@ export class HomebaseUpgradeSystem {
           break;
 
         // Mining building
-        case 'max_mining_bots':
-          miningBotSystem.maxBots = 3 + upgrade.level;
+        case 'max_bot_slots':
+          botSlotSystem.setTotalSlots(5 + upgrade.level);
           break;
         case 'mining_speed':
           miningBotSystem.miningRateMultiplier = 1 + upgrade.level * 0.2;
@@ -248,8 +250,8 @@ export class HomebaseUpgradeSystem {
           break;
 
         // Combat building
-        case 'max_combat_bots':
-          combatBotSystem.maxBots = 2 + upgrade.level;
+        case 'bot_cooldown':
+          botSlotSystem.setCooldownDuration(8 - upgrade.level);
           break;
         case 'combat_damage':
           combatBotSystem.baseDamage = 4 + upgrade.level * 2;
