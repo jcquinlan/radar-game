@@ -97,6 +97,11 @@ export interface Asteroid extends Entity {
 }
 
 
+export interface BuildingState {
+  level: number;
+  maxLevel: number;
+}
+
 export interface HomeBase {
   x: number;
   y: number;
@@ -106,6 +111,12 @@ export interface HomeBase {
   health: number;
   /** Maximum health of the home base */
   maxHealth: number;
+  /** Upgrade buildings at the homebase */
+  buildings: {
+    player: BuildingState;
+    mining: BuildingState;
+    combat: BuildingState;
+  };
 }
 
 export interface Projectile {
@@ -253,5 +264,10 @@ export function createHomeBase(x: number, y: number): HomeBase {
     radius: 150,
     health: 500,
     maxHealth: 500,
+    buildings: {
+      player: { level: 0, maxLevel: 5 },
+      mining: { level: 0, maxLevel: 5 },
+      combat: { level: 0, maxLevel: 5 },
+    },
   };
 }

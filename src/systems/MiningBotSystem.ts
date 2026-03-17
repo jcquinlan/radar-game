@@ -54,15 +54,21 @@ const AGGRO_RANGE_SQ = 400 * 400;
 // Floating text
 const ENERGY_TEXT_INTERVAL = 2;
 
-// Deploy range — max distance from click to asteroid
-const DEPLOY_RANGE_SQ = 100 * 100;
+// Deploy range — max distance from click to asteroid (default, overridden by upgrades)
+const DEFAULT_DEPLOY_RANGE = 100;
 
 export class MiningBotSystem {
   private bots: MiningBot[];
   maxBots: number;
+  /** Multiplier applied to mining rate — increased by mining speed upgrade */
+  miningRateMultiplier: number;
+  /** Max deploy distance from click to asteroid — increased by mining range upgrade */
+  deployRange: number;
 
   constructor(maxBots = 3) {
     this.maxBots = maxBots;
+    this.miningRateMultiplier = 1;
+    this.deployRange = DEFAULT_DEPLOY_RANGE;
     // Pre-allocate bot slots
     this.bots = [];
     for (let i = 0; i < maxBots; i++) {
@@ -101,7 +107,7 @@ export class MiningBotSystem {
 
     // Find nearest asteroid within range
     let nearest: Asteroid | null = null;
-    let nearestDistSq = DEPLOY_RANGE_SQ;
+    let nearestDistSq = this.deployRange * this.deployRange;
 
     for (let i = 0; i < entities.length; i++) {
       const e = entities[i];
@@ -127,7 +133,7 @@ export class MiningBotSystem {
     slot.targetAsteroid = nearest;
     slot.state = MiningBotState.Deploying;
     slot.miningProgress = 0;
-    slot.miningRate = nearest.energyValue / MINING_DURATION;
+    slot.miningRate = (nearest.energyValue / MINING_DURATION) * this.miningRateMultiplier;
     slot.lifetime = 0;
     slot.active = true;
     slot.aggroTimer = AGGRO_CHECK_INTERVAL;

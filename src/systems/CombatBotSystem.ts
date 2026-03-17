@@ -41,6 +41,10 @@ export class CombatBotSystem {
   bots: CombatBot[] = [];
   botProjectiles: Projectile[] = [];
   maxBots = 2;
+  /** Base damage per bot — increased by combat damage upgrade */
+  baseDamage = BOT_DAMAGE;
+  /** Base lifetime per bot — increased by combat lifetime upgrade */
+  baseLifetime = BOT_LIFETIME;
 
   constructor() {
     // Pre-allocate projectile pool
@@ -71,12 +75,12 @@ export class CombatBotSystem {
       y: worldY,
       health: BOT_HEALTH,
       maxHealth: BOT_HEALTH,
-      damage: BOT_DAMAGE,
+      damage: this.baseDamage,
       fireRate: BOT_FIRE_RATE,
       fireTimer: 0,
       range: BOT_RANGE,
-      lifetime: BOT_LIFETIME,
-      maxLifetime: BOT_LIFETIME,
+      lifetime: this.baseLifetime,
+      maxLifetime: this.baseLifetime,
       active: true,
     };
 

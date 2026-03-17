@@ -10,7 +10,7 @@ import { PingSystem } from './systems/PingSystem';
 import { CombatSystem } from './systems/CombatSystem';
 import { Enemy, GameEntity, Dropoff, HomeBase, createHomeBase } from './entities/Entity';
 import { spawnWave } from './systems/WaveSpawner';
-import { UpgradeSystem } from './systems/UpgradeSystem';
+import { HomebaseUpgradeSystem } from './systems/HomebaseUpgradeSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
 import { UpgradePanel } from './ui/UpgradePanel';
@@ -76,7 +76,6 @@ let player: Player;
 let input: InputSystem;
 let pingSystem: PingSystem;
 let combatSystem: CombatSystem;
-let upgradeSystem: UpgradeSystem;
 let world: World;
 let hud: HUD;
 let upgradePanel: UpgradePanel;
@@ -95,6 +94,7 @@ let combatBotSystem: CombatBotSystem;
 let miningBotSystem: MiningBotSystem;
 let minimap: Minimap;
 let homeBase: HomeBase;
+let homebaseUpgradeSystem: HomebaseUpgradeSystem;
 let resolutionLevel: number;
 let prevHealth: number;
 let damageFlash: number;
@@ -160,21 +160,20 @@ function startRun() {
   combatBotSystem = new CombatBotSystem();
   miningBotSystem = new MiningBotSystem();
   pingSystem = new PingSystem({ maxRadius: radar.getRadius() });
-  upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
-    resolutionLevel = lvl;
-  }, pingSystem);
   homeBase = createHomeBase(0, 0);
   resolutionLevel = 0;
   prevHealth = player.health;
   damageFlash = 0;
 
+  // Apply persistent homebase upgrades to this run's systems
+  homebaseUpgradeSystem.applyUpgrades(player, radar, pingSystem, miningBotSystem, combatBotSystem);
 
   input.attach();
   input.attachMouse(canvas);
   input.setCoordinateConverter(canvasToWorld);
   keyRemapScreen.load(abilitySystem.abilities);
   keyRemapScreen.attach(canvas, abilitySystem.abilities);
-  upgradePanel.attach(canvas, upgradeSystem, player);
+  upgradePanel.attach(canvas, homebaseUpgradeSystem, saveData, () => saveSaveData(saveData));
   world.updateSpawning(player.x, player.y);
   runTimer = 60; // 1 minute — compressed loop for rapid playtesting
   gameState = 'run_active';
@@ -222,13 +221,12 @@ function init() {
   screenShake = new ScreenShake();
   combatSystem.onShake = (intensity) => screenShake.trigger(intensity);
   homeBase = createHomeBase(0, 0);
+  homebaseUpgradeSystem = new HomebaseUpgradeSystem();
+  homebaseUpgradeSystem.loadFromSave(saveData);
   resolutionLevel = 0;
   prevHealth = player.health;
   damageFlash = 0;
 
-  upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
-    resolutionLevel = lvl;
-  }, pingSystem);
   abilitySystem = new AbilitySystem(player);
   abilitySystem.onShake = (intensity) => screenShake.trigger(intensity);
   abilityEffects = new AbilityEffects();
@@ -277,7 +275,7 @@ function init() {
   input.attachMouse(canvas);
   input.setCoordinateConverter(canvasToWorld);
   keyRemapScreen.attach(canvas, abilitySystem.abilities);
-  upgradePanel.attach(canvas, upgradeSystem, player);
+  upgradePanel.attach(canvas, homebaseUpgradeSystem, saveData, () => saveSaveData(saveData));
   world.updateSpawning(player.x, player.y);
 }
 
@@ -481,10 +479,11 @@ window.addEventListener('keydown', (e) => {
 
   // Only show upgrades panel if upgrades are enabled
   const features = currentLevelConfig?.features;
-  if (features?.upgrades !== false) {
-    const upgradesBinding = keyRemapScreen.getExtraBinding('upgrades');
+  // Upgrade panel — only available in base_mode (homebase upgrades are persistent between runs)
+  {
+    const upgradesBinding = keyRemapScreen ? keyRemapScreen.getExtraBinding('upgrades') : null;
     const upgradesKey = upgradesBinding ? upgradesBinding.key : 'e';
-    if ((e.key === upgradesKey || e.key === upgradesKey.toUpperCase()) && isActiveGameplay(gameState) && !keyRemapScreen.isVisible()) {
+    if ((e.key === upgradesKey || e.key === upgradesKey.toUpperCase()) && gameState === 'base_mode') {
       upgradePanel.toggle();
     }
   }
@@ -1027,7 +1026,44 @@ const loop = new GameLoop({
         ctx.fillText(`Runs completed: ${saveData.runCount}`, bcx, bcy + 190);
       }
 
+      // --- Upgrade buildings rendered around the homebase ---
+      const buildingRadius = 110;
+      const buildingDefs = [
+        { angle: -Math.PI / 2, label: 'PLAYER', color: '#00ff41', icon: 'P', tab: 'player' as const },
+        { angle: -Math.PI / 2 + (2 * Math.PI / 3), label: 'MINING', color: '#ffaa00', icon: 'M', tab: 'mining' as const },
+        { angle: -Math.PI / 2 + (4 * Math.PI / 3), label: 'COMBAT', color: '#ff4444', icon: 'C', tab: 'combat' as const },
+      ];
+      for (const bld of buildingDefs) {
+        const bx = bcx + Math.cos(bld.angle) * buildingRadius;
+        const by = bcy + Math.sin(bld.angle) * buildingRadius;
+
+        // Building circle
+        ctx.beginPath();
+        ctx.arc(bx, by, 22, 0, Math.PI * 2);
+        ctx.fillStyle = `${bld.color}10`;
+        ctx.fill();
+        ctx.strokeStyle = `${bld.color}80`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Building icon
+        ctx.font = 'bold 16px monospace';
+        ctx.fillStyle = bld.color;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(bld.icon, bx, by);
+
+        // Label below
+        ctx.font = '9px monospace';
+        ctx.fillStyle = `${bld.color}99`;
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(bld.label, bx, by + 34);
+      }
+
       ctx.restore();
+
+      // Upgrade panel (right side) — only in base_mode
+      upgradePanel.render(ctx, homebaseUpgradeSystem, saveData, canvas.width, canvas.height);
 
       // Pause menu (if paused from base_mode — shows on top)
       pauseMenu.render(ctx, canvas.width, canvas.height);
@@ -1530,11 +1566,6 @@ const loop = new GameLoop({
     // Ability bar (bottom center) — only if abilities enabled
     if (currentLevelConfig?.features.abilities !== false) {
       abilityBar.render(ctx, abilitySystem.abilities, canvas.width, canvas.height);
-    }
-
-    // Upgrade panel — only if upgrades enabled
-    if (currentLevelConfig?.features.upgrades !== false) {
-      upgradePanel.render(ctx, upgradeSystem, player, canvas.width, canvas.height);
     }
 
     // Game over overlay
