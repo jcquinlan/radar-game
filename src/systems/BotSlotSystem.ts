@@ -54,6 +54,18 @@ export class BotSlotSystem {
     slot.cooldownDuration = this.cooldownDuration;
   }
 
+  /**
+   * Cancel a slot acquisition, returning it to ready without cooldown.
+   * Call this when deployment fails (e.g., no valid target found).
+   */
+  cancelSlot(index: number): void {
+    if (index < 0 || index >= this.slots.length) return;
+    const slot = this.slots[index];
+    slot.state = SlotState.Ready;
+    slot.cooldownTimer = 0;
+    slot.cooldownDuration = 0;
+  }
+
   /** Tick cooldown timers. Call every frame. */
   update(dt: number): void {
     for (let i = 0; i < this.slots.length; i++) {

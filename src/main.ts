@@ -678,8 +678,8 @@ const loop = new GameLoop({
         if (miningBotSystem.deployBot(leftClick.worldX, leftClick.worldY, world.entities, player, slotIdx)) {
           floatingText.add('MINING BOT DEPLOYED', leftClick.worldX, leftClick.worldY - 15, '#ffaa00');
         } else {
-          // No asteroid in range — release the slot immediately
-          botSlotSystem.releaseSlot(slotIdx);
+          // No asteroid in range — cancel the slot (no cooldown)
+          botSlotSystem.cancelSlot(slotIdx);
           floatingText.add('NO ASTEROID', leftClick.worldX, leftClick.worldY - 15, '#ff4444');
         }
       } else {

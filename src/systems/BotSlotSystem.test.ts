@@ -172,6 +172,33 @@ describe('BotSlotSystem', () => {
     });
   });
 
+  describe('cancelSlot', () => {
+    it('returns a slot to ready state without cooldown', () => {
+      const index = system.acquireSlot();
+      expect(system.getReadyCount()).toBe(4);
+
+      system.cancelSlot(index);
+
+      expect(system.getSlots()[index].state).toBe(SlotState.Ready);
+      expect(system.getReadyCount()).toBe(5);
+    });
+
+    it('does not require waiting for cooldown', () => {
+      const i0 = system.acquireSlot();
+      system.cancelSlot(i0);
+
+      // Should be immediately available for reacquisition
+      const i1 = system.acquireSlot();
+      expect(i1).toBe(0);
+    });
+
+    it('ignores invalid indices', () => {
+      system.cancelSlot(-1);
+      system.cancelSlot(99);
+      expect(system.getReadyCount()).toBe(5);
+    });
+  });
+
   describe('reset', () => {
     it('returns all slots to ready state', () => {
       system.acquireSlot();
