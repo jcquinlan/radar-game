@@ -71,7 +71,7 @@ The game uses a lightweight entity-systems architecture. Entities are plain data
 1. `InputSystem` — reads WASD/arrow key state, returns `{turn, thrust}` for tank-style controls
 2. Player turn + thrust — applies turn inertia (`turnVelocity *= exp(-turnFriction * dt)`), accelerates along heading
 3. `World.updateSpawning()` — lazy-loads 400px chunks in a 5x5 grid around player, places POIs or ambient entities
-4. **Click-to-deploy** — single click handler with priority: near asteroid = mining bot, else = combat bot
+4. **Click-to-deploy** — left-click near asteroid = mining bot, right-click = combat bot (launches from player toward click)
 5. Blip, particle, HUD updates
 6. `PingSystem.update()` — fires expanding detection circle, returns interaction events on contact
 7. Event processing — floating text, score from ping events
@@ -144,7 +144,7 @@ src/
     AbilitySystem.ts         # 4 cooldown abilities — blast, heal over time, homing missile, dash
     TowRopeSystem.ts         # Salvage towing — spring physics, proximity pickup, dropoff/home deposit
     MiningBotSystem.ts       # Click-deployed mining bots — orbit asteroids, extract energy over ~30s
-    CombatBotSystem.ts       # Click-deployed combat bots — stationary turrets that fire at nearby enemies
+    CombatBotSystem.ts       # Right-click-deployed combat bots — launch from player, fly to target, orbit enemies while firing
     OrbitBotSystem.ts        # Permanent orbiting companion bot — auto-attacks nearby enemies
     BossSystem.ts            # Boss phase transitions (HP thresholds), stat scaling, minion spawning
     WaveSpawner.ts           # Final wave enemy spawning + boss spawning (scaled by run count)
@@ -221,7 +221,7 @@ The game uses an optional WebGL2 overlay canvas for post-processing effects. The
 - **Frame-rate independent**: all movement multiplied by `dt` (seconds)
 - **Tank-style movement**: A/D (or left/right arrows) rotate the player heading; W/S (or up/down arrows) thrust forward/backward along the heading direction
 - **Inertia model**: acceleration + exponential friction (`vel *= exp(-friction * dt)`). Acceleration = `speed * friction` so steady-state velocity equals `speed`. Player friction: 2.0, scouts: 2.5, brutes: 1.2, ranged: 1.8. Turning also uses inertia: `turnVelocity *= exp(-turnFriction * dt)` with turnFriction: 3.0
-- **Click-to-deploy**: Left click deploys bots. If click is near an asteroid (within mining deploy range), deploys a mining bot. Otherwise deploys a combat bot. Feedback via floating text.
+- **Click-to-deploy**: Left-click near an asteroid deploys a mining bot. Right-click deploys a combat bot that launches from the player and flies toward the click location. Feedback via floating text.
 - **Key remapping**: ability keys (1-4) and upgrades key (E) are remappable via K key; bindings persist to `localStorage` under `'radar-game-keybindings'`
 - **Events, not mutations**: `PingSystem.update()` returns an array of interaction events; the main loop processes them
 - **One ping per wave**: `pingedThisWave` flag on each entity prevents double-interaction until the next ping fires
@@ -313,7 +313,7 @@ The wave difficulty scales with `runCount`: more enemies per wave (`10 + runCoun
 
 **Bots (click-to-deploy):**
 - **Mining Bot** — click near an asteroid to deploy. Flies to asteroid, orbits while mining (~30s for full energy extraction). Returns to player when done or asteroid depleted. 3 charges base (upgradeable). Occasionally aggros nearby enemies toward the mining site.
-- **Combat Bot** — click away from asteroids to deploy. Stationary turret that fires at nearest enemy (200px range, 4 damage, 1.5s fire rate). 20s lifetime, 30 HP. 2 charges base (upgradeable).
+- **Combat Bot** — right-click to deploy. Launches from the player's position and flies toward the click location. Auto-detects enemies within 250px, chases them, and orbits while firing projectiles (1.5s fire rate, 4 damage). 20s lifetime, 30 HP. 2 charges base (upgradeable).
 - **Orbit Bot** — permanent companion that orbits the player. Auto-attacks nearby enemies with contact damage. Always active.
 
 **World generation:**

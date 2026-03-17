@@ -18,7 +18,8 @@ export class InputSystem {
   /** Whether the mouse cursor is currently over the game canvas */
   mouseOver = false;
 
-  private pendingClick: ClickEvent | null = null;
+  private pendingLeftClick: ClickEvent | null = null;
+  private pendingRightClick: ClickEvent | null = null;
   private coordinateConverter: CoordinateConverter | null = null;
   private canvas: HTMLCanvasElement | null = null;
 
@@ -28,6 +29,7 @@ export class InputSystem {
     this.onMouseMove = this.onMouseMove.bind(this);
     this.onMouseDown = this.onMouseDown.bind(this);
     this.onMouseLeave = this.onMouseLeave.bind(this);
+    this.onContextMenu = this.onContextMenu.bind(this);
   }
 
   attach(): void {
@@ -47,6 +49,7 @@ export class InputSystem {
     canvasEl.addEventListener('mousemove', this.onMouseMove);
     canvasEl.addEventListener('mousedown', this.onMouseDown);
     canvasEl.addEventListener('mouseleave', this.onMouseLeave);
+    canvasEl.addEventListener('contextmenu', this.onContextMenu);
   }
 
   /** Remove mouse listeners from the canvas element */
@@ -54,9 +57,11 @@ export class InputSystem {
     canvasEl.removeEventListener('mousemove', this.onMouseMove);
     canvasEl.removeEventListener('mousedown', this.onMouseDown);
     canvasEl.removeEventListener('mouseleave', this.onMouseLeave);
+    canvasEl.removeEventListener('contextmenu', this.onContextMenu);
     this.canvas = null;
     this.mouseOver = false;
-    this.pendingClick = null;
+    this.pendingLeftClick = null;
+    this.pendingRightClick = null;
   }
 
   /** Set the callback used to convert canvas coords to world coords */
@@ -65,12 +70,22 @@ export class InputSystem {
   }
 
   /**
-   * Consume the pending click event. Returns the click data once,
-   * then returns null until the next click occurs.
+   * Consume the pending left-click event. Returns the click data once,
+   * then returns null until the next left-click occurs.
    */
   consumeClick(): ClickEvent | null {
-    const click = this.pendingClick;
-    this.pendingClick = null;
+    const click = this.pendingLeftClick;
+    this.pendingLeftClick = null;
+    return click;
+  }
+
+  /**
+   * Consume the pending right-click event. Returns the click data once,
+   * then returns null until the next right-click occurs.
+   */
+  consumeRightClick(): ClickEvent | null {
+    const click = this.pendingRightClick;
+    this.pendingRightClick = null;
     return click;
   }
 
@@ -147,10 +162,19 @@ export class InputSystem {
     this.mouseX = x;
     this.mouseY = y;
     this.updateWorldCoords(x, y);
-    this.pendingClick = { worldX: this.mouseWorldX, worldY: this.mouseWorldY };
+    const clickEvent = { worldX: this.mouseWorldX, worldY: this.mouseWorldY };
+    if (e.button === 2) {
+      this.pendingRightClick = clickEvent;
+    } else {
+      this.pendingLeftClick = clickEvent;
+    }
   }
 
   private onMouseLeave(): void {
     this.mouseOver = false;
+  }
+
+  private onContextMenu(e: Event): void {
+    e.preventDefault();
   }
 }
