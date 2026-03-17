@@ -858,6 +858,23 @@ const loop = new GameLoop({
       motionTrail.track('ob0', ob.x, ob.y, ob.vx, ob.vy, theme.effects.drone, dt);
       activeTrailIds.add('ob0');
     }
+    // Combat bot entity trails
+    for (let i = 0; i < combatBotSystem.bots.length; i++) {
+      const cb = combatBotSystem.bots[i];
+      if (!cb.active) continue;
+      const cbid = `cb${i}`;
+      motionTrail.track(cbid, cb.x, cb.y, cb.vx, cb.vy, '#ff8844', dt);
+      activeTrailIds.add(cbid);
+    }
+    // Mining bot trails
+    const miningBots = miningBotSystem.getBots();
+    for (let i = 0; i < miningBots.length; i++) {
+      const mb = miningBots[i];
+      if (!mb.active) continue;
+      const mbid = `mb${i}`;
+      motionTrail.track(mbid, mb.x, mb.y, mb.vx, mb.vy, '#ffaa00', dt);
+      activeTrailIds.add(mbid);
+    }
     // Combat bot projectile trails
     for (let i = 0; i < combatBotSystem.botProjectiles.length; i++) {
       const cbp = combatBotSystem.botProjectiles[i];
