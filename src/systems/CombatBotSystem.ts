@@ -41,7 +41,7 @@ const BOT_RANGE = 200;
 const BOT_FIRE_RATE = 1.5;
 const BOT_LIFETIME = 20;
 
-// Movement — matches OrbitBotSystem's inertia model
+// Movement — inertia model
 const BOT_SPEED = 140;
 const BOT_FRICTION = 2.5;
 const BOT_ACCEL = BOT_SPEED * BOT_FRICTION;
