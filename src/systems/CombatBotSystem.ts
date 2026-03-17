@@ -32,6 +32,8 @@ export interface CombatBot {
   lifetime: number;
   maxLifetime: number;
   active: boolean;
+  /** BotSlotSystem slot index assigned to this bot (-1 if unassigned) */
+  slotIndex: number;
 }
 
 // Combat bot stats
@@ -80,11 +82,12 @@ const FAR_DIST = 250;
 export class CombatBotSystem {
   bots: CombatBot[] = [];
   botProjectiles: Projectile[] = [];
-  maxBots = 2;
   /** Base damage per bot — increased by combat damage upgrade */
   baseDamage = BOT_DAMAGE;
   /** Base lifetime per bot — increased by combat lifetime upgrade */
   baseLifetime = BOT_LIFETIME;
+  /** Callback invoked with slot index when a bot becomes inactive */
+  onSlotRelease: ((slotIndex: number) => void) | null = null;
   /** Screen shake callback — wired up by main.ts */
   onShake: (intensity: number) => void = () => {};
 
@@ -98,20 +101,11 @@ export class CombatBotSystem {
     }
   }
 
-  /** Returns number of charges currently available for deployment */
-  getChargesRemaining(): number {
-    const activeBots = this.bots.filter(b => b.active).length;
-    return this.maxBots - activeBots;
-  }
-
   /**
    * Deploy a combat bot from the player's position toward a target world position.
-   * Returns true if deployed, false if no charges remain.
+   * Caller must have already acquired a slot from BotSlotSystem.
    */
-  deployBot(targetX: number, targetY: number, player: Player): boolean {
-    const activeBots = this.bots.filter(b => b.active).length;
-    if (activeBots >= this.maxBots) return false;
-
+  deployBot(targetX: number, targetY: number, player: Player, slotIndex: number): void {
     // Compute missile-style launch angle with distance-scaled spread
     const dx = targetX - player.x;
     const dy = targetY - player.y;
@@ -140,15 +134,29 @@ export class CombatBotSystem {
       lifetime: this.baseLifetime,
       maxLifetime: this.baseLifetime,
       active: true,
+      slotIndex,
     };
 
     this.bots.push(bot);
     this.onShake(5);
-    return true;
   }
 
-  /** Reset all bots and charges — call on new run */
+  private releaseBotSlot(bot: CombatBot): void {
+    if (this.onSlotRelease && bot.slotIndex >= 0) {
+      this.onSlotRelease(bot.slotIndex);
+    }
+  }
+
+  /** Reset all bots — releases slots and clears array. Call on new run. */
   reset(): void {
+    if (this.onSlotRelease) {
+      for (let i = 0; i < this.bots.length; i++) {
+        const bot = this.bots[i];
+        if (bot.slotIndex >= 0) {
+          this.onSlotRelease(bot.slotIndex);
+        }
+      }
+    }
     this.bots.length = 0;
     for (let i = 0; i < this.botProjectiles.length; i++) {
       this.botProjectiles[i].active = false;
@@ -163,7 +171,7 @@ export class CombatBotSystem {
     onImpact: DeathCallback,
     player?: Player,
   ): void {
-    for (let bi = 0; bi < this.bots.length; bi++) {
+    for (let bi = this.bots.length - 1; bi >= 0; bi--) {
       const bot = this.bots[bi];
       if (!bot.active) continue;
 
@@ -171,6 +179,8 @@ export class CombatBotSystem {
       bot.lifetime -= dt;
       if (bot.lifetime <= 0) {
         bot.active = false;
+        this.releaseBotSlot(bot);
+        this.bots.splice(bi, 1);
         continue;
       }
 
@@ -227,8 +237,10 @@ export class CombatBotSystem {
           if (bot.health <= 0) {
             bot.health = 0;
             bot.active = false;
+            this.releaseBotSlot(bot);
             onDeath(bot.x, bot.y, enemy.x, enemy.y, '#ff8844');
             addFloatingText('BOT DESTROYED', bot.x, bot.y, '#ff8844');
+            this.bots.splice(bi, 1);
             break;
           }
         }

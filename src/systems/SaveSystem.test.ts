@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { calculateCurrency, calculateReducedCurrency, loadSaveData, saveSaveData, SaveData } from './SaveSystem';
+import { calculateCurrency, calculateReducedCurrency, loadSaveData, saveSaveData, migrateUpgrades, SaveData } from './SaveSystem';
 
 describe('calculateCurrency', () => {
   it('returns correct currency per formula: (salvage*50) + (kills*10) + floor(baseHpPercent*50)', () => {
@@ -69,6 +69,20 @@ describe('loadSaveData', () => {
     expect(data.currency).toBe(0);
     expect(data.runCount).toBe(0);
   });
+
+  it('migrates legacy max_mining_bots and max_combat_bots to max_bot_slots', () => {
+    const saved = {
+      currency: 500,
+      runCount: 3,
+      baseUpgrades: { max_mining_bots: 2, max_combat_bots: 1, hull_armor: 3 },
+    };
+    localStorage.setItem('radar-game-save', JSON.stringify(saved));
+    const data = loadSaveData();
+    expect(data.baseUpgrades['max_bot_slots']).toBe(3);
+    expect(data.baseUpgrades['max_mining_bots']).toBeUndefined();
+    expect(data.baseUpgrades['max_combat_bots']).toBeUndefined();
+    expect(data.baseUpgrades['hull_armor']).toBe(3);
+  });
 });
 
 describe('saveSaveData', () => {
@@ -91,5 +105,48 @@ describe('saveSaveData', () => {
     const parsed = JSON.parse(raw!);
     expect(parsed.currency).toBe(200);
     expect(parsed.runCount).toBe(2);
+  });
+});
+
+describe('migrateUpgrades', () => {
+  it('converts max_mining_bots + max_combat_bots to max_bot_slots', () => {
+    const result = migrateUpgrades({ max_mining_bots: 2, max_combat_bots: 3 });
+    expect(result['max_bot_slots']).toBe(5);
+    expect(result['max_mining_bots']).toBeUndefined();
+    expect(result['max_combat_bots']).toBeUndefined();
+  });
+
+  it('caps max_bot_slots at 5', () => {
+    const result = migrateUpgrades({ max_mining_bots: 4, max_combat_bots: 4 });
+    expect(result['max_bot_slots']).toBe(5);
+  });
+
+  it('handles only max_mining_bots being present', () => {
+    const result = migrateUpgrades({ max_mining_bots: 3 });
+    expect(result['max_bot_slots']).toBe(3);
+    expect(result['max_mining_bots']).toBeUndefined();
+  });
+
+  it('handles only max_combat_bots being present', () => {
+    const result = migrateUpgrades({ max_combat_bots: 2 });
+    expect(result['max_bot_slots']).toBe(2);
+    expect(result['max_combat_bots']).toBeUndefined();
+  });
+
+  it('does not overwrite existing max_bot_slots', () => {
+    const result = migrateUpgrades({ max_mining_bots: 3, max_bot_slots: 1 });
+    expect(result['max_bot_slots']).toBe(1);
+    expect(result['max_mining_bots']).toBeUndefined();
+  });
+
+  it('preserves other upgrade keys', () => {
+    const result = migrateUpgrades({ hull_armor: 3, mining_speed: 2 });
+    expect(result['hull_armor']).toBe(3);
+    expect(result['mining_speed']).toBe(2);
+  });
+
+  it('returns empty object for empty input', () => {
+    const result = migrateUpgrades({});
+    expect(result).toEqual({});
   });
 });
