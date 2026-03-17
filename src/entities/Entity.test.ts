@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createResource, createEnemy, createHomeBase, createSalvage, createAsteroid } from './Entity';
+import { createResource, createEnemy, createHomeBase, createSalvage, createAsteroid, createBossEnemy } from './Entity';
 
 describe('Entity factories', () => {
   it('creates a resource at the given position', () => {
@@ -119,5 +119,35 @@ describe('Entity factories', () => {
     expect(sizes.has('small')).toBe(true);
     expect(sizes.has('medium')).toBe(true);
     expect(sizes.has('large')).toBe(true);
+  });
+
+  it('creates a boss enemy with correct stats', () => {
+    const boss = createBossEnemy(500, 600);
+    expect(boss.x).toBe(500);
+    expect(boss.y).toBe(600);
+    expect(boss.type).toBe('enemy');
+    expect(boss.isBoss).toBe(true);
+    expect(boss.bossPhase).toBe(1);
+    expect(boss.health).toBe(500);
+    expect(boss.maxHealth).toBe(500);
+    expect(boss.damage).toBe(20);
+    expect(boss.speed).toBe(40);
+    expect(boss.chaseRange).toBe(500);
+    expect(boss.waveEnemy).toBe(true);
+    expect(boss.visible).toBe(true);
+    expect(boss.aggro).toBe(true);
+    expect(boss.fireRate).toBe(1.5);
+    expect(boss.projectileSpeed).toBe(140);
+  });
+
+  it('boss enemy defaults differ from regular enemy', () => {
+    const boss = createBossEnemy(0, 0);
+    const regular = createEnemy(0, 0, 'ranged');
+    expect(boss.isBoss).toBe(true);
+    expect(regular.isBoss).toBe(false);
+    expect(boss.visible).toBe(true);
+    expect(regular.visible).toBe(false);
+    expect(boss.bossPhase).toBe(1);
+    expect(regular.bossPhase).toBe(0);
   });
 });
