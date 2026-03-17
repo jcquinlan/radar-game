@@ -28,6 +28,7 @@ import { DeathParticles } from './radar/DeathParticles';
 import { TowRopeSystem } from './systems/TowRopeSystem';
 import { OrbitBotSystem } from './systems/OrbitBotSystem';
 import { CombatBotSystem } from './systems/CombatBotSystem';
+import { MiningBotSystem, MiningBotState } from './systems/MiningBotSystem';
 import { createZoomState, adjustZoom, updateZoom, resetZoom, ZOOM_WHEEL_SENSITIVITY, ZOOM_KEY_STEP, ZoomState } from './systems/ZoomState';
 import { Minimap } from './ui/Minimap';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
@@ -91,6 +92,7 @@ let deathParticles: DeathParticles;
 let towRopeSystem: TowRopeSystem;
 let orbitBotSystem: OrbitBotSystem;
 let combatBotSystem: CombatBotSystem;
+let miningBotSystem: MiningBotSystem;
 let minimap: Minimap;
 let homeBase: HomeBase;
 let resolutionLevel: number;
@@ -156,6 +158,7 @@ function startRun() {
   abilityEffects = new AbilityEffects();
   orbitBotSystem = new OrbitBotSystem(player);
   combatBotSystem = new CombatBotSystem();
+  miningBotSystem = new MiningBotSystem();
   pingSystem = new PingSystem({ maxRadius: radar.getRadius() });
   upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
     resolutionLevel = lvl;
@@ -231,6 +234,7 @@ function init() {
   abilityEffects = new AbilityEffects();
   orbitBotSystem = new OrbitBotSystem(player);
   combatBotSystem = new CombatBotSystem();
+  miningBotSystem = new MiningBotSystem();
   abilityBar = new AbilityBar();
   motionTrail = new MotionTrail();
   deathParticles = new DeathParticles(200);
@@ -643,6 +647,14 @@ const loop = new GameLoop({
     // Spawn entities in new areas
     world.updateSpawning(player.x, player.y);
 
+    // Click-to-deploy mining bots
+    const click = input.consumeClick();
+    if (click) {
+      if (miningBotSystem.deployBot(click.worldX, click.worldY, world.entities, player)) {
+        floatingText.add('MINER DEPLOYED', click.worldX, click.worldY - 15, '#ffaa00');
+      }
+    }
+
     // Blip + particle + HUD updates
     blipRenderer.update(dt);
     ambientParticles.update(dt);
@@ -706,6 +718,12 @@ const loop = new GameLoop({
         dt, world.entities,
         (text, x, y, color) => floatingText.add(text, x, y, color),
         (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color),
+      );
+
+      // Mining bots — click-deployed asteroid miners
+      miningBotSystem.update(
+        dt, player, world.entities,
+        (text, x, y, color) => floatingText.add(text, x, y, color),
       );
 
       const hotAbility = abilitySystem.getAbility('heal_over_time');
@@ -1346,6 +1364,47 @@ const loop = new GameLoop({
       }
     }
 
+    // Render mining bots and laser lines
+    {
+      const bots = miningBotSystem.getBots();
+      for (let i = 0; i < bots.length; i++) {
+        const mb = bots[i];
+        if (!mb.active) continue;
+        const mbrx = mb.x - player.x;
+        const mbry = mb.y - player.y;
+        if (mbrx * mbrx + mbry * mbry > viewRadiusSq) continue;
+        const mbX = cx + mbrx;
+        const mbY = cy + mbry;
+
+        // Laser line to asteroid while mining
+        if (mb.state === MiningBotState.Mining && mb.targetAsteroid) {
+          const tarx = mb.targetAsteroid.x - player.x;
+          const tary = mb.targetAsteroid.y - player.y;
+          const tarX = cx + tarx;
+          const tarY = cy + tary;
+          ctx.save();
+          ctx.strokeStyle = '#ffaa00';
+          ctx.globalAlpha = 0.6;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(mbX, mbY);
+          ctx.lineTo(tarX, tarY);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Bot dot
+        ctx.save();
+        ctx.shadowColor = '#ffaa00';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(mbX, mbY, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffaa00';
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
     // Render missiles
     for (const missile of abilitySystem.missiles) {
       const mrx = missile.x - player.x;
@@ -1435,7 +1494,8 @@ const loop = new GameLoop({
     // HUD
     hud.render(ctx, player, canvas.width, canvas.height, runTimer, homeBase,
       undefined,
-      { charges: combatBotSystem.getChargesRemaining(), maxBots: combatBotSystem.maxBots });
+      { charges: combatBotSystem.getChargesRemaining(), maxBots: combatBotSystem.maxBots },
+      { available: miningBotSystem.getAvailableCharges(), max: miningBotSystem.maxBots });
 
     // Tutorial hints
     if (currentLevelConfig && currentLevelConfig.hints.length > 0) {

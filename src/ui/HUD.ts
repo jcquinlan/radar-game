@@ -35,6 +35,7 @@ export class HUD {
     homeBase?: HomeBase,
     defenseHint?: { show: boolean; defenseCount: number; maxDefenses: number },
     combatBotHint?: { charges: number; maxBots: number },
+    minerInfo?: { available: number; max: number },
   ): void {
     const padding = 20;
     const barWidth = 200;
@@ -119,6 +120,17 @@ export class HUD {
         `BOTS: ${combatBotHint.charges}/${combatBotHint.maxBots}`,
         padding,
         y + barHeight + baseBarOffset + 98
+      );
+    }
+
+    // Mining bot charges
+    if (minerInfo) {
+      ctx.fillStyle = '#ffaa00';
+      ctx.font = '12px monospace';
+      ctx.fillText(
+        `MINERS: ${minerInfo.available}/${minerInfo.max}`,
+        padding,
+        y + barHeight + baseBarOffset + 114
       );
     }
 
