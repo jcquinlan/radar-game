@@ -6,7 +6,6 @@ export type FloatingTextCallback = (text: string, x: number, y: number, color: s
 export const enum MiningBotState {
   Deploying = 0,
   Mining = 1,
-  Returning = 2,
 }
 
 export interface MiningBot {
@@ -39,9 +38,6 @@ const ORBIT_ANGULAR_SPEED = 2.5;
 
 // Arrival threshold — close enough to start orbiting
 const ARRIVAL_THRESHOLD_SQ = 45 * 45;
-
-// Return despawn threshold
-const DESPAWN_THRESHOLD_SQ = 30 * 30;
 
 // Mining duration (seconds)
 const MINING_DURATION = 30;
@@ -160,9 +156,6 @@ export class MiningBotSystem {
         case MiningBotState.Mining:
           this.updateMining(bot, dt, player, entities, addFloatingText);
           break;
-        case MiningBotState.Returning:
-          this.updateReturning(bot, dt, player);
-          break;
       }
 
       // Apply friction and move
@@ -177,8 +170,8 @@ export class MiningBotSystem {
   private updateDeploying(bot: MiningBot, dt: number): void {
     const target = bot.targetAsteroid;
     if (!target || !target.active) {
-      // Target gone, return
-      bot.state = MiningBotState.Returning;
+      // Target gone — deactivate in place
+      bot.active = false;
       bot.targetAsteroid = null;
       return;
     }
@@ -212,8 +205,8 @@ export class MiningBotSystem {
   ): void {
     const target = bot.targetAsteroid;
     if (!target || !target.active) {
-      // Asteroid gone
-      bot.state = MiningBotState.Returning;
+      // Asteroid gone — deactivate in place
+      bot.active = false;
       bot.targetAsteroid = null;
       return;
     }
@@ -260,7 +253,7 @@ export class MiningBotSystem {
       target.hp = 0;
       target.active = false;
       target.miningActive = false;
-      bot.state = MiningBotState.Returning;
+      bot.active = false;
       bot.targetAsteroid = null;
       return;
     }
@@ -268,7 +261,7 @@ export class MiningBotSystem {
     // Check mining duration complete
     if (bot.miningProgress >= 1) {
       target.miningActive = false;
-      bot.state = MiningBotState.Returning;
+      bot.active = false;
       bot.targetAsteroid = null;
       return;
     }
@@ -280,26 +273,6 @@ export class MiningBotSystem {
       if (Math.random() < AGGRO_CHANCE) {
         this.aggroNearestEnemy(target.x, target.y, entities);
       }
-    }
-  }
-
-  private updateReturning(bot: MiningBot, dt: number, player: Player): void {
-    const dx = player.x - bot.x;
-    const dy = player.y - bot.y;
-    const distSq = dx * dx + dy * dy;
-
-    if (distSq < DESPAWN_THRESHOLD_SQ) {
-      // Close enough — despawn and restore charge
-      bot.active = false;
-      bot.targetAsteroid = null;
-      return;
-    }
-
-    // Steer toward player
-    const dist = Math.sqrt(distSq);
-    if (dist > 0) {
-      bot.vx += (dx / dist) * BOT_ACCEL * dt;
-      bot.vy += (dy / dist) * BOT_ACCEL * dt;
     }
   }
 
