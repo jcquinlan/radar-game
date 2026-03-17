@@ -1,13 +1,19 @@
-import { UpgradeSystem } from '../systems/UpgradeSystem';
-import { Player } from '../entities/Player';
+import { HomebaseUpgradeSystem, BuildingCategory, HomebaseUpgrade } from '../systems/HomebaseUpgradeSystem';
+import { SaveData } from '../systems/SaveSystem';
 import { getTheme } from '../themes/theme';
+
+const TABS: { id: BuildingCategory; label: string; color: string }[] = [
+  { id: 'player', label: 'PLAYER', color: '#00ff41' },
+  { id: 'mining', label: 'MINING', color: '#ffaa00' },
+  { id: 'combat', label: 'COMBAT', color: '#ff4444' },
+];
 
 export class UpgradePanel {
   private visible = false;
-  private selectedIndex = 0;
+  private activeTab: BuildingCategory = 'player';
   private clickHandler: ((e: MouseEvent) => void) | null = null;
-  private keyHandler: ((e: KeyboardEvent) => void) | null = null;
-  private itemBounds: { x: number; y: number; width: number; height: number }[] = [];
+  private itemBounds: { x: number; y: number; width: number; height: number; upgradeId: string }[] = [];
+  private tabBounds: { x: number; y: number; width: number; height: number; tab: BuildingCategory }[] = [];
 
   toggle(): void {
     this.visible = !this.visible;
@@ -17,7 +23,15 @@ export class UpgradePanel {
     return this.visible;
   }
 
-  attach(canvas: HTMLCanvasElement, upgradeSystem: UpgradeSystem, player: Player): void {
+  setTab(tab: BuildingCategory): void {
+    this.activeTab = tab;
+  }
+
+  attach(
+    canvas: HTMLCanvasElement,
+    upgradeSystem: HomebaseUpgradeSystem,
+    saveData: SaveData,
+  ): void {
     this.clickHandler = (e: MouseEvent) => {
       if (!this.visible) return;
 
@@ -25,11 +39,20 @@ export class UpgradePanel {
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
 
+      // Check tab clicks
+      for (let i = 0; i < this.tabBounds.length; i++) {
+        const b = this.tabBounds[i];
+        if (mx >= b.x && mx <= b.x + b.width && my >= b.y && my <= b.y + b.height) {
+          this.activeTab = b.tab;
+          return;
+        }
+      }
+
+      // Check upgrade item clicks
       for (let i = 0; i < this.itemBounds.length; i++) {
         const b = this.itemBounds[i];
         if (mx >= b.x && mx <= b.x + b.width && my >= b.y && my <= b.y + b.height) {
-          const upgrade = upgradeSystem.upgrades[i];
-          upgradeSystem.purchase(upgrade.id, player);
+          upgradeSystem.purchase(b.upgradeId, saveData);
           break;
         }
       }
@@ -47,59 +70,108 @@ export class UpgradePanel {
 
   render(
     ctx: CanvasRenderingContext2D,
-    upgradeSystem: UpgradeSystem,
-    player: Player,
+    upgradeSystem: HomebaseUpgradeSystem,
+    saveData: SaveData,
     canvasWidth: number,
-    canvasHeight: number
+    canvasHeight: number,
   ): void {
     if (!this.visible) return;
 
-    const panelWidth = 300;
+    const upgrades = upgradeSystem.getUpgradesForBuilding(this.activeTab);
+    const panelWidth = 320;
     const panelX = canvasWidth - panelWidth - 20;
     const panelY = 60;
+    const tabHeight = 32;
     const itemHeight = 80;
     const padding = 12;
+    const panelHeight = tabHeight + upgrades.length * itemHeight + padding * 2 + 40;
 
     const theme = getTheme();
 
-    // Panel background
     ctx.save();
-    ctx.fillStyle = theme.ui.panelBackground;
-    ctx.fillRect(panelX, panelY, panelWidth, upgradeSystem.upgrades.length * itemHeight + padding * 2 + 30);
 
-    // Title
-    ctx.font = 'bold 16px monospace';
-    ctx.fillStyle = theme.ui.textPrimary;
-    ctx.shadowColor = theme.ui.textPrimary;
-    ctx.shadowBlur = 5;
-    ctx.fillText('UPGRADES', panelX + padding, panelY + 22);
-    ctx.shadowBlur = 0;
+    // Panel background
+    ctx.fillStyle = theme.ui.panelBackground;
+    ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
 
     // Border
     ctx.strokeStyle = theme.ui.border;
     ctx.lineWidth = 1;
-    ctx.strokeRect(panelX, panelY, panelWidth, upgradeSystem.upgrades.length * itemHeight + padding * 2 + 30);
+    ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
 
-    this.itemBounds = [];
+    // Title
+    ctx.font = 'bold 14px monospace';
+    ctx.fillStyle = theme.ui.textPrimary;
+    ctx.shadowColor = theme.ui.textPrimary;
+    ctx.shadowBlur = 5;
+    ctx.fillText('HOMEBASE UPGRADES', panelX + padding, panelY + 20);
+    ctx.shadowBlur = 0;
 
-    for (let i = 0; i < upgradeSystem.upgrades.length; i++) {
-      const upgrade = upgradeSystem.upgrades[i];
-      const y = panelY + 35 + i * itemHeight;
-      const canBuy = upgradeSystem.canPurchase(upgrade.id, player.energy);
-      const maxed = upgrade.level >= upgrade.maxLevel;
+    // Currency display
+    ctx.font = '11px monospace';
+    ctx.fillStyle = '#ffaa00';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${saveData.currency} CR`, panelX + panelWidth - padding, panelY + 20);
+    ctx.textAlign = 'left';
 
-      const itemY = y;
-      this.itemBounds.push({
-        x: panelX + padding,
-        y: itemY,
-        width: panelWidth - padding * 2,
-        height: itemHeight - 5,
+    // Tabs
+    this.tabBounds = [];
+    const tabY = panelY + 30;
+    const tabWidth = Math.floor((panelWidth - padding * 2) / TABS.length);
+
+    for (let i = 0; i < TABS.length; i++) {
+      const tab = TABS[i];
+      const tx = panelX + padding + i * tabWidth;
+      const isActive = tab.id === this.activeTab;
+
+      this.tabBounds.push({
+        x: tx,
+        y: tabY,
+        width: tabWidth,
+        height: tabHeight,
+        tab: tab.id,
       });
 
-      // Item background on hover possibility
+      // Tab background
+      ctx.fillStyle = isActive ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.02)';
+      ctx.fillRect(tx, tabY, tabWidth, tabHeight);
+
+      // Tab border (bottom highlight for active)
+      if (isActive) {
+        ctx.fillStyle = tab.color;
+        ctx.fillRect(tx, tabY + tabHeight - 2, tabWidth, 2);
+      }
+
+      // Tab label
+      ctx.font = isActive ? 'bold 11px monospace' : '11px monospace';
+      ctx.fillStyle = isActive ? tab.color : theme.ui.textDisabled;
+      ctx.textAlign = 'center';
+      ctx.fillText(tab.label, tx + tabWidth / 2, tabY + 20);
+      ctx.textAlign = 'left';
+    }
+
+    // Upgrade items
+    this.itemBounds = [];
+    const listY = tabY + tabHeight + 8;
+
+    for (let i = 0; i < upgrades.length; i++) {
+      const upgrade = upgrades[i];
+      const y = listY + i * itemHeight;
+      const canBuy = upgradeSystem.canPurchase(upgrade.id, saveData.currency);
+      const maxed = upgrade.level >= upgrade.maxLevel;
+
+      this.itemBounds.push({
+        x: panelX + padding,
+        y,
+        width: panelWidth - padding * 2,
+        height: itemHeight - 5,
+        upgradeId: upgrade.id,
+      });
+
+      // Item background for purchasable
       if (canBuy) {
         ctx.fillStyle = theme.ui.highlightSubtle;
-        ctx.fillRect(panelX + padding, itemY, panelWidth - padding * 2, itemHeight - 5);
+        ctx.fillRect(panelX + padding, y, panelWidth - padding * 2, itemHeight - 5);
       }
 
       // Name
@@ -127,17 +199,13 @@ export class UpgradePanel {
       // Level text
       ctx.font = '11px monospace';
       ctx.fillStyle = theme.ui.statsText;
-      ctx.fillText(
-        `Lv ${upgrade.level}/${upgrade.maxLevel}`,
-        panelX + padding + 4,
-        y + 50
-      );
+      ctx.fillText(`Lv ${upgrade.level}/${upgrade.maxLevel}`, panelX + padding + 4, y + 50);
 
       // Cost
       if (!maxed) {
         const cost = upgradeSystem.getNextCost(upgrade.id);
         ctx.fillStyle = canBuy ? theme.ui.textPrimary : theme.ui.cooldownText;
-        ctx.fillText(`Cost: ${cost} E`, panelX + panelWidth - padding - 90, y + 50);
+        ctx.fillText(`Cost: ${cost} CR`, panelX + panelWidth - padding - 100, y + 50);
       } else {
         ctx.fillStyle = theme.ui.maxedText;
         ctx.fillText('MAXED', panelX + panelWidth - padding - 60, y + 50);
