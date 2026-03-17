@@ -27,7 +27,6 @@ import { HelpScreen } from './ui/HelpScreen';
 import { MotionTrail } from './radar/MotionTrail';
 import { DeathParticles } from './radar/DeathParticles';
 import { TowRopeSystem } from './systems/TowRopeSystem';
-import { OrbitBotSystem } from './systems/OrbitBotSystem';
 import { CombatBotSystem } from './systems/CombatBotSystem';
 import { MiningBotSystem, MiningBotState } from './systems/MiningBotSystem';
 import { createZoomState, adjustZoom, updateZoom, resetZoom, ZOOM_WHEEL_SENSITIVITY, ZOOM_KEY_STEP, ZoomState } from './systems/ZoomState';
@@ -90,7 +89,6 @@ let keyRemapScreen: KeyRemapScreen;
 let motionTrail: MotionTrail;
 let deathParticles: DeathParticles;
 let towRopeSystem: TowRopeSystem;
-let orbitBotSystem: OrbitBotSystem;
 let combatBotSystem: CombatBotSystem;
 let miningBotSystem: MiningBotSystem;
 let minimap: Minimap;
@@ -161,7 +159,6 @@ function startRun() {
   abilitySystem = new AbilitySystem(player);
   abilitySystem.onShake = (intensity) => screenShake.trigger(intensity);
   abilityEffects = new AbilityEffects();
-  orbitBotSystem = new OrbitBotSystem(player);
   combatBotSystem = new CombatBotSystem();
   miningBotSystem = new MiningBotSystem();
   bossSystem = new BossSystem();
@@ -237,7 +234,6 @@ function init() {
   abilitySystem = new AbilitySystem(player);
   abilitySystem.onShake = (intensity) => screenShake.trigger(intensity);
   abilityEffects = new AbilityEffects();
-  orbitBotSystem = new OrbitBotSystem(player);
   combatBotSystem = new CombatBotSystem();
   miningBotSystem = new MiningBotSystem();
   abilityBar = new AbilityBar();
@@ -740,13 +736,6 @@ const loop = new GameLoop({
         deathParticles.emitFromSource(x, y, srcX, srcY, color, 5);
       abilitySystem.update(dt, world.entities, addText, onAbilityDeath, onAbilityImpact);
 
-      // Orbit bot — permanent companion
-      orbitBotSystem.update(
-        dt, world.entities,
-        (text, x, y, color) => floatingText.add(text, x, y, color),
-        (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color),
-      );
-
       // Mining bots — click-deployed asteroid miners
       miningBotSystem.update(
         dt, player, world.entities,
@@ -847,12 +836,6 @@ const loop = new GameLoop({
         motionTrail.track(mid, missile.x, missile.y, missile.vx, missile.vy, theme.effects.missile, dt);
         activeTrailIds.add(mid);
       }
-    }
-    // Orbit bot trail
-    {
-      const ob = orbitBotSystem.bot;
-      motionTrail.track('ob0', ob.x, ob.y, ob.vx, ob.vy, theme.effects.drone, dt);
-      activeTrailIds.add('ob0');
     }
     // Combat bot projectile trails
     for (let i = 0; i < combatBotSystem.botProjectiles.length; i++) {
@@ -1198,7 +1181,7 @@ const loop = new GameLoop({
       }
     }
 
-    // Combat bots — orange circles (like orbit bot) with health indicator
+    // Combat bots — orange circles with health indicator
     for (let i = 0; i < combatBotSystem.bots.length; i++) {
       const bot = combatBotSystem.bots[i];
       if (!bot.active) continue;
@@ -1382,54 +1365,6 @@ const loop = new GameLoop({
       ctx.fillStyle = theme.effects.projectile;
       ctx.fill();
       ctx.restore();
-    }
-
-    // Render orbit bot
-    {
-      const ob = orbitBotSystem.bot;
-      const obrx = ob.x - player.x;
-      const obry = ob.y - player.y;
-      if (obrx * obrx + obry * obry <= viewRadiusSq) {
-        const obX = cx + obrx;
-        const obY = cy + obry;
-        ctx.save();
-        ctx.shadowColor = '#00ffff';
-        ctx.shadowBlur = 10;
-        ctx.beginPath();
-        ctx.arc(obX, obY, 3.5, 0, Math.PI * 2);
-        ctx.fillStyle = '#00ffff';
-        ctx.fill();
-        ctx.restore();
-      }
-    }
-
-    // Render orbit bot projectiles
-    {
-      const projs = orbitBotSystem.botProjectiles;
-      let hasActive = false;
-      for (let i = 0; i < projs.length; i++) {
-        if (projs[i].active) { hasActive = true; break; }
-      }
-      if (hasActive) {
-        ctx.save();
-        ctx.shadowColor = '#00ffff';
-        ctx.shadowBlur = 6;
-        ctx.fillStyle = '#00ffff';
-        ctx.beginPath();
-        for (let i = 0; i < projs.length; i++) {
-          const p = projs[i];
-          if (!p.active) continue;
-          const prx = p.x - player.x;
-          const pry = p.y - player.y;
-          if (prx * prx + pry * pry > viewRadiusSq) continue;
-          const px = cx + prx;
-          const py = cy + pry;
-          ctx.moveTo(px + 2, py);
-          ctx.arc(px, py, 2, 0, Math.PI * 2);
-        }
-        ctx.fill();
-        ctx.restore();
-      }
     }
 
     // Render mining bots and laser lines
