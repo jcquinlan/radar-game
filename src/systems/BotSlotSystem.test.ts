@@ -29,9 +29,19 @@ describe('BotSlotSystem', () => {
       expect(system.getReadyCount()).toBe(4);
     });
 
-    it('marks acquired slot as active', () => {
+    it('marks acquired slot as active combat by default', () => {
       const index = system.acquireSlot();
-      expect(system.getSlots()[index].state).toBe(SlotState.Active);
+      expect(system.getSlots()[index].state).toBe(SlotState.ActiveCombat);
+    });
+
+    it('marks acquired slot as active mining when type is mining', () => {
+      const index = system.acquireSlot('mining');
+      expect(system.getSlots()[index].state).toBe(SlotState.ActiveMining);
+    });
+
+    it('marks acquired slot as active combat when type is combat', () => {
+      const index = system.acquireSlot('combat');
+      expect(system.getSlots()[index].state).toBe(SlotState.ActiveCombat);
     });
 
     it('returns sequential indices for multiple acquisitions', () => {
@@ -56,7 +66,7 @@ describe('BotSlotSystem', () => {
 
       const newIndex = system.acquireSlot();
       expect(newIndex).toBe(0);
-      expect(system.getSlots()[newIndex].state).toBe(SlotState.Active);
+      expect(system.getSlots()[newIndex].state).toBe(SlotState.ActiveCombat);
     });
   });
 
@@ -124,7 +134,7 @@ describe('BotSlotSystem', () => {
 
       system.update(100);
 
-      expect(system.getSlots()[0].state).toBe(SlotState.Active);
+      expect(system.getSlots()[0].state).toBe(SlotState.ActiveCombat);
       expect(system.getSlots()[1].state).toBe(SlotState.Ready);
     });
   });

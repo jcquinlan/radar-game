@@ -1,7 +1,8 @@
 export const enum SlotState {
   Ready = 0,
-  Active = 1,
-  Cooldown = 2,
+  ActiveMining = 1,
+  ActiveCombat = 2,
+  Cooldown = 3,
 }
 
 export interface BotSlot {
@@ -32,10 +33,10 @@ export class BotSlotSystem {
    * Find and acquire the first ready slot.
    * Returns the slot index, or -1 if none available.
    */
-  acquireSlot(): number {
+  acquireSlot(type: 'mining' | 'combat' = 'combat'): number {
     for (let i = 0; i < this.slots.length; i++) {
       if (this.slots[i].state === SlotState.Ready) {
-        this.slots[i].state = SlotState.Active;
+        this.slots[i].state = type === 'mining' ? SlotState.ActiveMining : SlotState.ActiveCombat;
         return i;
       }
     }
