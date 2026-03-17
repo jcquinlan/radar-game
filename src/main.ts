@@ -27,7 +27,6 @@ import { HelpScreen } from './ui/HelpScreen';
 import { MotionTrail } from './radar/MotionTrail';
 import { DeathParticles } from './radar/DeathParticles';
 import { TowRopeSystem } from './systems/TowRopeSystem';
-import { OrbitBotSystem } from './systems/OrbitBotSystem';
 import { CombatBotSystem } from './systems/CombatBotSystem';
 import { MiningBotSystem, MiningBotState } from './systems/MiningBotSystem';
 import { BotSlotSystem } from './systems/BotSlotSystem';
@@ -91,7 +90,6 @@ let keyRemapScreen: KeyRemapScreen;
 let motionTrail: MotionTrail;
 let deathParticles: DeathParticles;
 let towRopeSystem: TowRopeSystem;
-let orbitBotSystem: OrbitBotSystem;
 let combatBotSystem: CombatBotSystem;
 let miningBotSystem: MiningBotSystem;
 let botSlotSystem: BotSlotSystem;
@@ -163,9 +161,10 @@ function startRun() {
   abilitySystem = new AbilitySystem(player);
   abilitySystem.onShake = (intensity) => screenShake.trigger(intensity);
   abilityEffects = new AbilityEffects();
-  orbitBotSystem = new OrbitBotSystem(player);
   combatBotSystem = new CombatBotSystem();
+  combatBotSystem.onShake = (intensity) => screenShake.trigger(intensity);
   miningBotSystem = new MiningBotSystem();
+  miningBotSystem.onShake = (intensity) => screenShake.trigger(intensity);
   botSlotSystem = new BotSlotSystem();
   // Wire slot release callbacks
   miningBotSystem.onSlotRelease = (slotIndex) => botSlotSystem.releaseSlot(slotIndex);
@@ -243,9 +242,10 @@ function init() {
   abilitySystem = new AbilitySystem(player);
   abilitySystem.onShake = (intensity) => screenShake.trigger(intensity);
   abilityEffects = new AbilityEffects();
-  orbitBotSystem = new OrbitBotSystem(player);
   combatBotSystem = new CombatBotSystem();
+  combatBotSystem.onShake = (intensity) => screenShake.trigger(intensity);
   miningBotSystem = new MiningBotSystem();
+  miningBotSystem.onShake = (intensity) => screenShake.trigger(intensity);
   botSlotSystem = new BotSlotSystem();
   miningBotSystem.onSlotRelease = (slotIndex) => botSlotSystem.releaseSlot(slotIndex);
   combatBotSystem.onSlotRelease = (slotIndex) => botSlotSystem.releaseSlot(slotIndex);
@@ -758,13 +758,6 @@ const loop = new GameLoop({
         deathParticles.emitFromSource(x, y, srcX, srcY, color, 5);
       abilitySystem.update(dt, world.entities, addText, onAbilityDeath, onAbilityImpact);
 
-      // Orbit bot — permanent companion
-      orbitBotSystem.update(
-        dt, world.entities,
-        (text, x, y, color) => floatingText.add(text, x, y, color),
-        (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color),
-      );
-
       // Bot slot cooldowns
       botSlotSystem.update(dt);
 
@@ -869,11 +862,22 @@ const loop = new GameLoop({
         activeTrailIds.add(mid);
       }
     }
-    // Orbit bot trail
-    {
-      const ob = orbitBotSystem.bot;
-      motionTrail.track('ob0', ob.x, ob.y, ob.vx, ob.vy, theme.effects.drone, dt);
-      activeTrailIds.add('ob0');
+    // Combat bot entity trails
+    for (let i = 0; i < combatBotSystem.bots.length; i++) {
+      const cb = combatBotSystem.bots[i];
+      if (!cb.active) continue;
+      const cbid = `cb${i}`;
+      motionTrail.track(cbid, cb.x, cb.y, cb.vx, cb.vy, '#ff8844', dt);
+      activeTrailIds.add(cbid);
+    }
+    // Mining bot trails
+    const miningBots = miningBotSystem.getBots();
+    for (let i = 0; i < miningBots.length; i++) {
+      const mb = miningBots[i];
+      if (!mb.active) continue;
+      const mbid = `mb${i}`;
+      motionTrail.track(mbid, mb.x, mb.y, mb.vx, mb.vy, '#ffaa00', dt);
+      activeTrailIds.add(mbid);
     }
     // Combat bot projectile trails
     for (let i = 0; i < combatBotSystem.botProjectiles.length; i++) {
@@ -1219,7 +1223,7 @@ const loop = new GameLoop({
       }
     }
 
-    // Combat bots — orange circles (like orbit bot) with health indicator
+    // Combat bots — orange circles with health indicator
     for (let i = 0; i < combatBotSystem.bots.length; i++) {
       const bot = combatBotSystem.bots[i];
       if (!bot.active) continue;
@@ -1403,54 +1407,6 @@ const loop = new GameLoop({
       ctx.fillStyle = theme.effects.projectile;
       ctx.fill();
       ctx.restore();
-    }
-
-    // Render orbit bot
-    {
-      const ob = orbitBotSystem.bot;
-      const obrx = ob.x - player.x;
-      const obry = ob.y - player.y;
-      if (obrx * obrx + obry * obry <= viewRadiusSq) {
-        const obX = cx + obrx;
-        const obY = cy + obry;
-        ctx.save();
-        ctx.shadowColor = '#00ffff';
-        ctx.shadowBlur = 10;
-        ctx.beginPath();
-        ctx.arc(obX, obY, 3.5, 0, Math.PI * 2);
-        ctx.fillStyle = '#00ffff';
-        ctx.fill();
-        ctx.restore();
-      }
-    }
-
-    // Render orbit bot projectiles
-    {
-      const projs = orbitBotSystem.botProjectiles;
-      let hasActive = false;
-      for (let i = 0; i < projs.length; i++) {
-        if (projs[i].active) { hasActive = true; break; }
-      }
-      if (hasActive) {
-        ctx.save();
-        ctx.shadowColor = '#00ffff';
-        ctx.shadowBlur = 6;
-        ctx.fillStyle = '#00ffff';
-        ctx.beginPath();
-        for (let i = 0; i < projs.length; i++) {
-          const p = projs[i];
-          if (!p.active) continue;
-          const prx = p.x - player.x;
-          const pry = p.y - player.y;
-          if (prx * prx + pry * pry > viewRadiusSq) continue;
-          const px = cx + prx;
-          const py = cy + pry;
-          ctx.moveTo(px + 2, py);
-          ctx.arc(px, py, 2, 0, Math.PI * 2);
-        }
-        ctx.fill();
-        ctx.restore();
-      }
     }
 
     // Render mining bots and laser lines

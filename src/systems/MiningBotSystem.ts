@@ -6,7 +6,6 @@ export type FloatingTextCallback = (text: string, x: number, y: number, color: s
 export const enum MiningBotState {
   Deploying = 0,
   Mining = 1,
-  Returning = 2,
 }
 
 export interface MiningBot {
@@ -42,9 +41,6 @@ const ORBIT_ANGULAR_SPEED = 2.5;
 // Arrival threshold — close enough to start orbiting
 const ARRIVAL_THRESHOLD_SQ = 45 * 45;
 
-// Return despawn threshold
-const DESPAWN_THRESHOLD_SQ = 30 * 30;
-
 // Mining duration (seconds)
 const MINING_DURATION = 30;
 
@@ -59,6 +55,13 @@ const ENERGY_TEXT_INTERVAL = 2;
 // Deploy range — max distance from click to asteroid (default, overridden by upgrades)
 const DEFAULT_DEPLOY_RANGE = 100;
 
+// Launch spread — missile-style punchy launch
+const LAUNCH_SPEED = 60;
+const CLOSE_SPREAD = Math.PI * (30 / 180);   // ±30° half-spread at close range
+const FAR_SPREAD = Math.PI * 1.2 * 0.5;      // ±108° half-spread at far range
+const CLOSE_DIST = 80;
+const FAR_DIST = 250;
+
 export class MiningBotSystem {
   private bots: MiningBot[] = [];
   /** Multiplier applied to mining rate — increased by mining speed upgrade */
@@ -67,6 +70,8 @@ export class MiningBotSystem {
   deployRange = DEFAULT_DEPLOY_RANGE;
   /** Callback invoked with slot index when a bot becomes inactive */
   onSlotRelease: ((slotIndex: number) => void) | null = null;
+  /** Screen shake callback — wired up by main.ts */
+  onShake: (intensity: number) => void = () => {};
 
   constructor() {
     // No pre-allocation — bots are added dynamically via deployBot
@@ -98,12 +103,21 @@ export class MiningBotSystem {
 
     if (!nearest) return false;
 
+    // Compute missile-style launch angle with distance-scaled spread
+    const dx = nearest.x - player.x;
+    const dy = nearest.y - player.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const directAngle = Math.atan2(dy, dx);
+    const spreadT = Math.min(1, Math.max(0, (dist - CLOSE_DIST) / (FAR_DIST - CLOSE_DIST)));
+    const halfSpread = CLOSE_SPREAD + (FAR_SPREAD - CLOSE_SPREAD) * spreadT;
+    const launchAngle = directAngle + (Math.random() - 0.5) * 2 * halfSpread;
+
     // Create and activate the bot
     const bot: MiningBot = {
       x: player.x,
       y: player.y,
-      vx: 0,
-      vy: 0,
+      vx: Math.cos(launchAngle) * LAUNCH_SPEED,
+      vy: Math.sin(launchAngle) * LAUNCH_SPEED,
       angle: 0,
       targetAsteroid: nearest,
       state: MiningBotState.Deploying,
@@ -118,6 +132,8 @@ export class MiningBotSystem {
     };
 
     this.bots.push(bot);
+    this.onShake(5);
+
     return true;
   }
 
@@ -137,9 +153,6 @@ export class MiningBotSystem {
           break;
         case MiningBotState.Mining:
           this.updateMining(bot, dt, player, entities, addFloatingText);
-          break;
-        case MiningBotState.Returning:
-          this.updateReturning(bot, dt, player);
           break;
       }
 
@@ -163,8 +176,8 @@ export class MiningBotSystem {
   private updateDeploying(bot: MiningBot, dt: number): void {
     const target = bot.targetAsteroid;
     if (!target || !target.active) {
-      // Target gone, return
-      bot.state = MiningBotState.Returning;
+      // Target gone — deactivate in place
+      bot.active = false;
       bot.targetAsteroid = null;
       return;
     }
@@ -198,8 +211,8 @@ export class MiningBotSystem {
   ): void {
     const target = bot.targetAsteroid;
     if (!target || !target.active) {
-      // Asteroid gone
-      bot.state = MiningBotState.Returning;
+      // Asteroid gone — deactivate in place
+      bot.active = false;
       bot.targetAsteroid = null;
       return;
     }
@@ -246,7 +259,7 @@ export class MiningBotSystem {
       target.hp = 0;
       target.active = false;
       target.miningActive = false;
-      bot.state = MiningBotState.Returning;
+      bot.active = false;
       bot.targetAsteroid = null;
       return;
     }
@@ -254,7 +267,7 @@ export class MiningBotSystem {
     // Check mining duration complete
     if (bot.miningProgress >= 1) {
       target.miningActive = false;
-      bot.state = MiningBotState.Returning;
+      bot.active = false;
       bot.targetAsteroid = null;
       return;
     }
@@ -266,26 +279,6 @@ export class MiningBotSystem {
       if (Math.random() < AGGRO_CHANCE) {
         this.aggroNearestEnemy(target.x, target.y, entities);
       }
-    }
-  }
-
-  private updateReturning(bot: MiningBot, dt: number, player: Player): void {
-    const dx = player.x - bot.x;
-    const dy = player.y - bot.y;
-    const distSq = dx * dx + dy * dy;
-
-    if (distSq < DESPAWN_THRESHOLD_SQ) {
-      // Close enough — despawn and restore charge
-      bot.active = false;
-      bot.targetAsteroid = null;
-      return;
-    }
-
-    // Steer toward player
-    const dist = Math.sqrt(distSq);
-    if (dist > 0) {
-      bot.vx += (dx / dist) * BOT_ACCEL * dt;
-      bot.vy += (dy / dist) * BOT_ACCEL * dt;
     }
   }
 

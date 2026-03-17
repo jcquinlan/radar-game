@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MiningBotSystem, MiningBotState } from './MiningBotSystem';
 import { Player } from '../entities/Player';
 import { createAsteroid, createEnemy, Asteroid, Enemy, GameEntity } from '../entities/Entity';
@@ -101,6 +101,29 @@ describe('MiningBotSystem', () => {
       const bots = system.getBots();
       expect(bots[0].slotIndex).toBe(7);
     });
+
+    it('launches bot with non-zero initial velocity toward asteroid', () => {
+      const asteroid = makeAsteroid(200, 0);
+      const entities: GameEntity[] = [asteroid];
+
+      system.deployBot(200, 0, entities, player, 0);
+
+      const bot = system.getBots().find(b => b.active)!;
+      const speed = Math.sqrt(bot.vx * bot.vx + bot.vy * bot.vy);
+      expect(speed).toBeGreaterThan(0);
+    });
+
+    it('triggers screen shake on deployment', () => {
+      const onShake = vi.fn();
+      system.onShake = onShake;
+
+      const asteroid = makeAsteroid(60, 0);
+      const entities: GameEntity[] = [asteroid];
+
+      system.deployBot(60, 0, entities, player, 0);
+
+      expect(onShake).toHaveBeenCalledWith(5);
+    });
   });
 
   describe('deploying state', () => {
@@ -195,7 +218,7 @@ describe('MiningBotSystem', () => {
 
       system.deployBot(40, 0, entities, player, 3);
 
-      // Run long enough for bot to mine, deplete, return, and despawn
+      // Run long enough for bot to mine, deplete, and despawn
       for (let i = 0; i < 2400; i++) {
         system.update(1 / 60, player, entities, addFloatingText);
       }
@@ -203,6 +226,27 @@ describe('MiningBotSystem', () => {
       expect(asteroid.active).toBe(false);
       expect(releasedSlots).toContain(3);
       expect(system.getActiveCount()).toBe(0);
+    });
+
+    it('deactivates bot in place when asteroid is depleted', () => {
+      const asteroid = makeAsteroid(60, 0, 'small');
+      asteroid.hp = 0.5;
+      asteroid.maxHp = 0.5;
+      asteroid.energyValue = 10;
+      const entities: GameEntity[] = [asteroid];
+
+      system.deployBot(40, 0, entities, player, 3);
+
+      // Use larger dt (0.1s per step) to speed the simulation
+      for (let i = 0; i < 600; i++) {
+        system.update(0.1, player, entities, addFloatingText);
+        if (!asteroid.active) break;
+      }
+
+      expect(asteroid.active).toBe(false);
+      // Bot should be deactivated (not returning)
+      const activeBot = system.getBots().find(b => b.active);
+      expect(activeBot).toBeUndefined();
     });
   });
 
@@ -225,6 +269,24 @@ describe('MiningBotSystem', () => {
 
       expect(releasedSlots).toContain(2);
       expect(system.getActiveCount()).toBe(0);
+    });
+
+    it('deactivates when target asteroid disappears during deploying', () => {
+      const asteroid = makeAsteroid(200, 0);
+      const entities: GameEntity[] = [asteroid];
+
+      system.deployBot(200, 0, entities, player, 0);
+
+      // Run a few frames then remove the asteroid
+      for (let i = 0; i < 10; i++) {
+        system.update(1 / 60, player, entities, addFloatingText);
+      }
+
+      asteroid.active = false;
+      system.update(1 / 60, player, entities, addFloatingText);
+
+      const activeBot = system.getBots().find(b => b.active);
+      expect(activeBot).toBeUndefined();
     });
   });
 

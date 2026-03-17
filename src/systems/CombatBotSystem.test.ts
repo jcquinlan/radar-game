@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CombatBotSystem, CombatBotState } from './CombatBotSystem';
 import { createEnemy, Enemy, GameEntity } from '../entities/Entity';
 import { Player } from '../entities/Player';
@@ -67,6 +67,22 @@ describe('CombatBotSystem', () => {
     it('stores slotIndex on the deployed bot', () => {
       system.deployBot(100, 100, player, 5);
       expect(system.bots[0].slotIndex).toBe(5);
+    });
+
+    it('launches bot with non-zero initial velocity', () => {
+      system.deployBot(300, 0, player, 0);
+      const bot = system.bots[0];
+      const speed = Math.sqrt(bot.vx * bot.vx + bot.vy * bot.vy);
+      expect(speed).toBeGreaterThan(0);
+    });
+
+    it('triggers screen shake on deployment', () => {
+      const onShake = vi.fn();
+      system.onShake = onShake;
+
+      system.deployBot(300, 0, player, 0);
+
+      expect(onShake).toHaveBeenCalledWith(5);
     });
   });
 

@@ -80,15 +80,14 @@ The game uses a lightweight entity-systems architecture. Entities are plain data
 10. `TowRopeSystem.checkDropoffs()` — checks if towed salvage entered a dropoff zone or home base, awards energy
 11. Shield buff countdown
 12. `AbilitySystem.update()` — cooldown decrements, HoT healing, missile tracking
-13. `OrbitBotSystem.update()` — permanent orbiting companion, auto-attacks enemies
-14. `MiningBotSystem.update()` — deployed mining bots orbit asteroids, extract energy
-15. `CombatBotSystem.update()` — deployed combat bots fire at nearby enemies
-16. `CombatSystem.update()` — enemy AI (chase/fire), projectile movement, contact damage, base damage during final_wave
-17. `BossSystem.updateBoss()` — boss phase transitions, stat scaling, minion spawning (final_wave only)
-18. Motion trail tracking (player, enemies, projectiles, bots)
-19. Screen shake + damage flash on damage
-20. Level objective / wave end / game over checks
-21. `World.cleanup()` — removes inactive/distant entities (preserves towed salvage, skipped during final_wave)
+13. `MiningBotSystem.update()` — deployed mining bots orbit asteroids, extract energy
+14. `CombatBotSystem.update()` — deployed combat bots fire at nearby enemies
+15. `CombatSystem.update()` — enemy AI (chase/fire), projectile movement, contact damage, base damage during final_wave
+16. `BossSystem.updateBoss()` — boss phase transitions, stat scaling, minion spawning (final_wave only)
+17. Motion trail tracking (player, enemies, projectiles, bots)
+18. Screen shake + damage flash on damage
+19. Level objective / wave end / game over checks
+20. `World.cleanup()` — removes inactive/distant entities (preserves towed salvage, skipped during final_wave)
 
 **Render order:**
 
@@ -108,7 +107,6 @@ The game uses a lightweight entity-systems architecture. Entities are plain data
    - Sweep flash effects
    - Ability visual effects (blast ring, regen glow, missile launch flash)
    - Enemy projectiles (red circles with glow)
-   - Orbit bot (cyan circle)
    - Homing missiles (orange streaks)
    - Floating damage/heal/collection text (counter-rotated to stay upright)
    - Ambient particles (foreground layer)
@@ -145,7 +143,6 @@ src/
     TowRopeSystem.ts         # Salvage towing — spring physics, proximity pickup, dropoff/home deposit
     MiningBotSystem.ts       # Click-deployed mining bots — orbit asteroids, extract energy over ~30s
     CombatBotSystem.ts       # Right-click-deployed combat bots — launch from player, fly to target, orbit enemies while firing
-    OrbitBotSystem.ts        # Permanent orbiting companion bot — auto-attacks nearby enemies
     BossSystem.ts            # Boss phase transitions (HP thresholds), stat scaling, minion spawning
     WaveSpawner.ts           # Final wave enemy spawning + boss spawning (scaled by run count)
     SaveSystem.ts            # localStorage persistence — currency, run count, base upgrade levels
@@ -314,7 +311,6 @@ The wave difficulty scales with `runCount`: more enemies per wave (`10 + runCoun
 **Bots (click-to-deploy):**
 - **Mining Bot** — click near an asteroid to deploy. Flies to asteroid, orbits while mining (~30s for full energy extraction). Returns to player when done or asteroid depleted. 3 charges base (upgradeable). Occasionally aggros nearby enemies toward the mining site.
 - **Combat Bot** — right-click to deploy. Launches from the player's position and flies toward the click location. Auto-detects enemies within 250px, chases them, and orbits while firing projectiles (1.5s fire rate, 4 damage). 20s lifetime, 30 HP. 2 charges base (upgradeable).
-- **Orbit Bot** — permanent companion that orbits the player. Auto-attacks nearby enemies with contact damage. Always active.
 
 **World generation:**
 - Chunks are 400px squares, loaded in a 5x5 grid around the player
