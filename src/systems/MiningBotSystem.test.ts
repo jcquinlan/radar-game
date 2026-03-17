@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MiningBotSystem, MiningBotState } from './MiningBotSystem';
 import { Player } from '../entities/Player';
 import { createAsteroid, createEnemy, Asteroid, Enemy, GameEntity } from '../entities/Entity';
@@ -109,6 +109,29 @@ describe('MiningBotSystem', () => {
       expect(activeBot).toBeDefined();
       expect(activeBot!.targetAsteroid).toBe(nearAsteroid);
     });
+
+    it('launches bot with non-zero initial velocity toward asteroid', () => {
+      const asteroid = makeAsteroid(200, 0);
+      const entities: GameEntity[] = [asteroid];
+
+      system.deployBot(200, 0, entities, player);
+
+      const bot = system.getBots().find(b => b.active)!;
+      const speed = Math.sqrt(bot.vx * bot.vx + bot.vy * bot.vy);
+      expect(speed).toBeGreaterThan(0);
+    });
+
+    it('triggers screen shake on deployment', () => {
+      const onShake = vi.fn();
+      system.onShake = onShake;
+
+      const asteroid = makeAsteroid(60, 0);
+      const entities: GameEntity[] = [asteroid];
+
+      system.deployBot(60, 0, entities, player);
+
+      expect(onShake).toHaveBeenCalledWith(5);
+    });
   });
 
   describe('deploying state', () => {
@@ -196,11 +219,8 @@ describe('MiningBotSystem', () => {
       expect(asteroid.miningActive).toBe(true);
     });
 
-    it('transitions to returning when asteroid is depleted', () => {
+    it('deactivates bot in place when asteroid is depleted', () => {
       const asteroid = makeAsteroid(60, 0, 'small');
-      // Set very low HP so it depletes quickly
-      // hp drain = maxHp / 30 per second, so with maxHp=0.5, drain = 0.0167/s
-      // Need 0.5 / 0.0167 = 30s to deplete. Use larger dt to speed up.
       asteroid.hp = 0.5;
       asteroid.maxHp = 0.5;
       asteroid.energyValue = 10;
@@ -209,59 +229,40 @@ describe('MiningBotSystem', () => {
       system.deployBot(60, 0, entities, player);
 
       // Use larger dt (0.1s per step) to speed the simulation
-      let botWasReturning = false;
       for (let i = 0; i < 600; i++) {
         system.update(0.1, player, entities, addFloatingText);
-        const bot = system.getBots().find(b => b.active);
-        if (bot && bot.state === MiningBotState.Returning) {
-          botWasReturning = true;
-        }
-        if (!asteroid.active && botWasReturning) break;
+        if (!asteroid.active) break;
       }
 
       expect(asteroid.active).toBe(false);
-      // Bot was seen in returning state (it may have despawned by now)
-      expect(botWasReturning).toBe(true);
+      // Bot should be deactivated (not returning)
+      const activeBot = system.getBots().find(b => b.active);
+      expect(activeBot).toBeUndefined();
     });
   });
 
-  describe('returning state', () => {
-    it('bot flies back toward player after mining completes', () => {
+  describe('bot deactivation', () => {
+    it('deactivates immediately when asteroid is depleted during mining', () => {
       const asteroid = makeAsteroid(60, 0, 'small');
-      asteroid.hp = 1;
-      asteroid.maxHp = 1;
+      asteroid.hp = 0.5;
+      asteroid.maxHp = 0.5;
       asteroid.energyValue = 5;
       const entities: GameEntity[] = [asteroid];
 
       system.deployBot(60, 0, entities, player);
 
-      // Let bot mine and deplete asteroid
+      // Use larger dt (0.1s per step) to deplete asteroid faster
       for (let i = 0; i < 600; i++) {
-        system.update(1 / 60, player, entities, addFloatingText);
+        system.update(0.1, player, entities, addFloatingText);
         if (!asteroid.active) break;
       }
 
-      // Now give bot time to return
-      const bot = system.getBots().find(b => b.active);
-      if (bot && bot.state === MiningBotState.Returning) {
-        const distBefore = Math.sqrt(
-          (bot.x - player.x) ** 2 + (bot.y - player.y) ** 2
-        );
-
-        for (let i = 0; i < 120; i++) {
-          system.update(1 / 60, player, entities, addFloatingText);
-        }
-
-        const distAfter = Math.sqrt(
-          (bot.x - player.x) ** 2 + (bot.y - player.y) ** 2
-        );
-
-        expect(distAfter).toBeLessThan(distBefore);
-      }
+      // Bot should be deactivated, not returning
+      const activeBot = system.getBots().find(b => b.active);
+      expect(activeBot).toBeUndefined();
     });
 
-    it('restores charge when bot despawns after returning', () => {
-      // Place asteroid very close to player so return is quick
+    it('restores charge when bot deactivates after mining completes', () => {
       player.x = 0;
       player.y = 0;
       const asteroid = makeAsteroid(40, 0, 'small');
@@ -273,13 +274,31 @@ describe('MiningBotSystem', () => {
       system.deployBot(40, 0, entities, player);
       expect(system.getAvailableCharges()).toBe(2); // 3 max - 1 deployed
 
-      // Let bot complete full lifecycle (deploy -> mine -> return -> despawn)
+      // Let bot complete full lifecycle (deploy -> mine -> deactivate)
       for (let i = 0; i < 2400; i++) {
         system.update(1 / 60, player, entities, addFloatingText);
       }
 
       // Charge should be restored
       expect(system.getAvailableCharges()).toBe(3);
+    });
+
+    it('deactivates when target asteroid disappears during deploying', () => {
+      const asteroid = makeAsteroid(200, 0);
+      const entities: GameEntity[] = [asteroid];
+
+      system.deployBot(200, 0, entities, player);
+
+      // Run a few frames then remove the asteroid
+      for (let i = 0; i < 10; i++) {
+        system.update(1 / 60, player, entities, addFloatingText);
+      }
+
+      asteroid.active = false;
+      system.update(1 / 60, player, entities, addFloatingText);
+
+      const activeBot = system.getBots().find(b => b.active);
+      expect(activeBot).toBeUndefined();
     });
   });
 

@@ -70,6 +70,13 @@ const MAX_PROJECTILES = 16;
 const CONTACT_RANGE = 25;
 const CONTACT_RANGE_SQ = CONTACT_RANGE * CONTACT_RANGE;
 
+// Launch spread — missile-style punchy launch
+const LAUNCH_SPEED = 60;
+const CLOSE_SPREAD = Math.PI * (30 / 180);   // ±30° half-spread at close range
+const FAR_SPREAD = Math.PI * 1.2 * 0.5;      // ±108° half-spread at far range
+const CLOSE_DIST = 80;
+const FAR_DIST = 250;
+
 export class CombatBotSystem {
   bots: CombatBot[] = [];
   botProjectiles: Projectile[] = [];
@@ -78,6 +85,8 @@ export class CombatBotSystem {
   baseDamage = BOT_DAMAGE;
   /** Base lifetime per bot — increased by combat lifetime upgrade */
   baseLifetime = BOT_LIFETIME;
+  /** Screen shake callback — wired up by main.ts */
+  onShake: (intensity: number) => void = () => {};
 
   constructor() {
     // Pre-allocate projectile pool
@@ -103,11 +112,20 @@ export class CombatBotSystem {
     const activeBots = this.bots.filter(b => b.active).length;
     if (activeBots >= this.maxBots) return false;
 
+    // Compute missile-style launch angle with distance-scaled spread
+    const dx = targetX - player.x;
+    const dy = targetY - player.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const directAngle = Math.atan2(dy, dx);
+    const spreadT = Math.min(1, Math.max(0, (dist - CLOSE_DIST) / (FAR_DIST - CLOSE_DIST)));
+    const halfSpread = CLOSE_SPREAD + (FAR_SPREAD - CLOSE_SPREAD) * spreadT;
+    const launchAngle = directAngle + (Math.random() - 0.5) * 2 * halfSpread;
+
     const bot: CombatBot = {
       x: player.x,
       y: player.y,
-      vx: 0,
-      vy: 0,
+      vx: Math.cos(launchAngle) * LAUNCH_SPEED,
+      vy: Math.sin(launchAngle) * LAUNCH_SPEED,
       angle: 0,
       state: CombatBotState.FlyingToTarget,
       targetEnemy: null,
@@ -125,6 +143,7 @@ export class CombatBotSystem {
     };
 
     this.bots.push(bot);
+    this.onShake(5);
     return true;
   }
 
