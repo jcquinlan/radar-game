@@ -37,13 +37,17 @@ describe('Entity factories', () => {
     expect(e.projectileSpeed).toBeGreaterThan(0);
   });
 
-  it('creates a home base with health and maxHealth', () => {
+  it('creates a home base with health, maxHealth, and buildings', () => {
     const hb = createHomeBase(100, 200);
     expect(hb.x).toBe(100);
     expect(hb.y).toBe(200);
     expect(hb.radius).toBe(150);
     expect(hb.health).toBe(500);
     expect(hb.maxHealth).toBe(500);
+    // Buildings initialized at level 0
+    expect(hb.buildings.player).toEqual({ level: 0, maxLevel: 5 });
+    expect(hb.buildings.mining).toEqual({ level: 0, maxLevel: 5 });
+    expect(hb.buildings.combat).toEqual({ level: 0, maxLevel: 5 });
   });
 
   it('creates enemies with waveEnemy and isBoss defaulting to false', () => {
