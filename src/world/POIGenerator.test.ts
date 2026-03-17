@@ -3,9 +3,9 @@ import {
   POI_TYPES,
   selectPOI,
   isOnCorridor,
-  spawnResourceVein,
+  spawnAsteroidVein,
 } from './POIGenerator';
-import { Enemy, Resource, Ally } from '../entities/Entity';
+import { Enemy, Asteroid } from '../entities/Entity';
 
 describe('POI type definitions', () => {
   it('every POI type has an id, base weight, and spawn function', () => {
@@ -25,15 +25,15 @@ describe('POI type definitions', () => {
 });
 
 describe('resource_cache POI', () => {
-  it('spawns 5-8 resources and 2-3 enemy guards', () => {
+  it('spawns 8-12 asteroids and 2-3 enemy guards', () => {
     const cache = POI_TYPES.find((p) => p.id === 'resource_cache')!;
     // Run multiple times to check range
     for (let i = 0; i < 20; i++) {
       const entities = cache.spawn(1000, 1000, 1.5);
-      const resources = entities.filter((e) => e.type === 'resource') as Resource[];
+      const asteroids = entities.filter((e) => e.type === 'asteroid') as Asteroid[];
       const enemies = entities.filter((e) => e.type === 'enemy') as Enemy[];
-      expect(resources.length).toBeGreaterThanOrEqual(8);
-      expect(resources.length).toBeLessThanOrEqual(12);
+      expect(asteroids.length).toBeGreaterThanOrEqual(8);
+      expect(asteroids.length).toBeLessThanOrEqual(12);
       expect(enemies.length).toBeGreaterThanOrEqual(2);
       expect(enemies.length).toBeLessThanOrEqual(3);
     }
@@ -70,60 +70,28 @@ describe('resource_cache POI', () => {
     expect(foundPairPack).toBe(true);
   });
 
-  it('resources are clustered near the POI center', () => {
+  it('asteroids are clustered near the POI center', () => {
     const cache = POI_TYPES.find((p) => p.id === 'resource_cache')!;
     const entities = cache.spawn(1000, 1000, 1.5);
-    const resources = entities.filter((e) => e.type === 'resource') as Resource[];
-    // All resources should be within 80px of the center (1000, 1000)
-    for (const r of resources) {
-      const dist = Math.sqrt((r.x - 1000) ** 2 + (r.y - 1000) ** 2);
+    const asteroids = entities.filter((e) => e.type === 'asteroid') as Asteroid[];
+    // All asteroids should be within 80px of the center (1000, 1000)
+    for (const a of asteroids) {
+      const dist = Math.sqrt((a.x - 1000) ** 2 + (a.y - 1000) ** 2);
       expect(dist).toBeLessThan(80);
     }
   });
 });
 
-describe('ally_outpost POI', () => {
-  it('spawns 1 ally and 3-4 resources', () => {
-    const outpost = POI_TYPES.find((p) => p.id === 'ally_outpost')!;
-    for (let i = 0; i < 20; i++) {
-      const entities = outpost.spawn(500, 500, 1);
-      const allies = entities.filter((e) => e.type === 'ally') as Ally[];
-      const resources = entities.filter((e) => e.type === 'resource') as Resource[];
-      expect(allies).toHaveLength(1);
-      expect(resources.length).toBeGreaterThanOrEqual(3);
-      expect(resources.length).toBeLessThanOrEqual(4);
-    }
-  });
-
-  it('ally is near the center, resources form a ring', () => {
-    const outpost = POI_TYPES.find((p) => p.id === 'ally_outpost')!;
-    const entities = outpost.spawn(500, 500, 1);
-    const ally = entities.find((e) => e.type === 'ally')!;
-    const resources = entities.filter((e) => e.type === 'resource');
-
-    // Ally should be very close to center
-    const allyDist = Math.sqrt((ally.x - 500) ** 2 + (ally.y - 500) ** 2);
-    expect(allyDist).toBeLessThan(20);
-
-    // Resources should be further out in a ring (60-100px from center)
-    for (const r of resources) {
-      const dist = Math.sqrt((r.x - 500) ** 2 + (r.y - 500) ** 2);
-      expect(dist).toBeGreaterThan(50);
-      expect(dist).toBeLessThan(110);
-    }
-  });
-});
-
 describe('enemy_camp POI', () => {
-  it('spawns 3-5 enemies and 1 high-value resource', () => {
+  it('spawns 3-5 enemies and 1 high-value asteroid', () => {
     const camp = POI_TYPES.find((p) => p.id === 'enemy_camp')!;
     for (let i = 0; i < 20; i++) {
       const entities = camp.spawn(2000, 2000, 2);
       const enemies = entities.filter((e) => e.type === 'enemy') as Enemy[];
-      const resources = entities.filter((e) => e.type === 'resource') as Resource[];
+      const asteroids = entities.filter((e) => e.type === 'asteroid') as Asteroid[];
       expect(enemies.length).toBeGreaterThanOrEqual(3);
       expect(enemies.length).toBeLessThanOrEqual(5);
-      expect(resources).toHaveLength(1);
+      expect(asteroids).toHaveLength(1);
     }
   });
 
@@ -138,13 +106,13 @@ describe('enemy_camp POI', () => {
     }
   });
 
-  it('the center resource has higher energy value than normal', () => {
+  it('the center asteroid has higher energy value than normal', () => {
     const camp = POI_TYPES.find((p) => p.id === 'enemy_camp')!;
-    // Normal resources are 5-15 energy. High-value should be at least 20.
+    // Normal small asteroids are 10-15 energy. High-value should be at least 20.
     for (let i = 0; i < 20; i++) {
       const entities = camp.spawn(2000, 2000, 2);
-      const resource = entities.find((e) => e.type === 'resource') as Resource;
-      expect(resource.energyValue).toBeGreaterThanOrEqual(20);
+      const asteroid = entities.find((e) => e.type === 'asteroid') as Asteroid;
+      expect(asteroid.energyValue).toBeGreaterThanOrEqual(20);
     }
   });
 });
@@ -220,16 +188,16 @@ describe('selectPOI', () => {
   });
 });
 
-describe('spawnResourceVein', () => {
-  it('spawns 5-8 resources clustered within scatter radius', () => {
+describe('spawnAsteroidVein', () => {
+  it('spawns 5-8 asteroids clustered within scatter radius', () => {
     for (let i = 0; i < 20; i++) {
-      const resources = spawnResourceVein(500, 500);
-      expect(resources.length).toBeGreaterThanOrEqual(5);
-      expect(resources.length).toBeLessThanOrEqual(8);
-      for (const r of resources) {
-        const dist = Math.sqrt((r.x - 500) ** 2 + (r.y - 500) ** 2);
+      const asteroids = spawnAsteroidVein(500, 500);
+      expect(asteroids.length).toBeGreaterThanOrEqual(5);
+      expect(asteroids.length).toBeLessThanOrEqual(8);
+      for (const a of asteroids) {
+        const dist = Math.sqrt((a.x - 500) ** 2 + (a.y - 500) ** 2);
         expect(dist).toBeLessThanOrEqual(40);
-        expect(r.type).toBe('resource');
+        expect(a.type).toBe('asteroid');
       }
     }
   });

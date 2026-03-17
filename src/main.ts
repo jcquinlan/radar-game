@@ -8,10 +8,10 @@ import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
 import { PingSystem } from './systems/PingSystem';
 import { CombatSystem } from './systems/CombatSystem';
-import { Ally, Enemy, GameEntity, Resource, Dropoff, HomeBase, Defense, createHomeBase } from './entities/Entity';
-import { spawnWave } from './systems/WaveSpawner';
-import { tryPlaceDefense, TURRET_COST, REPAIR_STATION_COST } from './systems/DefensePlacement';
-import { UpgradeSystem } from './systems/UpgradeSystem';
+import { Enemy, GameEntity, Dropoff, HomeBase, createHomeBase } from './entities/Entity';
+import { spawnWave, spawnBoss } from './systems/WaveSpawner';
+import { BossSystem } from './systems/BossSystem';
+import { HomebaseUpgradeSystem } from './systems/HomebaseUpgradeSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
 import { UpgradePanel } from './ui/UpgradePanel';
@@ -28,6 +28,8 @@ import { MotionTrail } from './radar/MotionTrail';
 import { DeathParticles } from './radar/DeathParticles';
 import { TowRopeSystem } from './systems/TowRopeSystem';
 import { OrbitBotSystem } from './systems/OrbitBotSystem';
+import { CombatBotSystem } from './systems/CombatBotSystem';
+import { MiningBotSystem, MiningBotState } from './systems/MiningBotSystem';
 import { createZoomState, adjustZoom, updateZoom, resetZoom, ZOOM_WHEEL_SENSITIVITY, ZOOM_KEY_STEP, ZoomState } from './systems/ZoomState';
 import { Minimap } from './ui/Minimap';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
@@ -75,7 +77,6 @@ let player: Player;
 let input: InputSystem;
 let pingSystem: PingSystem;
 let combatSystem: CombatSystem;
-let upgradeSystem: UpgradeSystem;
 let world: World;
 let hud: HUD;
 let upgradePanel: UpgradePanel;
@@ -90,11 +91,11 @@ let motionTrail: MotionTrail;
 let deathParticles: DeathParticles;
 let towRopeSystem: TowRopeSystem;
 let orbitBotSystem: OrbitBotSystem;
+let combatBotSystem: CombatBotSystem;
+let miningBotSystem: MiningBotSystem;
 let minimap: Minimap;
 let homeBase: HomeBase;
-let defenses: Defense[] = [];
-/** Maximum number of defenses the player can place (upgradeable later) */
-let maxDefenses = 3;
+let homebaseUpgradeSystem: HomebaseUpgradeSystem;
 let resolutionLevel: number;
 let prevHealth: number;
 let damageFlash: number;
@@ -115,6 +116,10 @@ const salvageBuffer: import('./entities/Entity').Salvage[] = [];
 let startRunBounds: { x: number; y: number; width: number; height: number } | null = null;
 /** Click handler for base_mode START RUN button */
 let baseModeClickHandler: ((e: MouseEvent) => void) | null = null;
+/** Boss system for phase-based boss behavior */
+let bossSystem: BossSystem = new BossSystem();
+/** Current boss reference during final_wave (null when no boss is active) */
+let currentBoss: Enemy | null = null;
 
 function showMainMenu() {
   gameState = 'menu';
@@ -157,20 +162,25 @@ function startRun() {
   abilitySystem.onShake = (intensity) => screenShake.trigger(intensity);
   abilityEffects = new AbilityEffects();
   orbitBotSystem = new OrbitBotSystem(player);
+  combatBotSystem = new CombatBotSystem();
+  miningBotSystem = new MiningBotSystem();
+  bossSystem = new BossSystem();
+  currentBoss = null;
   pingSystem = new PingSystem({ maxRadius: radar.getRadius() });
-  upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
-    resolutionLevel = lvl;
-  }, pingSystem);
   homeBase = createHomeBase(0, 0);
   resolutionLevel = 0;
   prevHealth = player.health;
   damageFlash = 0;
 
+  // Apply persistent homebase upgrades to this run's systems
+  homebaseUpgradeSystem.applyUpgrades(player, radar, pingSystem, miningBotSystem, combatBotSystem);
 
   input.attach();
+  input.attachMouse(canvas);
+  input.setCoordinateConverter(canvasToWorld);
   keyRemapScreen.load(abilitySystem.abilities);
   keyRemapScreen.attach(canvas, abilitySystem.abilities);
-  upgradePanel.attach(canvas, upgradeSystem, player);
+  upgradePanel.attach(canvas, homebaseUpgradeSystem, saveData, () => saveSaveData(saveData));
   world.updateSpawning(player.x, player.y);
   runTimer = 60; // 1 minute — compressed loop for rapid playtesting
   gameState = 'run_active';
@@ -218,18 +228,18 @@ function init() {
   screenShake = new ScreenShake();
   combatSystem.onShake = (intensity) => screenShake.trigger(intensity);
   homeBase = createHomeBase(0, 0);
-  defenses = [];
+  homebaseUpgradeSystem = new HomebaseUpgradeSystem();
+  homebaseUpgradeSystem.loadFromSave(saveData);
   resolutionLevel = 0;
   prevHealth = player.health;
   damageFlash = 0;
 
-  upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
-    resolutionLevel = lvl;
-  }, pingSystem);
   abilitySystem = new AbilitySystem(player);
   abilitySystem.onShake = (intensity) => screenShake.trigger(intensity);
   abilityEffects = new AbilityEffects();
   orbitBotSystem = new OrbitBotSystem(player);
+  combatBotSystem = new CombatBotSystem();
+  miningBotSystem = new MiningBotSystem();
   abilityBar = new AbilityBar();
   motionTrail = new MotionTrail();
   deathParticles = new DeathParticles(200);
@@ -269,9 +279,31 @@ function init() {
 
 
   input.attach();
+  input.attachMouse(canvas);
+  input.setCoordinateConverter(canvasToWorld);
   keyRemapScreen.attach(canvas, abilitySystem.abilities);
-  upgradePanel.attach(canvas, upgradeSystem, player);
+  upgradePanel.attach(canvas, homebaseUpgradeSystem, saveData, () => saveSaveData(saveData));
   world.updateSpawning(player.x, player.y);
+}
+
+/** Convert canvas pixel coordinates to world coordinates, inverting the render transform */
+function canvasToWorld(canvasX: number, canvasY: number): { worldX: number; worldY: number } {
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const z = zoom.current;
+  const R = -player.heading - Math.PI / 2;
+
+  // Undo translate(cx,cy) and scale
+  const dx = (canvasX - cx) / z;
+  const dy = (canvasY - cy) / z;
+
+  // Undo rotate(R) by rotating by -R
+  const cosNR = Math.cos(-R);
+  const sinNR = Math.sin(-R);
+  const offX = cosNR * dx - sinNR * dy;
+  const offY = sinNR * dx + cosNR * dy;
+
+  return { worldX: player.x + offX, worldY: player.y + offY };
 }
 
 /** Show results screen after a successful run (wave survived) */
@@ -319,10 +351,14 @@ function showRunFailed() {
 }
 
 function cleanupCurrentGame() {
-  if (input) input.detach();
+  if (input) {
+    input.detach();
+    input.detachMouse(canvas);
+  }
   if (upgradePanel) upgradePanel.detach(canvas);
   if (keyRemapScreen) keyRemapScreen.detach(canvas);
   if (towRopeSystem) towRopeSystem.clear();
+  if (combatBotSystem) combatBotSystem.reset();
   if (deathParticles) deathParticles.reset();
   if (gameOverScreen) gameOverScreen.hide(canvas);
   if (resultsScreen) resultsScreen.hide(canvas);
@@ -429,30 +465,6 @@ window.addEventListener('keydown', (e) => {
     }
   }
 
-  // Defense placement — T/R keys during run_active or base_mode, near home base
-  if ((gameState === 'run_active' || gameState === 'base_mode') && (e.key === 't' || e.key === 'T')) {
-    const result = tryPlaceDefense('turret', player.energy, defenses, maxDefenses, homeBase.radius, player.x, player.y);
-    if (result.success) {
-      player.energy -= result.cost;
-      defenses.push(result.defense);
-      floatingText.add('TURRET PLACED', result.defense.x, result.defense.y - 15, '#00ddff');
-    } else {
-      floatingText.add(result.reason, player.x, player.y - 15, '#ff6666');
-    }
-    return;
-  }
-  if ((gameState === 'run_active' || gameState === 'base_mode') && (e.key === 'r' || e.key === 'R')) {
-    const result = tryPlaceDefense('repair_station', player.energy, defenses, maxDefenses, homeBase.radius, player.x, player.y);
-    if (result.success) {
-      player.energy -= result.cost;
-      defenses.push(result.defense);
-      floatingText.add('REPAIR STATION PLACED', result.defense.x, result.defense.y - 15, '#00ff41');
-    } else {
-      floatingText.add(result.reason, player.x, player.y - 15, '#ff6666');
-    }
-    return;
-  }
-
   // Only handle remaining keys during active gameplay or pause
   if (!isActiveGameplay(gameState) && gameState !== 'paused') return;
 
@@ -474,10 +486,11 @@ window.addEventListener('keydown', (e) => {
 
   // Only show upgrades panel if upgrades are enabled
   const features = currentLevelConfig?.features;
-  if (features?.upgrades !== false) {
-    const upgradesBinding = keyRemapScreen.getExtraBinding('upgrades');
+  // Upgrade panel — only available in base_mode (homebase upgrades are persistent between runs)
+  {
+    const upgradesBinding = keyRemapScreen ? keyRemapScreen.getExtraBinding('upgrades') : null;
     const upgradesKey = upgradesBinding ? upgradesBinding.key : 'e';
-    if ((e.key === upgradesKey || e.key === upgradesKey.toUpperCase()) && isActiveGameplay(gameState) && !keyRemapScreen.isVisible()) {
+    if ((e.key === upgradesKey || e.key === upgradesKey.toUpperCase()) && gameState === 'base_mode') {
       upgradePanel.toggle();
     }
   }
@@ -599,10 +612,18 @@ const loop = new GameLoop({
         for (const enemy of waveEnemies) {
           world.entities.push(enemy);
         }
+
+        // Spawn the boss far from the base
+        bossSystem.reset();
+        const boss = spawnBoss(runCount);
+        currentBoss = boss;
+        world.entities.push(boss);
+
         gameState = 'final_wave';
 
         // Show WAVE INCOMING floating text
         floatingText.add('WAVE INCOMING', 0, -30, '#ffff00');
+        floatingText.add('BOSS DETECTED', 0, -50, '#ff3333');
 
         return;
       }
@@ -640,6 +661,41 @@ const loop = new GameLoop({
     // Spawn entities in new areas
     world.updateSpawning(player.x, player.y);
 
+    // Click-to-deploy: mining bot if near asteroid, combat bot otherwise
+    const click = input.consumeClick();
+    if (click) {
+      // Check if click is near an asteroid (within mining deploy range)
+      let nearAsteroid = false;
+      const deployRangeSq = miningBotSystem.deployRange * miningBotSystem.deployRange;
+      for (let i = 0; i < world.entities.length; i++) {
+        const e = world.entities[i];
+        if (!e.active || e.type !== 'asteroid') continue;
+        const adx = e.x - click.worldX;
+        const ady = e.y - click.worldY;
+        if (adx * adx + ady * ady < deployRangeSq) {
+          nearAsteroid = true;
+          break;
+        }
+      }
+
+      if (nearAsteroid) {
+        // Priority: deploy mining bot near asteroid
+        if (miningBotSystem.deployBot(click.worldX, click.worldY, world.entities, player)) {
+          floatingText.add('MINING BOT DEPLOYED', click.worldX, click.worldY - 15, '#ffaa00');
+        } else {
+          floatingText.add('NO CHARGES', click.worldX, click.worldY - 15, '#ff4444');
+        }
+      } else {
+        // No asteroid nearby: deploy combat bot
+        if (combatBotSystem.deployBot(click.worldX, click.worldY)) {
+          floatingText.add('COMBAT BOT DEPLOYED', click.worldX, click.worldY - 15, '#ff8844');
+          screenShake.trigger(2);
+        } else {
+          floatingText.add('NO CHARGES', click.worldX, click.worldY - 15, '#ff4444');
+        }
+      }
+    }
+
     // Blip + particle + HUD updates
     blipRenderer.update(dt);
     ambientParticles.update(dt);
@@ -651,43 +707,12 @@ const loop = new GameLoop({
     // Feed ping state to radar for rendering
     radar.setPingState(pingSystem.getState());
 
-    // Track score and floating text from ping events
     const theme = getTheme();
-    for (const event of events) {
-      if (event.type === 'collect') {
-        player.totalEnergyCollected += event.value;
-        player.score += event.value;
-        floatingText.add(`+${event.value}E`, event.entity.x, event.entity.y, theme.events.collect);
-      }
-      if (event.type === 'heal') {
-        floatingText.add(`+${event.value}HP`, player.x, player.y - 20, theme.events.heal);
-      }
-      if (event.type === 'shield') {
-        floatingText.add('SHIELD!', player.x, player.y - 20, theme.events.shield);
-      }
-    }
 
     // Visual effects from ping interactions
     sweepEffects.addEvents(events, player.x, player.y);
     sweepEffects.update(dt);
     floatingText.update(dt);
-
-    // Energy magnet: auto-collect nearby resources
-    if (player.magnetRange > 0) {
-      for (const entity of world.entities) {
-        if (!entity.active || entity.type !== 'resource') continue;
-        const resource = entity as Resource;
-        const mdx = entity.x - player.x;
-        const mdy = entity.y - player.y;
-        if (mdx * mdx + mdy * mdy < player.magnetRange * player.magnetRange) {
-          player.addEnergy(resource.energyValue);
-          player.totalEnergyCollected += resource.energyValue;
-          player.score += resource.energyValue;
-          floatingText.add(`+${resource.energyValue}E`, resource.x, resource.y, theme.events.collect);
-          resource.active = false;
-        }
-      }
-    }
 
     // Salvage & tow rope — only if enabled
     if (features?.towRope !== false) {
@@ -719,18 +744,6 @@ const loop = new GameLoop({
     // Shield buff countdown
     player.updateShield(dt);
 
-    // Beacon passive energy generation
-    for (const entity of world.entities) {
-      if (!entity.active || entity.type !== 'ally') continue;
-      const ally = entity as Ally;
-      if (ally.subtype !== 'beacon') continue;
-      const bdx = ally.x - player.x;
-      const bdy = ally.y - player.y;
-      if (bdx * bdx + bdy * bdy < ally.beaconRange * ally.beaconRange) {
-        player.addEnergy(ally.energyPerSecond * dt);
-      }
-    }
-
     // Abilities — only if enabled
     if (features?.abilities !== false) {
       const addText = (text: string, x: number, y: number, color: string) =>
@@ -748,6 +761,12 @@ const loop = new GameLoop({
         (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color),
       );
 
+      // Mining bots — click-deployed asteroid miners
+      miningBotSystem.update(
+        dt, player, world.entities,
+        (text, x, y, color) => floatingText.add(text, x, y, color),
+      );
+
       const hotAbility = abilitySystem.getAbility('heal_over_time');
       if (hotAbility) {
         abilityEffects.setRegenActive(hotAbility.active, hotAbility.durationRemaining);
@@ -755,10 +774,14 @@ const loop = new GameLoop({
       abilityEffects.update(dt);
     }
 
-    // Turret AI — fire at nearby enemies
-    if (features?.combat !== false && defenses.length > 0) {
-      combatSystem.updateTurrets(defenses, world.entities, player.survivalTime, dt);
-    }
+    // Combat bot AI — auto-attack nearby enemies
+    combatBotSystem.update(
+      dt, world.entities,
+      (text, x, y, color) => floatingText.add(text, x, y, color),
+      (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color),
+      (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color, 5),
+      player,
+    );
 
     // Combat — only if enabled
     let alive = true;
@@ -787,9 +810,16 @@ const loop = new GameLoop({
         (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color, 5),
         targetPos,
         baseTarget,
-        defenses.length > 0 ? defenses : undefined,
         salvageBuffer.length > 0 ? salvageBuffer : undefined,
       );
+    }
+
+    // Boss system update — phase transitions and minion spawning
+    if (gameState === 'final_wave' && currentBoss && currentBoss.active) {
+      const newMinions = bossSystem.updateBoss(currentBoss, dt, runCount);
+      for (const minion of newMinions) {
+        world.entities.push(minion);
+      }
     }
 
     // Decrement salvage damage flash timers
@@ -802,17 +832,6 @@ const loop = new GameLoop({
 
     // Death particles
     deathParticles.update(dt);
-
-    // Repair station healing — heal player when within range
-    for (let i = 0; i < defenses.length; i++) {
-      const def = defenses[i];
-      if (!def.active || def.type !== 'repair_station') continue;
-      const rdx = player.x - def.x;
-      const rdy = player.y - def.y;
-      if (rdx * rdx + rdy * rdy < def.range * def.range) {
-        player.heal(def.healRate * dt);
-      }
-    }
 
     // Motion trails — track fast-moving entities
     motionTrail.track('player', player.x, player.y, player.vx, player.vy, theme.radar.primary, dt);
@@ -834,13 +853,6 @@ const loop = new GameLoop({
         motionTrail.track(pid, p.x, p.y, p.vx, p.vy, theme.effects.projectile, dt);
         activeTrailIds.add(pid);
       }
-      for (let i = 0; i < combatSystem.turretProjectiles.length; i++) {
-        const tp = combatSystem.turretProjectiles[i];
-        if (!tp.active) continue;
-        const tpid = `tp${i}`;
-        motionTrail.track(tpid, tp.x, tp.y, tp.vx, tp.vy, '#00ddff', dt);
-        activeTrailIds.add(tpid);
-      }
     }
     if (features?.abilities !== false) {
       for (let i = 0; i < abilitySystem.missiles.length; i++) {
@@ -855,6 +867,14 @@ const loop = new GameLoop({
       const ob = orbitBotSystem.bot;
       motionTrail.track('ob0', ob.x, ob.y, ob.vx, ob.vy, theme.effects.drone, dt);
       activeTrailIds.add('ob0');
+    }
+    // Combat bot projectile trails
+    for (let i = 0; i < combatBotSystem.botProjectiles.length; i++) {
+      const cbp = combatBotSystem.botProjectiles[i];
+      if (!cbp.active) continue;
+      const cbpid = `cbp${i}`;
+      motionTrail.track(cbpid, cbp.x, cbp.y, cbp.vx, cbp.vy, '#ff8844', dt);
+      activeTrailIds.add(cbpid);
     }
     motionTrail.prune(activeTrailIds);
 
@@ -903,11 +923,20 @@ const loop = new GameLoop({
         return;
       }
 
-      // All wave enemies dead — wave survived, show results
+      // Boss killed — round won! (primary win condition)
+      if (currentBoss && !currentBoss.active) {
+        currentBoss = null;
+        runCount++;
+        showRunResults();
+        return;
+      }
+
+      // Fallback: all wave enemies dead (if boss somehow missed) — wave survived
       const waveEnemiesAlive = world.entities.some(
         (e: GameEntity) => e.active && e.type === 'enemy' && (e as Enemy).waveEnemy
       );
       if (!waveEnemiesAlive) {
+        currentBoss = null;
         runCount++;
         showRunResults();
         return;
@@ -1031,43 +1060,44 @@ const loop = new GameLoop({
         ctx.fillText(`Runs completed: ${saveData.runCount}`, bcx, bcy + 190);
       }
 
-      // Defense placement hint in base mode
-      if (defenses.length < maxDefenses && player.energy >= 75) {
-        ctx.font = '13px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(170, 220, 170, 0.85)';
-        const hintY = canvas.height - 35;
-        ctx.fillText('[T] Turret (100)  |  [R] Repair (75)', bcx, hintY);
-        ctx.font = '10px monospace';
-        ctx.fillStyle = 'rgba(136, 170, 136, 0.6)';
-        ctx.fillText(`Defenses: ${defenses.length}/${maxDefenses}`, bcx, hintY + 14);
-      }
+      // --- Upgrade buildings rendered around the homebase ---
+      const buildingRadius = 110;
+      const buildingDefs = [
+        { angle: -Math.PI / 2, label: 'PLAYER', color: '#00ff41', icon: 'P', tab: 'player' as const },
+        { angle: -Math.PI / 2 + (2 * Math.PI / 3), label: 'MINING', color: '#ffaa00', icon: 'M', tab: 'mining' as const },
+        { angle: -Math.PI / 2 + (4 * Math.PI / 3), label: 'COMBAT', color: '#ff4444', icon: 'C', tab: 'combat' as const },
+      ];
+      for (const bld of buildingDefs) {
+        const bx = bcx + Math.cos(bld.angle) * buildingRadius;
+        const by = bcy + Math.sin(bld.angle) * buildingRadius;
 
-      // Render existing defenses in base mode
-      for (const def of defenses) {
-        if (!def.active) continue;
-        const dsx = bcx + def.x;
-        const dsy = bcy + def.y;
-        if (def.type === 'turret') {
-          ctx.fillStyle = '#00ddff';
-          ctx.fillRect(dsx - 3, dsy - 3, 6, 6);
-          ctx.beginPath();
-          ctx.moveTo(dsx, dsy);
-          ctx.lineTo(dsx + Math.cos(def.aimDirection) * 8, dsy + Math.sin(def.aimDirection) * 8);
-          ctx.strokeStyle = '#00ddff';
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-        } else {
-          const pulseAlpha = 0.5 + Math.sin(performance.now() / 333) * 0.3;
-          ctx.globalAlpha = pulseAlpha;
-          ctx.fillStyle = '#00ff41';
-          ctx.fillRect(dsx - 6, dsy - 1.5, 12, 3);
-          ctx.fillRect(dsx - 1.5, dsy - 6, 3, 12);
-          ctx.globalAlpha = 1;
-        }
+        // Building circle
+        ctx.beginPath();
+        ctx.arc(bx, by, 22, 0, Math.PI * 2);
+        ctx.fillStyle = `${bld.color}10`;
+        ctx.fill();
+        ctx.strokeStyle = `${bld.color}80`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Building icon
+        ctx.font = 'bold 16px monospace';
+        ctx.fillStyle = bld.color;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(bld.icon, bx, by);
+
+        // Label below
+        ctx.font = '9px monospace';
+        ctx.fillStyle = `${bld.color}99`;
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(bld.label, bx, by + 34);
       }
 
       ctx.restore();
+
+      // Upgrade panel (right side) — only in base_mode
+      upgradePanel.render(ctx, homebaseUpgradeSystem, saveData, canvas.width, canvas.height);
 
       // Pause menu (if paused from base_mode — shows on top)
       pauseMenu.render(ctx, canvas.width, canvas.height);
@@ -1172,37 +1202,48 @@ const loop = new GameLoop({
       }
     }
 
-    // Defense entities — turrets and repair stations
-    for (const def of defenses) {
-      if (!def.active) continue;
-      const ddx = def.x - player.x;
-      const ddy = def.y - player.y;
-      if (ddx * ddx + ddy * ddy > viewRadiusSq) continue;
-      const dsx = cx + ddx;
-      const dsy = cy + ddy;
+    // Combat bots — orange/red squares with health indicator
+    for (let i = 0; i < combatBotSystem.bots.length; i++) {
+      const bot = combatBotSystem.bots[i];
+      if (!bot.active) continue;
+      const bdx = bot.x - player.x;
+      const bdy = bot.y - player.y;
+      if (bdx * bdx + bdy * bdy > viewRadiusSq) continue;
+      const bsx = cx + bdx;
+      const bsy = cy + bdy;
 
-      if (def.type === 'turret') {
-        // Cyan square (6x6) with aim-direction line
-        ctx.fillStyle = '#00ddff';
-        ctx.fillRect(dsx - 3, dsy - 3, 6, 6);
-        // Aim direction line (8px long)
-        ctx.beginPath();
-        ctx.moveTo(dsx, dsy);
-        ctx.lineTo(dsx + Math.cos(def.aimDirection) * 8, dsy + Math.sin(def.aimDirection) * 8);
-        ctx.strokeStyle = '#00ddff';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-      } else {
-        // Repair station: green cross/plus with pulsing glow
-        const pulseAlpha = 0.5 + Math.sin(player.survivalTime * 3) * 0.3;
-        ctx.globalAlpha = pulseAlpha;
-        ctx.fillStyle = '#00ff41';
-        // Horizontal bar of cross
-        ctx.fillRect(dsx - 6, dsy - 1.5, 12, 3);
-        // Vertical bar of cross
-        ctx.fillRect(dsx - 1.5, dsy - 6, 3, 12);
-        ctx.globalAlpha = 1;
+      // Pulsing glow based on remaining lifetime
+      const lifeFrac = bot.lifetime / bot.maxLifetime;
+      const pulseAlpha = lifeFrac > 0.25 ? 0.8 : 0.4 + Math.sin(player.survivalTime * 8) * 0.4;
+      ctx.globalAlpha = pulseAlpha;
+      ctx.fillStyle = '#ff8844';
+      ctx.fillRect(bsx - 4, bsy - 4, 8, 8);
+
+      // Health bar above bot (only if damaged)
+      if (bot.health < bot.maxHealth) {
+        const hpFrac = bot.health / bot.maxHealth;
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = '#333';
+        ctx.fillRect(bsx - 6, bsy - 9, 12, 2);
+        ctx.fillStyle = hpFrac > 0.5 ? '#ff8844' : '#ff4444';
+        ctx.fillRect(bsx - 6, bsy - 9, 12 * hpFrac, 2);
       }
+      ctx.globalAlpha = 1;
+    }
+
+    // Combat bot projectiles — small orange dots
+    for (let i = 0; i < combatBotSystem.botProjectiles.length; i++) {
+      const p = combatBotSystem.botProjectiles[i];
+      if (!p.active) continue;
+      const pdx = p.x - player.x;
+      const pdy = p.y - player.y;
+      if (pdx * pdx + pdy * pdy > viewRadiusSq) continue;
+      const psx = cx + pdx;
+      const psy = cy + pdy;
+      ctx.beginPath();
+      ctx.arc(psx, psy, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#ff8844';
+      ctx.fill();
     }
 
     // Dropoff zones — pulsing ring markers
@@ -1345,23 +1386,6 @@ const loop = new GameLoop({
       ctx.restore();
     }
 
-    // Render turret projectiles (cyan)
-    for (const p of combatSystem.turretProjectiles) {
-      const trx = p.x - player.x;
-      const try_ = p.y - player.y;
-      if (trx * trx + try_ * try_ > viewRadiusSq) continue;
-      const tpx = cx + trx;
-      const tpy = cy + try_;
-      ctx.save();
-      ctx.shadowColor = '#00ddff';
-      ctx.shadowBlur = 6;
-      ctx.beginPath();
-      ctx.arc(tpx, tpy, 2, 0, Math.PI * 2);
-      ctx.fillStyle = '#00ddff';
-      ctx.fill();
-      ctx.restore();
-    }
-
     // Render orbit bot
     {
       const ob = orbitBotSystem.bot;
@@ -1410,6 +1434,47 @@ const loop = new GameLoop({
       }
     }
 
+    // Render mining bots and laser lines
+    {
+      const bots = miningBotSystem.getBots();
+      for (let i = 0; i < bots.length; i++) {
+        const mb = bots[i];
+        if (!mb.active) continue;
+        const mbrx = mb.x - player.x;
+        const mbry = mb.y - player.y;
+        if (mbrx * mbrx + mbry * mbry > viewRadiusSq) continue;
+        const mbX = cx + mbrx;
+        const mbY = cy + mbry;
+
+        // Laser line to asteroid while mining
+        if (mb.state === MiningBotState.Mining && mb.targetAsteroid) {
+          const tarx = mb.targetAsteroid.x - player.x;
+          const tary = mb.targetAsteroid.y - player.y;
+          const tarX = cx + tarx;
+          const tarY = cy + tary;
+          ctx.save();
+          ctx.strokeStyle = '#ffaa00';
+          ctx.globalAlpha = 0.6;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(mbX, mbY);
+          ctx.lineTo(tarX, tarY);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Bot dot
+        ctx.save();
+        ctx.shadowColor = '#ffaa00';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(mbX, mbY, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffaa00';
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
     // Render missiles
     for (const missile of abilitySystem.missiles) {
       const mrx = missile.x - player.x;
@@ -1425,6 +1490,24 @@ const loop = new GameLoop({
       ctx.fillStyle = theme.effects.missile;
       ctx.fill();
       ctx.restore();
+    }
+
+    // Mouse cursor indicator (crosshair at mouse world position)
+    if (input.mouseOver) {
+      const cursorSX = cx + (input.mouseWorldX - player.x);
+      const cursorSY = cy + (input.mouseWorldY - player.y);
+      ctx.globalAlpha = 0.3;
+      ctx.strokeStyle = theme.radar.primary;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      // Horizontal line
+      ctx.moveTo(cursorSX - 8, cursorSY);
+      ctx.lineTo(cursorSX + 8, cursorSY);
+      // Vertical line
+      ctx.moveTo(cursorSX, cursorSY - 8);
+      ctx.lineTo(cursorSX, cursorSY + 8);
+      ctx.stroke();
+      ctx.globalAlpha = 1.0;
     }
 
     // Floating text (counter-rotated so text stays upright)
@@ -1479,10 +1562,60 @@ const loop = new GameLoop({
     }
 
     // HUD
-    const nearBase = gameState === 'run_active'
-      && player.x * player.x + player.y * player.y < homeBase.radius * homeBase.radius;
     hud.render(ctx, player, canvas.width, canvas.height, runTimer, homeBase,
-      { show: nearBase, defenseCount: defenses.length, maxDefenses });
+      undefined,
+      { charges: combatBotSystem.getChargesRemaining(), maxBots: combatBotSystem.maxBots },
+      { available: miningBotSystem.getAvailableCharges(), max: miningBotSystem.maxBots },
+      currentBoss);
+
+    // Boss direction indicator — pulsing arrow on screen edge when boss is off-screen
+    if (currentBoss && currentBoss.active && gameState === 'final_wave') {
+      // World-space offset from player to boss
+      const bossDx = currentBoss.x - player.x;
+      const bossDy = currentBoss.y - player.y;
+      const bossDist = Math.sqrt(bossDx * bossDx + bossDy * bossDy);
+
+      // Only show indicator if boss is outside the visible radar radius
+      const visibleRadius = radar.getRadius() * zoom.current;
+      if (bossDist > visibleRadius * 0.8) {
+        // Calculate angle in screen space (rotated by player heading)
+        const worldAngle = Math.atan2(bossDy, bossDx);
+        const screenAngle = worldAngle - player.heading - Math.PI / 2;
+
+        // Position the indicator at the edge of the screen
+        const edgeMargin = 40;
+        const edgeX = cx + Math.cos(screenAngle) * (visibleRadius - edgeMargin);
+        const edgeY = cy + Math.sin(screenAngle) * (visibleRadius - edgeMargin);
+
+        // Pulsing alpha
+        const pulse = 0.5 + Math.sin(performance.now() / 300) * 0.3;
+
+        ctx.save();
+        ctx.translate(edgeX, edgeY);
+        ctx.rotate(screenAngle + Math.PI / 2);
+
+        // Arrow triangle pointing outward
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = '#ff3333';
+        ctx.shadowColor = '#ff3333';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.moveTo(0, -10);
+        ctx.lineTo(-7, 6);
+        ctx.lineTo(7, 6);
+        ctx.closePath();
+        ctx.fill();
+
+        // Distance label
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = pulse * 0.8;
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${Math.floor(bossDist)}m`, 0, 18);
+
+        ctx.restore();
+      }
+    }
 
     // Tutorial hints
     if (currentLevelConfig && currentLevelConfig.hints.length > 0) {
@@ -1517,11 +1650,6 @@ const loop = new GameLoop({
     // Ability bar (bottom center) — only if abilities enabled
     if (currentLevelConfig?.features.abilities !== false) {
       abilityBar.render(ctx, abilitySystem.abilities, canvas.width, canvas.height);
-    }
-
-    // Upgrade panel — only if upgrades enabled
-    if (currentLevelConfig?.features.upgrades !== false) {
-      upgradePanel.render(ctx, upgradeSystem, player, canvas.width, canvas.height);
     }
 
     // Game over overlay

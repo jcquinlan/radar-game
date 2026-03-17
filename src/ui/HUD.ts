@@ -1,5 +1,5 @@
 import { Player } from '../entities/Player';
-import { HomeBase } from '../entities/Entity';
+import { Enemy, HomeBase } from '../entities/Entity';
 import { getThreatLevel } from '../world/World';
 import { getTheme } from '../themes/theme';
 
@@ -34,6 +34,9 @@ export class HUD {
     runTimer: number = -1,
     homeBase?: HomeBase,
     defenseHint?: { show: boolean; defenseCount: number; maxDefenses: number },
+    combatBotHint?: { charges: number; maxBots: number },
+    minerInfo?: { available: number; max: number },
+    boss?: Enemy | null,
   ): void {
     const padding = 20;
     const barWidth = 200;
@@ -110,6 +113,28 @@ export class HUD {
       y + barHeight + baseBarOffset + 82
     );
 
+    // Combat bot charges
+    if (combatBotHint) {
+      ctx.font = '12px monospace';
+      ctx.fillStyle = combatBotHint.charges > 0 ? '#ff8844' : theme.ui.textTertiary;
+      ctx.fillText(
+        `BOTS: ${combatBotHint.charges}/${combatBotHint.maxBots}`,
+        padding,
+        y + barHeight + baseBarOffset + 98
+      );
+    }
+
+    // Mining bot charges
+    if (minerInfo) {
+      ctx.fillStyle = '#ffaa00';
+      ctx.font = '12px monospace';
+      ctx.fillText(
+        `MINERS: ${minerInfo.available}/${minerInfo.max}`,
+        padding,
+        y + barHeight + baseBarOffset + 114
+      );
+    }
+
     // Run timer (top center) — only shown during timed runs
     if (runTimer >= 0) {
       ctx.save();
@@ -137,6 +162,31 @@ export class HUD {
         ctx.shadowBlur = 4;
         ctx.fillText(formatTime(runTimer), canvasWidth / 2, y + 20);
       }
+      ctx.restore();
+    }
+
+    // Boss HP bar (wide bar below the timer, top center)
+    if (boss && boss.active) {
+      ctx.save();
+      const bossBarWidth = Math.min(400, canvasWidth * 0.4);
+      const bossBarHeight = 14;
+      const bossBarX = (canvasWidth - bossBarWidth) / 2;
+      const bossBarY = y + 30;
+      const bossHpRatio = Math.max(0, boss.health / boss.maxHealth);
+
+      // Phase label
+      const phaseLabel = boss.bossPhase === 3 ? ' [ENRAGED]' : boss.bossPhase === 2 ? ' [AGGRESSIVE]' : '';
+
+      this.renderBar(
+        ctx,
+        bossBarX,
+        bossBarY,
+        bossBarWidth,
+        bossBarHeight,
+        bossHpRatio,
+        '#ff3333',
+        `BOSS${phaseLabel}: ${Math.ceil(boss.health)}/${boss.maxHealth}`
+      );
       ctx.restore();
     }
 
@@ -168,19 +218,6 @@ export class HUD {
     ctx.globalAlpha = 0.5;
     ctx.fillText(`${this.fps} FPS`, padding, canvasHeight - 10);
     ctx.globalAlpha = 1;
-
-    // Defense placement hint — shown when near base with room for more defenses
-    if (defenseHint && defenseHint.show && defenseHint.defenseCount < defenseHint.maxDefenses
-        && (player.energy >= 75)) {
-      ctx.font = '13px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = 'rgba(170, 220, 170, 0.85)';
-      const hintY = canvasHeight - 35;
-      ctx.fillText('[T] Turret (100)  |  [R] Repair (75)', canvasWidth / 2, hintY);
-      ctx.font = '10px monospace';
-      ctx.fillStyle = 'rgba(136, 170, 136, 0.6)';
-      ctx.fillText(`Defenses: ${defenseHint.defenseCount}/${defenseHint.maxDefenses}`, canvasWidth / 2, hintY + 14);
-    }
 
     ctx.restore();
   }

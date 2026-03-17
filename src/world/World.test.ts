@@ -95,11 +95,11 @@ describe('World', () => {
     // Spawn far from origin to get POIs with enemies
     world.updateSpawning(3000, 3000);
 
-    const resources = world.entities.filter((e) => e.type === 'resource');
+    const asteroids = world.entities.filter((e) => e.type === 'asteroid');
     const enemies = world.entities.filter((e) => e.type === 'enemy');
 
-    // Should have both resources and enemies in the world
-    expect(resources.length).toBeGreaterThan(0);
+    // Should have both asteroids and enemies in the world
+    expect(asteroids.length).toBeGreaterThan(0);
     expect(enemies.length).toBeGreaterThan(0);
   });
 });
@@ -112,7 +112,7 @@ describe('World with level config', () => {
       name: 'Test',
       description: '',
       features: { combat: true, upgrades: true, abilities: true, salvage: true, towRope: true },
-      world: { maxChunks: 5, difficultyMultiplier: null, spawnEnemies: true, spawnAllies: true },
+      world: { maxChunks: 5, difficultyMultiplier: null, spawnEnemies: true },
       objectives: [],
       hints: [],
     });
@@ -135,7 +135,7 @@ describe('World with level config', () => {
         name: 'Test',
         description: '',
         features: { combat: false, upgrades: false, abilities: false, salvage: false, towRope: false },
-        world: { maxChunks: null, difficultyMultiplier: 0, spawnEnemies: false, spawnAllies: false },
+        world: { maxChunks: null, difficultyMultiplier: 0, spawnEnemies: false },
         objectives: [],
         hints: [],
       });
@@ -152,7 +152,7 @@ describe('World with level config', () => {
       name: 'Test',
       description: '',
       features: { combat: true, upgrades: true, abilities: true, salvage: true, towRope: true },
-      world: { maxChunks: null, difficultyMultiplier: 0.5, spawnEnemies: true, spawnAllies: true },
+      world: { maxChunks: null, difficultyMultiplier: 0.5, spawnEnemies: true },
       objectives: [],
       hints: [],
     });

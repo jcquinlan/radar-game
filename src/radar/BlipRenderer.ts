@@ -1,13 +1,13 @@
-import { GameEntity, Ally, Enemy, Salvage } from '../entities/Entity';
+import { GameEntity, Enemy, Salvage, Asteroid } from '../entities/Entity';
 import { getTheme } from '../themes/theme';
 
 
 const BLIP_SIZES: Record<string, number> = {
   resource: 3,
   enemy: 5,
-  ally: 4,
   salvage: 5,
   dropoff: 6,
+  asteroid: 4,
 };
 
 /** Glow radius multiplier — the faked glow circle is this much larger than the blip */
@@ -62,19 +62,10 @@ export class BlipRenderer {
 
       let color = entity.type === 'resource' ? themeColors.resource
         : entity.type === 'enemy' ? themeColors.enemy
-        : entity.type === 'ally' ? themeColors.ally
         : entity.type === 'salvage' ? themeColors.salvage
+        : entity.type === 'asteroid' ? themeColors.asteroid
         : themeColors.dropoff;
       const size = BLIP_SIZES[entity.type];
-
-      // Ally subtype colors
-      if (entity.type === 'ally') {
-        const subtype = (entity as Ally).subtype;
-        color = subtype === 'healer' ? themeColors.allyHealer
-          : subtype === 'shield' ? themeColors.allyShield
-          : subtype === 'beacon' ? themeColors.allyBeacon
-          : color;
-      }
 
       let currentSize = size;
 
@@ -90,36 +81,72 @@ export class BlipRenderer {
           currentSize = 4;
           color = enemyRangedColor;
         }
-        // Bosses render at 1.5x size
+        // Bosses render at 2x size with a pulsing effect
         if (enemy.isBoss) {
-          currentSize *= 1.5;
-        }
-      }
-
-      // Ally gentle pulsing aura
-      if (entity.type === 'ally') {
-        const auraSize = size + 6 + Math.sin(this.time * 2) * 3;
-        ctx.globalAlpha = 0.15 + Math.sin(this.time * 2) * 0.05;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, auraSize, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.globalAlpha = 1;
-
-        // Beacon range indicator
-        if ((entity as Ally).subtype === 'beacon') {
-          ctx.globalAlpha = 0.06;
-          ctx.beginPath();
-          ctx.arc(screenX, screenY, (entity as Ally).beaconRange, 0, Math.PI * 2);
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 1;
-          ctx.stroke();
-          ctx.globalAlpha = 1;
+          currentSize *= 2;
         }
       }
 
       // Dropoffs are rendered in full by main.ts — skip blip
       if (entity.type === 'dropoff') continue;
+
+      // Asteroids: irregular circle, size varies by asteroid size category
+      if (entity.type === 'asteroid') {
+        const asteroid = entity as Asteroid;
+        const asteroidRadius = asteroid.size === 'small' ? 4
+          : asteroid.size === 'medium' ? 7
+          : 10;
+
+        // Faked glow behind the asteroid
+        ctx.globalAlpha = GLOW_ALPHA;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, asteroidRadius * GLOW_RADIUS_MULT, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Irregular polygon shape (6 vertices with jitter based on position for consistency)
+        ctx.beginPath();
+        const vertices = 6;
+        for (let v = 0; v < vertices; v++) {
+          const angle = (v / vertices) * Math.PI * 2;
+          // Use position-based seed for consistent jitter per asteroid
+          const jitter = 0.7 + 0.3 * Math.abs(Math.sin(asteroid.x * 13.7 + asteroid.y * 7.3 + v * 2.1));
+          const r = asteroidRadius * jitter;
+          const px = screenX + Math.cos(angle) * r;
+          const py = screenY + Math.sin(angle) * r;
+          if (v === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+
+        // Damage flash overlay
+        if (asteroid.damageFlash > 0) {
+          ctx.globalAlpha = Math.min(asteroid.damageFlash / 0.15, 1);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+
+        // Resolution label for asteroids (S/M/L)
+        if (resolutionLevel >= 2) {
+          ctx.save();
+          if (worldRotation) {
+            ctx.translate(screenX, screenY);
+            ctx.rotate(-worldRotation);
+            ctx.translate(-screenX, -screenY);
+          }
+          ctx.font = '10px monospace';
+          ctx.fillStyle = color;
+          ctx.globalAlpha = 0.8;
+          const astLabel = asteroid.size === 'small' ? 'S' : asteroid.size === 'medium' ? 'M' : 'L';
+          ctx.fillText(astLabel, screenX + asteroidRadius + 2, screenY + 3);
+          ctx.restore();
+        }
+        continue;
+      }
 
       // Salvage: pulsing diamond with aura (skip if already towed — rendered by tow rope system)
       if (entity.type === 'salvage') {
@@ -199,8 +226,7 @@ export class BlipRenderer {
         } else if (entity.type === 'salvage') {
           label = 'S';
         } else {
-          const ally = entity as Ally;
-          label = ally.subtype === 'healer' ? '+' : ally.subtype === 'shield' ? 'S' : 'B';
+          label = '';
         }
         ctx.fillText(label, screenX + size + 2, screenY + 3);
         ctx.restore();

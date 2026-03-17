@@ -1,4 +1,4 @@
-export type EntityType = 'resource' | 'enemy' | 'ally' | 'salvage' | 'dropoff';
+export type EntityType = 'resource' | 'enemy' | 'salvage' | 'dropoff' | 'asteroid';
 
 export interface Entity {
   x: number;
@@ -46,25 +46,12 @@ export interface Enemy extends Entity {
   waveEnemy: boolean;
   /** Whether this enemy is a wave boss (renders larger) */
   isBoss: boolean;
+  /** Boss behavior phase (1-3), driven by HP thresholds. Only meaningful when isBoss is true. */
+  bossPhase: number;
   /** Whether this enemy has been aggro'd by taking player damage (chases regardless of range) */
   aggro: boolean;
 }
 
-export type AllySubtype = 'healer' | 'shield' | 'beacon';
-
-export interface Ally extends Entity {
-  type: 'ally';
-  subtype: AllySubtype;
-  healAmount: number;
-  cooldown: number;
-  lastHealTime: number;
-  /** Shield: damage reduction multiplier (0-1), duration in seconds */
-  shieldReduction: number;
-  shieldDuration: number;
-  /** Beacon: energy per second when player is in range */
-  energyPerSecond: number;
-  beaconRange: number;
-}
 
 export interface Salvage extends Entity {
   type: 'salvage';
@@ -91,39 +78,31 @@ export interface Dropoff extends Entity {
   rewardPerItem: number;
 }
 
-export interface Turret {
-  type: 'turret';
-  x: number;
-  y: number;
-  health: number;
-  maxHealth: number;
-  /** Detection/firing range in pixels */
-  range: number;
-  /** Damage per shot */
-  damage: number;
-  /** Shots per second */
-  fireRate: number;
-  /** Timestamp of last shot (seconds) */
-  lastFireTime: number;
-  active: boolean;
-  /** Current aim direction in radians (fixed for now — no AI yet) */
-  aimDirection: number;
+export type AsteroidSize = 'small' | 'medium' | 'large';
+
+export interface Asteroid extends Entity {
+  type: 'asteroid';
+  /** Size category — determines energy value, HP, and render size */
+  size: AsteroidSize;
+  /** Energy awarded when fully mined */
+  energyValue: number;
+  /** Current hit points — destroyed/mined when reaching 0 */
+  hp: number;
+  /** Maximum hit points */
+  maxHp: number;
+  /** Damage flash timer (seconds remaining) — renders white overlay when > 0 */
+  damageFlash: number;
+  /** Whether a mining bot is actively mining this asteroid */
+  miningActive: boolean;
+  /** Mining progress 0-1 (for future mining bot system) */
+  miningProgress: number;
 }
 
-export interface RepairStation {
-  type: 'repair_station';
-  x: number;
-  y: number;
-  health: number;
-  maxHealth: number;
-  /** HP healed per second to nearby entities */
-  healRate: number;
-  /** Healing range in pixels */
-  range: number;
-  active: boolean;
-}
 
-export type Defense = Turret | RepairStation;
+export interface BuildingState {
+  level: number;
+  maxLevel: number;
+}
 
 export interface HomeBase {
   x: number;
@@ -134,6 +113,12 @@ export interface HomeBase {
   health: number;
   /** Maximum health of the home base */
   maxHealth: number;
+  /** Upgrade buildings at the homebase */
+  buildings: {
+    player: BuildingState;
+    mining: BuildingState;
+    combat: BuildingState;
+  };
 }
 
 export interface Projectile {
@@ -146,7 +131,7 @@ export interface Projectile {
   lifetime: number;
 }
 
-export type GameEntity = Resource | Enemy | Ally | Salvage | Dropoff;
+export type GameEntity = Resource | Enemy | Salvage | Dropoff | Asteroid;
 
 export function createResource(x: number, y: number): Resource {
   return {
@@ -195,29 +180,11 @@ export function createEnemy(x: number, y: number, subtype?: EnemySubtype): Enemy
     wanderTimer: 1 + Math.random() * 2,
     waveEnemy: false,
     isBoss: false,
+    bossPhase: 0,
     aggro: false,
   };
 }
 
-export function createAlly(x: number, y: number, subtype?: AllySubtype): Ally {
-  const st = subtype ?? (['healer', 'shield', 'beacon'][Math.floor(Math.random() * 3)] as AllySubtype);
-  return {
-    x,
-    y,
-    type: 'ally',
-    subtype: st,
-    active: true,
-    visible: true,
-    pingedThisWave: false,
-    healAmount: st === 'healer' ? 8 + Math.floor(Math.random() * 8) : 0,
-    cooldown: st === 'healer' ? 3 : st === 'shield' ? 8 : 0,
-    lastHealTime: -Infinity,
-    shieldReduction: st === 'shield' ? 0.5 : 0,
-    shieldDuration: st === 'shield' ? 5 : 0,
-    energyPerSecond: st === 'beacon' ? 2 : 0,
-    beaconRange: st === 'beacon' ? 150 : 0,
-  };
-}
 
 /** Min/max rope length for salvage items (randomized per item for visual spread) */
 const SALVAGE_ROPE_MIN = 25;
@@ -257,32 +224,71 @@ export function createDropoff(x: number, y: number): Dropoff {
   };
 }
 
-export function createTurret(x: number, y: number): Turret {
+/** Stats per asteroid size: [energyMin, energyMax, hp] */
+const ASTEROID_STATS: Record<AsteroidSize, { energyMin: number; energyMax: number; hp: number }> = {
+  small:  { energyMin: 10, energyMax: 15, hp: 20 },
+  medium: { energyMin: 20, energyMax: 35, hp: 40 },
+  large:  { energyMin: 40, energyMax: 60, hp: 80 },
+};
+
+/** Pick a random asteroid size with weighted distribution: 50% small, 35% medium, 15% large */
+function randomAsteroidSize(): AsteroidSize {
+  const roll = Math.random();
+  if (roll < 0.50) return 'small';
+  if (roll < 0.85) return 'medium';
+  return 'large';
+}
+
+export function createAsteroid(x: number, y: number, size?: AsteroidSize): Asteroid {
+  const s = size ?? randomAsteroidSize();
+  const stats = ASTEROID_STATS[s];
   return {
-    type: 'turret',
     x,
     y,
-    health: 50,
-    maxHealth: 50,
-    range: 200,
-    damage: 5,
-    fireRate: 1,
-    lastFireTime: 0,
+    type: 'asteroid',
     active: true,
-    aimDirection: 0,
+    visible: true,
+    pingedThisWave: false,
+    size: s,
+    energyValue: stats.energyMin + Math.floor(Math.random() * (stats.energyMax - stats.energyMin + 1)),
+    hp: stats.hp,
+    maxHp: stats.hp,
+    damageFlash: 0,
+    miningActive: false,
+    miningProgress: 0,
   };
 }
 
-export function createRepairStation(x: number, y: number): RepairStation {
+
+export function createBossEnemy(x: number, y: number): Enemy {
   return {
-    type: 'repair_station',
     x,
     y,
-    health: 30,
-    maxHealth: 30,
-    healRate: 3,
-    range: 100,
+    type: 'enemy',
+    subtype: 'ranged',
     active: true,
+    visible: true,
+    pingedThisWave: false,
+    health: 350,
+    maxHealth: 350,
+    damage: 15,
+    speed: 40,
+    chaseRange: 500,
+    energyDrop: 100,
+    fireRate: 1.8,
+    projectileSpeed: 130,
+    lastFireTime: -Infinity,
+    vx: 0,
+    vy: 0,
+    friction: 1.5,
+    ghostX: null,
+    ghostY: null,
+    wanderAngle: Math.random() * Math.PI * 2,
+    wanderTimer: 1 + Math.random() * 2,
+    waveEnemy: true,
+    isBoss: true,
+    bossPhase: 1,
+    aggro: true,
   };
 }
 
@@ -291,7 +297,12 @@ export function createHomeBase(x: number, y: number): HomeBase {
     x,
     y,
     radius: 150,
-    health: 500,
-    maxHealth: 500,
+    health: 400,
+    maxHealth: 400,
+    buildings: {
+      player: { level: 0, maxLevel: 5 },
+      mining: { level: 0, maxLevel: 5 },
+      combat: { level: 0, maxLevel: 5 },
+    },
   };
 }

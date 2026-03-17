@@ -5,7 +5,7 @@ import {
   createSalvage,
   EnemySubtype,
 } from '../entities/Entity';
-import { selectPOI, spawnResourceVein, scaleEnemy } from './POIGenerator';
+import { selectPOI, spawnAsteroidVein, scaleEnemy } from './POIGenerator';
 import { getTheme } from '../themes/theme';
 import { LevelConfig } from '../levels/LevelConfig';
 
@@ -84,20 +84,18 @@ export class World {
         // Safe zone: no enemies in the inner 3x3 chunks around the player
         const isNearPlayer = Math.abs(dx) <= 1 && Math.abs(dy) <= 1;
 
-        // Skip enemy/ally spawning based on level config
+        // Skip enemy spawning based on level config
         const spawnEnemies = this.levelConfig?.world.spawnEnemies ?? true;
-        const spawnAllies = this.levelConfig?.world.spawnAllies ?? true;
 
         // Try to place a POI in this chunk
-        const poi = (isNearPlayer || (!spawnEnemies && !spawnAllies)) ? null : selectPOI(chunkCenterX, chunkCenterY);
+        const poi = (isNearPlayer || !spawnEnemies) ? null : selectPOI(chunkCenterX, chunkCenterY);
 
         if (poi) {
           // POI chunk — use structured spawning
           const poiEntities = poi.spawn(chunkCenterX, chunkCenterY, difficulty);
-          // Filter out enemies/allies if level config disables them
+          // Filter out enemies if level config disables them
           const filtered = poiEntities.filter(e => {
             if (e.type === 'enemy' && !spawnEnemies) return false;
-            if (e.type === 'ally' && !spawnAllies) return false;
             return true;
           });
           this.entities.push(...filtered);
@@ -120,19 +118,19 @@ export class World {
     }
   }
 
-  /** Spawn ambient resources (as veins) and occasional solo enemies in non-POI chunks */
+  /** Spawn ambient asteroids (as veins) and occasional solo enemies in non-POI chunks */
   private spawnAmbient(
     chunkX: number,
     chunkY: number,
     difficulty: number,
     isNearPlayer: boolean
   ): void {
-    // 1-2 resource veins per chunk
+    // 1-2 asteroid veins per chunk
     const veinCount = 1 + (Math.random() < 0.4 ? 1 : 0);
     for (let v = 0; v < veinCount; v++) {
       const veinCenterX = chunkX + 60 + Math.random() * (CHUNK_SIZE - 120);
       const veinCenterY = chunkY + 60 + Math.random() * (CHUNK_SIZE - 120);
-      const vein = spawnResourceVein(veinCenterX, veinCenterY);
+      const vein = spawnAsteroidVein(veinCenterX, veinCenterY);
       this.entities.push(...vein);
     }
 

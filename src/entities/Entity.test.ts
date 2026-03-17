@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createResource, createEnemy, createAlly, createHomeBase, createTurret, createRepairStation, createSalvage } from './Entity';
+import { createResource, createEnemy, createHomeBase, createSalvage, createAsteroid, createBossEnemy } from './Entity';
 
 describe('Entity factories', () => {
   it('creates a resource at the given position', () => {
@@ -37,43 +37,17 @@ describe('Entity factories', () => {
     expect(e.projectileSpeed).toBeGreaterThan(0);
   });
 
-  it('creates a healer ally with heal properties', () => {
-    const a = createAlly(300, 400, 'healer');
-    expect(a.type).toBe('ally');
-    expect(a.subtype).toBe('healer');
-    expect(a.active).toBe(true);
-    expect(a.visible).toBe(true);
-    expect(a.pingedThisWave).toBe(false);
-    expect(a.healAmount).toBeGreaterThan(0);
-    expect(a.cooldown).toBeGreaterThan(0);
-  });
-
-  it('creates a shield ally with shield properties', () => {
-    const a = createAlly(300, 400, 'shield');
-    expect(a.subtype).toBe('shield');
-    expect(a.shieldReduction).toBeGreaterThan(0);
-    expect(a.shieldDuration).toBeGreaterThan(0);
-  });
-
-  it('creates a beacon ally with energy properties', () => {
-    const a = createAlly(300, 400, 'beacon');
-    expect(a.subtype).toBe('beacon');
-    expect(a.energyPerSecond).toBeGreaterThan(0);
-    expect(a.beaconRange).toBeGreaterThan(0);
-  });
-
-  it('creates a random ally subtype when none specified', () => {
-    const a = createAlly(300, 400);
-    expect(['healer', 'shield', 'beacon']).toContain(a.subtype);
-  });
-
-  it('creates a home base with health and maxHealth', () => {
+  it('creates a home base with health, maxHealth, and buildings', () => {
     const hb = createHomeBase(100, 200);
     expect(hb.x).toBe(100);
     expect(hb.y).toBe(200);
     expect(hb.radius).toBe(150);
-    expect(hb.health).toBe(500);
-    expect(hb.maxHealth).toBe(500);
+    expect(hb.health).toBe(400);
+    expect(hb.maxHealth).toBe(400);
+    // Buildings initialized at level 0
+    expect(hb.buildings.player).toEqual({ level: 0, maxLevel: 5 });
+    expect(hb.buildings.mining).toEqual({ level: 0, maxLevel: 5 });
+    expect(hb.buildings.combat).toEqual({ level: 0, maxLevel: 5 });
   });
 
   it('creates enemies with waveEnemy and isBoss defaulting to false', () => {
@@ -82,7 +56,6 @@ describe('Entity factories', () => {
     expect(e.isBoss).toBe(false);
   });
 
-
   it('creates enemies with ghost marker and wander fields initialized', () => {
     const e = createEnemy(50, 75, 'scout');
     expect(e.ghostX).toBeNull();
@@ -90,33 +63,6 @@ describe('Entity factories', () => {
     expect(e.wanderAngle).toBeGreaterThanOrEqual(0);
     expect(e.wanderAngle).toBeLessThan(Math.PI * 2);
     expect(e.wanderTimer).toBeGreaterThan(0);
-  });
-
-  it('creates a turret at the given position with correct defaults', () => {
-    const t = createTurret(150, 250);
-    expect(t.type).toBe('turret');
-    expect(t.x).toBe(150);
-    expect(t.y).toBe(250);
-    expect(t.health).toBe(50);
-    expect(t.maxHealth).toBe(50);
-    expect(t.range).toBe(200);
-    expect(t.damage).toBe(5);
-    expect(t.fireRate).toBe(1);
-    expect(t.lastFireTime).toBe(0);
-    expect(t.active).toBe(true);
-    expect(t.aimDirection).toBe(0);
-  });
-
-  it('creates a repair station at the given position with correct defaults', () => {
-    const rs = createRepairStation(300, 400);
-    expect(rs.type).toBe('repair_station');
-    expect(rs.x).toBe(300);
-    expect(rs.y).toBe(400);
-    expect(rs.health).toBe(30);
-    expect(rs.maxHealth).toBe(30);
-    expect(rs.healRate).toBe(3);
-    expect(rs.range).toBe(100);
-    expect(rs.active).toBe(true);
   });
 
   it('creates salvage with HP, maxHp, and damageFlash fields', () => {
@@ -129,16 +75,79 @@ describe('Entity factories', () => {
     expect(s.active).toBe(true);
   });
 
-  it('Defense union type discriminates turret from repair station', () => {
-    const turret = createTurret(0, 0);
-    const station = createRepairStation(0, 0);
+  it('creates a small asteroid with correct stats', () => {
+    const a = createAsteroid(100, 200, 'small');
+    expect(a.type).toBe('asteroid');
+    expect(a.size).toBe('small');
+    expect(a.x).toBe(100);
+    expect(a.y).toBe(200);
+    expect(a.active).toBe(true);
+    expect(a.visible).toBe(true);
+    expect(a.pingedThisWave).toBe(false);
+    expect(a.energyValue).toBeGreaterThanOrEqual(10);
+    expect(a.energyValue).toBeLessThanOrEqual(15);
+    expect(a.hp).toBe(20);
+    expect(a.maxHp).toBe(20);
+    expect(a.damageFlash).toBe(0);
+    expect(a.miningActive).toBe(false);
+    expect(a.miningProgress).toBe(0);
+  });
 
-    // Type narrowing works via the type field
-    if (turret.type === 'turret') {
-      expect(turret.damage).toBe(5);
+  it('creates a medium asteroid with correct stats', () => {
+    const a = createAsteroid(0, 0, 'medium');
+    expect(a.size).toBe('medium');
+    expect(a.energyValue).toBeGreaterThanOrEqual(20);
+    expect(a.energyValue).toBeLessThanOrEqual(35);
+    expect(a.hp).toBe(40);
+    expect(a.maxHp).toBe(40);
+  });
+
+  it('creates a large asteroid with correct stats', () => {
+    const a = createAsteroid(0, 0, 'large');
+    expect(a.size).toBe('large');
+    expect(a.energyValue).toBeGreaterThanOrEqual(40);
+    expect(a.energyValue).toBeLessThanOrEqual(60);
+    expect(a.hp).toBe(80);
+    expect(a.maxHp).toBe(80);
+  });
+
+  it('creates a random asteroid size when none specified', () => {
+    const sizes = new Set<string>();
+    for (let i = 0; i < 100; i++) {
+      sizes.add(createAsteroid(0, 0).size);
     }
-    if (station.type === 'repair_station') {
-      expect(station.healRate).toBe(3);
-    }
+    expect(sizes.has('small')).toBe(true);
+    expect(sizes.has('medium')).toBe(true);
+    expect(sizes.has('large')).toBe(true);
+  });
+
+  it('creates a boss enemy with correct stats', () => {
+    const boss = createBossEnemy(500, 600);
+    expect(boss.x).toBe(500);
+    expect(boss.y).toBe(600);
+    expect(boss.type).toBe('enemy');
+    expect(boss.isBoss).toBe(true);
+    expect(boss.bossPhase).toBe(1);
+    expect(boss.health).toBe(350);
+    expect(boss.maxHealth).toBe(350);
+    expect(boss.damage).toBe(15);
+    expect(boss.speed).toBe(40);
+    expect(boss.chaseRange).toBe(500);
+    expect(boss.waveEnemy).toBe(true);
+    expect(boss.visible).toBe(true);
+    expect(boss.aggro).toBe(true);
+    expect(boss.fireRate).toBe(1.8);
+    expect(boss.projectileSpeed).toBe(130);
+  });
+
+  it('boss enemy defaults differ from regular enemy', () => {
+    const boss = createBossEnemy(0, 0);
+    const regular = createEnemy(0, 0, 'ranged');
+    expect(boss.isBoss).toBe(true);
+    expect(regular.isBoss).toBe(false);
+    expect(boss.visible).toBe(true);
+    expect(regular.visible).toBe(false);
+    expect(boss.bossPhase).toBe(1);
+    expect(regular.bossPhase).toBe(0);
   });
 });

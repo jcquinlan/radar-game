@@ -26,6 +26,7 @@ export interface ColorTheme {
     allyBeacon: string;
     salvage: string;
     dropoff: string;
+    asteroid: string;
   };
 
   ui: {

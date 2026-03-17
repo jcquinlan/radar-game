@@ -1,9 +1,9 @@
-import { GameEntity, Resource, Enemy, Ally } from '../entities/Entity';
+import { GameEntity, Enemy } from '../entities/Entity';
 import { Player } from '../entities/Player';
 
 export interface PingEvent {
   entity: GameEntity;
-  type: 'collect' | 'heal' | 'shield';
+  type: 'reveal';
   value: number;
 }
 
@@ -42,7 +42,6 @@ export class PingSystem {
   private state: PingState;
   private config: PingConfig;
   private events: PingEvent[] = [];
-  private gameTime = 0;
 
   constructor(config: Partial<PingConfig> = {}) {
     this.config = { ...DEFAULT_PING_CONFIG, ...config };
@@ -77,7 +76,6 @@ export class PingSystem {
     dt: number
   ): PingEvent[] {
     this.events.length = 0;
-    this.gameTime += dt;
 
     // Check if we need to fire a new ping
     if (!this.state.active) {
@@ -133,11 +131,6 @@ export class PingSystem {
             (entity as Enemy).ghostX = null;
             (entity as Enemy).ghostY = null;
           }
-
-          const event = this.processInteraction(entity, player);
-          if (event) {
-            this.events.push(event);
-          }
         }
       }
 
@@ -152,47 +145,5 @@ export class PingSystem {
     }
 
     return this.events;
-  }
-
-  private processInteraction(entity: GameEntity, player: Player): PingEvent | null {
-    switch (entity.type) {
-      case 'resource':
-        return this.collectResource(entity as Resource, player);
-      case 'enemy':
-        return null; // Ping only reveals enemies, does not damage them
-      case 'ally':
-        return this.healFromAlly(entity as Ally, player);
-      case 'salvage':
-      case 'dropoff':
-        return null; // These are not interacted with by ping
-    }
-  }
-
-  private collectResource(resource: Resource, player: Player): PingEvent {
-    player.addEnergy(resource.energyValue);
-    resource.active = false;
-    return { entity: resource, type: 'collect', value: resource.energyValue };
-  }
-
-  private healFromAlly(ally: Ally, player: Player): PingEvent | null {
-    if (ally.cooldown > 0 && this.gameTime - ally.lastHealTime < ally.cooldown) {
-      return null;
-    }
-    ally.lastHealTime = this.gameTime;
-
-    switch (ally.subtype) {
-      case 'healer':
-        player.heal(ally.healAmount);
-        return { entity: ally, type: 'heal', value: ally.healAmount };
-      case 'shield':
-        player.applyShield(ally.shieldReduction, ally.shieldDuration);
-        return { entity: ally, type: 'shield', value: ally.shieldDuration };
-      case 'beacon':
-        player.addEnergy(5);
-        return { entity: ally, type: 'collect', value: 5 };
-      default:
-        player.heal(ally.healAmount);
-        return { entity: ally, type: 'heal', value: ally.healAmount };
-    }
   }
 }

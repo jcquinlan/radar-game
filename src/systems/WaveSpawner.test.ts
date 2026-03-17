@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { spawnWave } from './WaveSpawner';
+import { spawnWave, spawnBoss } from './WaveSpawner';
 
 describe('spawnWave', () => {
   it('spawns 10 + runCount*5 enemies for runCount 1', () => {
@@ -75,5 +75,41 @@ describe('spawnWave', () => {
 
     // Run 3 has higher difficulty (1 + 3*0.3 = 1.9) vs run 1 (1 + 1*0.3 = 1.3)
     expect(scout3.maxHealth).toBeGreaterThan(scout1.maxHealth);
+  });
+});
+
+describe('spawnBoss', () => {
+  it('spawns a boss at 2000-3000px from origin', () => {
+    const boss = spawnBoss(1);
+    const dist = Math.sqrt(boss.x * boss.x + boss.y * boss.y);
+    expect(dist).toBeGreaterThanOrEqual(2000);
+    expect(dist).toBeLessThanOrEqual(3000);
+  });
+
+  it('creates a boss with isBoss=true and waveEnemy=true', () => {
+    const boss = spawnBoss(1);
+    expect(boss.isBoss).toBe(true);
+    expect(boss.waveEnemy).toBe(true);
+    expect(boss.visible).toBe(true);
+    expect(boss.aggro).toBe(true);
+  });
+
+  it('boss has 350+ HP base (scaled by run count)', () => {
+    const boss = spawnBoss(1);
+    // At runCount 1: difficulty = 1.15, so HP = floor(350 * 1.15) = 402
+    expect(boss.health).toBeGreaterThanOrEqual(350);
+    expect(boss.maxHealth).toBe(boss.health);
+  });
+
+  it('boss is stronger on later runs', () => {
+    const boss1 = spawnBoss(1);
+    const boss5 = spawnBoss(5);
+    expect(boss5.maxHealth).toBeGreaterThan(boss1.maxHealth);
+    expect(boss5.damage).toBeGreaterThan(boss1.damage);
+  });
+
+  it('boss starts in phase 1', () => {
+    const boss = spawnBoss(1);
+    expect(boss.bossPhase).toBe(1);
   });
 });
