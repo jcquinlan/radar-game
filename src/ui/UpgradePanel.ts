@@ -1,4 +1,4 @@
-import { HomebaseUpgradeSystem, BuildingCategory, HomebaseUpgrade } from '../systems/HomebaseUpgradeSystem';
+import { HomebaseUpgradeSystem, BuildingCategory } from '../systems/HomebaseUpgradeSystem';
 import { SaveData } from '../systems/SaveSystem';
 import { getTheme } from '../themes/theme';
 
