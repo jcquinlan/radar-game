@@ -10,7 +10,6 @@ import { PingSystem } from './systems/PingSystem';
 import { CombatSystem } from './systems/CombatSystem';
 import { Enemy, GameEntity, Dropoff, HomeBase, createHomeBase } from './entities/Entity';
 import { spawnWave } from './systems/WaveSpawner';
-import { UpgradeSystem } from './systems/UpgradeSystem';
 import { HomebaseUpgradeSystem } from './systems/HomebaseUpgradeSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
@@ -77,7 +76,6 @@ let player: Player;
 let input: InputSystem;
 let pingSystem: PingSystem;
 let combatSystem: CombatSystem;
-let upgradeSystem: UpgradeSystem;
 let world: World;
 let hud: HUD;
 let upgradePanel: UpgradePanel;
@@ -162,9 +160,6 @@ function startRun() {
   combatBotSystem = new CombatBotSystem();
   miningBotSystem = new MiningBotSystem();
   pingSystem = new PingSystem({ maxRadius: radar.getRadius() });
-  upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
-    resolutionLevel = lvl;
-  }, pingSystem);
   homeBase = createHomeBase(0, 0);
   resolutionLevel = 0;
   prevHealth = player.health;
@@ -232,9 +227,6 @@ function init() {
   prevHealth = player.health;
   damageFlash = 0;
 
-  upgradeSystem = new UpgradeSystem(player, radar, (lvl) => {
-    resolutionLevel = lvl;
-  }, pingSystem);
   abilitySystem = new AbilitySystem(player);
   abilitySystem.onShake = (intensity) => screenShake.trigger(intensity);
   abilityEffects = new AbilityEffects();
@@ -487,16 +479,12 @@ window.addEventListener('keydown', (e) => {
 
   // Only show upgrades panel if upgrades are enabled
   const features = currentLevelConfig?.features;
-  // Upgrade panel — available in base_mode and during active gameplay (if enabled)
+  // Upgrade panel — only available in base_mode (homebase upgrades are persistent between runs)
   {
     const upgradesBinding = keyRemapScreen ? keyRemapScreen.getExtraBinding('upgrades') : null;
     const upgradesKey = upgradesBinding ? upgradesBinding.key : 'e';
-    if (e.key === upgradesKey || e.key === upgradesKey.toUpperCase()) {
-      if (gameState === 'base_mode') {
-        upgradePanel.toggle();
-      } else if (features?.upgrades !== false && isActiveGameplay(gameState) && !keyRemapScreen.isVisible()) {
-        upgradePanel.toggle();
-      }
+    if ((e.key === upgradesKey || e.key === upgradesKey.toUpperCase()) && gameState === 'base_mode') {
+      upgradePanel.toggle();
     }
   }
   if ((e.key === 'k' || e.key === 'K') && isActiveGameplay(gameState)) {
@@ -1578,11 +1566,6 @@ const loop = new GameLoop({
     // Ability bar (bottom center) — only if abilities enabled
     if (currentLevelConfig?.features.abilities !== false) {
       abilityBar.render(ctx, abilitySystem.abilities, canvas.width, canvas.height);
-    }
-
-    // Upgrade panel — only if upgrades enabled
-    if (currentLevelConfig?.features.upgrades !== false) {
-      upgradePanel.render(ctx, homebaseUpgradeSystem, saveData, canvas.width, canvas.height);
     }
 
     // Game over overlay
