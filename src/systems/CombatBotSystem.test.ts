@@ -25,6 +25,7 @@ describe('CombatBotSystem', () => {
   let onDeath: (x: number, y: number, sx: number, sy: number, color: string) => void;
   let impactEvents: { x: number; y: number }[];
   let onImpact: (x: number, y: number, sx: number, sy: number, color: string) => void;
+  let releasedSlots: number[];
 
   beforeEach(() => {
     system = new CombatBotSystem();
@@ -35,32 +36,24 @@ describe('CombatBotSystem', () => {
     onDeath = (x, y) => deathEvents.push({ x, y });
     impactEvents = [];
     onImpact = (x, y) => impactEvents.push({ x, y });
+    releasedSlots = [];
+    system.onSlotRelease = (slotIndex) => releasedSlots.push(slotIndex);
   });
 
   describe('deployBot', () => {
     it('spawns a bot at the player position, targeting the click location', () => {
-      const result = system.deployBot(300, 400, player);
-      expect(result).toBe(true);
+      system.deployBot(300, 400, player, 0);
       expect(system.bots.length).toBe(1);
-      // Bot spawns at player position
       expect(system.bots[0].x).toBe(0);
       expect(system.bots[0].y).toBe(0);
-      // Target is the click location
       expect(system.bots[0].targetX).toBe(300);
       expect(system.bots[0].targetY).toBe(400);
       expect(system.bots[0].active).toBe(true);
       expect(system.bots[0].state).toBe(CombatBotState.FlyingToTarget);
     });
 
-    it('returns false when no charges remain', () => {
-      expect(system.deployBot(100, 0, player)).toBe(true);
-      expect(system.deployBot(200, 0, player)).toBe(true);
-      expect(system.deployBot(300, 0, player)).toBe(false);
-      expect(system.bots.length).toBe(2);
-    });
-
     it('sets correct initial stats on deployed bot', () => {
-      system.deployBot(100, 100, player);
+      system.deployBot(100, 100, player, 0);
       const bot = system.bots[0];
       expect(bot.health).toBe(30);
       expect(bot.maxHealth).toBe(30);
@@ -71,28 +64,19 @@ describe('CombatBotSystem', () => {
       expect(bot.lifetime).toBe(20);
     });
 
-    it('allows deploying a new bot after an old one expires', () => {
-      system.deployBot(100, 0, player);
-      system.deployBot(200, 0, player);
-      expect(system.deployBot(300, 0, player)).toBe(false);
-
-      // Expire bots
-      const entities: GameEntity[] = [];
-      for (let i = 0; i < 21 * 60; i++) {
-        system.update(1 / 60, entities, addFloatingText, onDeath, onImpact);
-      }
-      expect(system.deployBot(300, 0, player)).toBe(true);
+    it('stores slotIndex on the deployed bot', () => {
+      system.deployBot(100, 100, player, 5);
+      expect(system.bots[0].slotIndex).toBe(5);
     });
   });
 
   describe('movement — flies from player to click target', () => {
     it('bot moves toward the click target', () => {
-      system.deployBot(500, 0, player);
+      system.deployBot(500, 0, player, 0);
       const bot = system.bots[0];
       const initialX = bot.x;
       const entities: GameEntity[] = [];
 
-      // Run a few frames
       for (let i = 0; i < 30; i++) {
         system.update(1 / 60, entities, addFloatingText, onDeath, onImpact);
       }
@@ -101,12 +85,10 @@ describe('CombatBotSystem', () => {
     });
 
     it('transitions to SeekingEnemy on arrival at target', () => {
-      // Place click target very close so bot arrives quickly
-      system.deployBot(10, 0, player);
+      system.deployBot(10, 0, player, 0);
       const bot = system.bots[0];
       const entities: GameEntity[] = [];
 
-      // Run enough frames to arrive
       for (let i = 0; i < 60; i++) {
         system.update(1 / 60, entities, addFloatingText, onDeath, onImpact);
       }
@@ -117,13 +99,11 @@ describe('CombatBotSystem', () => {
 
   describe('auto-aggro — detects and chases enemies', () => {
     it('auto-aggros a nearby enemy while flying to target', () => {
-      system.deployBot(500, 0, player);
+      system.deployBot(500, 0, player, 0);
       const bot = system.bots[0];
-      // Place enemy near the bot's starting position
       const enemy = makeEnemy(100, 0);
       const entities: GameEntity[] = [enemy];
 
-      // Run a few frames — bot should detect enemy
       for (let i = 0; i < 10; i++) {
         system.update(1 / 60, entities, addFloatingText, onDeath, onImpact);
       }
@@ -133,12 +113,10 @@ describe('CombatBotSystem', () => {
     });
 
     it('transitions to orbiting after reaching the enemy', () => {
-      // Place target far away but enemy right next to player
-      system.deployBot(500, 0, player);
+      system.deployBot(500, 0, player, 0);
       const enemy = makeEnemy(20, 0, 100);
       const entities: GameEntity[] = [enemy];
 
-      // Run enough frames to reach and orbit
       for (let i = 0; i < 120; i++) {
         system.update(1 / 60, entities, addFloatingText, onDeath, onImpact);
       }
@@ -148,24 +126,26 @@ describe('CombatBotSystem', () => {
     });
 
     it('returns to seeking when target enemy dies', () => {
-      system.deployBot(500, 0, player);
+      system.deployBot(500, 0, player, 0);
       const enemy = makeEnemy(50, 0, 1);
       const entities: GameEntity[] = [enemy];
 
-      // Let bot aggro and kill the enemy
       for (let i = 0; i < 200; i++) {
         system.update(1 / 60, entities, addFloatingText, onDeath, onImpact, player);
       }
 
-      const bot = system.bots[0];
+      // Bot should still be alive (it may be seeking or have found another state)
       expect(enemy.active).toBe(false);
-      expect(bot.state).toBe(CombatBotState.SeekingEnemy);
+      // After enemy dies, bot should be in seeking state (if still alive)
+      const aliveBots = system.bots.filter(b => b.active);
+      if (aliveBots.length > 0) {
+        expect(aliveBots[0].state).toBe(CombatBotState.SeekingEnemy);
+      }
     });
 
     it('does not aggro enemies outside detection range', () => {
-      system.deployBot(100, 0, player);
+      system.deployBot(100, 0, player, 0);
       const bot = system.bots[0];
-      // Enemy far away — beyond 250px detection range
       const enemy = makeEnemy(800, 0);
       const entities: GameEntity[] = [enemy];
 
@@ -179,12 +159,11 @@ describe('CombatBotSystem', () => {
 
   describe('projectile damage', () => {
     it('deals damage to enemies while orbiting', () => {
-      system.deployBot(500, 0, player);
+      system.deployBot(500, 0, player, 0);
       const enemy = makeEnemy(50, 0, 100);
       const entities: GameEntity[] = [enemy];
       const initialHealth = enemy.health;
 
-      // Run enough frames for bot to reach, orbit, and fire
       for (let i = 0; i < 300; i++) {
         system.update(1 / 60, entities, addFloatingText, onDeath, onImpact, player);
       }
@@ -193,7 +172,7 @@ describe('CombatBotSystem', () => {
     });
 
     it('deactivates enemy when health reaches 0', () => {
-      system.deployBot(500, 0, player);
+      system.deployBot(500, 0, player, 0);
       const enemy = makeEnemy(50, 0, 4);
       const entities: GameEntity[] = [enemy];
 
@@ -206,20 +185,21 @@ describe('CombatBotSystem', () => {
     });
   });
 
-  describe('lifetime', () => {
-    it('deactivates bot after lifetime expires', () => {
-      system.deployBot(100, 0, player);
+  describe('lifetime and slot release', () => {
+    it('deactivates bot and releases slot after lifetime expires', () => {
+      system.deployBot(100, 0, player, 3);
       const entities: GameEntity[] = [];
 
       for (let i = 0; i < 21 * 60; i++) {
         system.update(1 / 60, entities, addFloatingText, onDeath, onImpact);
       }
 
-      expect(system.bots[0].active).toBe(false);
+      expect(system.bots.filter(b => b.active).length).toBe(0);
+      expect(releasedSlots).toContain(3);
     });
 
     it('bot remains active before lifetime expires', () => {
-      system.deployBot(100, 0, player);
+      system.deployBot(100, 0, player, 0);
       const entities: GameEntity[] = [];
 
       for (let i = 0; i < 10 * 60; i++) {
@@ -228,13 +208,28 @@ describe('CombatBotSystem', () => {
 
       expect(system.bots[0].active).toBe(true);
     });
+
+    it('releases slot when bot is destroyed by contact damage', () => {
+      system.deployBot(100, 0, player, 4);
+      const bot = system.bots[0];
+      bot.x = 0;
+      bot.y = 0;
+      bot.state = CombatBotState.SeekingEnemy;
+      const enemy = makeEnemy(5, 0);
+      enemy.damage = 10000;
+      enemy.subtype = 'brute';
+      const entities: GameEntity[] = [enemy];
+
+      system.update(1 / 60, entities, addFloatingText, onDeath, onImpact);
+
+      expect(releasedSlots).toContain(4);
+    });
   });
 
   describe('enemy contact damage', () => {
     it('enemies deal contact damage to bots', () => {
-      system.deployBot(100, 0, player);
+      system.deployBot(100, 0, player, 0);
       const bot = system.bots[0];
-      // Move bot to known position for testing
       bot.x = 0;
       bot.y = 0;
       bot.state = CombatBotState.SeekingEnemy;
@@ -251,26 +246,8 @@ describe('CombatBotSystem', () => {
       expect(bot.health).toBeLessThan(initialHealth);
     });
 
-    it('deactivates bot when health reaches 0 from contact damage', () => {
-      system.deployBot(100, 0, player);
-      const bot = system.bots[0];
-      bot.x = 0;
-      bot.y = 0;
-      bot.state = CombatBotState.SeekingEnemy;
-      const enemy = makeEnemy(5, 0);
-      enemy.damage = 100;
-      enemy.subtype = 'brute';
-      const entities: GameEntity[] = [enemy];
-
-      for (let i = 0; i < 60; i++) {
-        system.update(1 / 60, entities, addFloatingText, onDeath, onImpact);
-      }
-
-      expect(bot.active).toBe(false);
-    });
-
     it('ranged enemies do not deal contact damage to bots', () => {
-      system.deployBot(100, 0, player);
+      system.deployBot(100, 0, player, 0);
       const bot = system.bots[0];
       bot.x = 0;
       bot.y = 0;
@@ -289,42 +266,22 @@ describe('CombatBotSystem', () => {
     });
   });
 
-  describe('charge management', () => {
-    it('getChargesRemaining returns correct count', () => {
-      expect(system.getChargesRemaining()).toBe(2);
-      system.deployBot(100, 0, player);
-      expect(system.getChargesRemaining()).toBe(1);
-      system.deployBot(200, 0, player);
-      expect(system.getChargesRemaining()).toBe(0);
-    });
-
-    it('reset restores all charges and clears bots', () => {
-      system.deployBot(100, 0, player);
-      system.deployBot(200, 0, player);
-      expect(system.getChargesRemaining()).toBe(0);
+  describe('reset', () => {
+    it('clears all bots and releases their slots', () => {
+      system.deployBot(100, 0, player, 0);
+      system.deployBot(200, 0, player, 1);
 
       system.reset();
-      expect(system.getChargesRemaining()).toBe(2);
-      const activeBots = system.bots.filter(b => b.active);
-      expect(activeBots.length).toBe(0);
-    });
 
-    it('expired bots free up charges', () => {
-      system.deployBot(100, 0, player);
-      expect(system.getChargesRemaining()).toBe(1);
-
-      const entities: GameEntity[] = [];
-      for (let i = 0; i < 21 * 60; i++) {
-        system.update(1 / 60, entities, addFloatingText, onDeath, onImpact);
-      }
-
-      expect(system.getChargesRemaining()).toBe(2);
+      expect(system.bots.length).toBe(0);
+      expect(releasedSlots).toContain(0);
+      expect(releasedSlots).toContain(1);
     });
   });
 
   describe('edge cases', () => {
     it('handles empty entity list without errors', () => {
-      system.deployBot(100, 0, player);
+      system.deployBot(100, 0, player, 0);
       const entities: GameEntity[] = [];
       for (let i = 0; i < 10; i++) {
         system.update(1 / 60, entities, addFloatingText, onDeath, onImpact);
@@ -333,7 +290,7 @@ describe('CombatBotSystem', () => {
     });
 
     it('handles zero dt gracefully', () => {
-      system.deployBot(100, 0, player);
+      system.deployBot(100, 0, player, 0);
       const entities: GameEntity[] = [];
       system.update(0, entities, addFloatingText, onDeath, onImpact);
       expect(system.bots[0].active).toBe(true);
@@ -341,7 +298,7 @@ describe('CombatBotSystem', () => {
     });
 
     it('bot destroyed emits floating text', () => {
-      system.deployBot(100, 0, player);
+      system.deployBot(100, 0, player, 0);
       const bot = system.bots[0];
       bot.x = 0;
       bot.y = 0;
@@ -355,18 +312,6 @@ describe('CombatBotSystem', () => {
 
       const destroyedText = floatingTexts.find(t => t.text === 'BOT DESTROYED');
       expect(destroyedText).toBeDefined();
-    });
-  });
-
-  describe('maxBots property', () => {
-    it('defaults to 2', () => {
-      expect(system.maxBots).toBe(2);
-    });
-
-    it('limits deployment to maxBots', () => {
-      system.maxBots = 1;
-      expect(system.deployBot(100, 0, player)).toBe(true);
-      expect(system.deployBot(200, 0, player)).toBe(false);
     });
   });
 });

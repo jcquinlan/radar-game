@@ -26,6 +26,8 @@ export interface MiningBot {
   /** Accumulated energy for batched floating text */
   energyAccum: number;
   energyTextTimer: number;
+  /** BotSlotSystem slot index assigned to this bot (-1 if unassigned) */
+  slotIndex: number;
 }
 
 // Movement
@@ -58,53 +60,25 @@ const ENERGY_TEXT_INTERVAL = 2;
 const DEFAULT_DEPLOY_RANGE = 100;
 
 export class MiningBotSystem {
-  private bots: MiningBot[];
-  maxBots: number;
+  private bots: MiningBot[] = [];
   /** Multiplier applied to mining rate — increased by mining speed upgrade */
-  miningRateMultiplier: number;
+  miningRateMultiplier = 1;
   /** Max deploy distance from click to asteroid — increased by mining range upgrade */
-  deployRange: number;
+  deployRange = DEFAULT_DEPLOY_RANGE;
+  /** Callback invoked with slot index when a bot becomes inactive */
+  onSlotRelease: ((slotIndex: number) => void) | null = null;
 
-  constructor(maxBots = 3) {
-    this.maxBots = maxBots;
-    this.miningRateMultiplier = 1;
-    this.deployRange = DEFAULT_DEPLOY_RANGE;
-    // Pre-allocate bot slots
-    this.bots = [];
-    for (let i = 0; i < maxBots; i++) {
-      this.bots.push(this.createInactiveBot());
-    }
-  }
-
-  private createInactiveBot(): MiningBot {
-    return {
-      x: 0,
-      y: 0,
-      vx: 0,
-      vy: 0,
-      angle: 0,
-      targetAsteroid: null,
-      state: MiningBotState.Deploying,
-      miningProgress: 0,
-      miningRate: 0,
-      lifetime: 0,
-      active: false,
-      aggroTimer: AGGRO_CHECK_INTERVAL,
-      energyAccum: 0,
-      energyTextTimer: 0,
-    };
+  constructor() {
+    // No pre-allocation — bots are added dynamically via deployBot
   }
 
   /**
    * Try to deploy a mining bot near the given world coordinates.
-   * Finds the nearest active asteroid within 100px of the click.
-   * Returns true if deployment succeeded.
+   * Finds the nearest active asteroid within deployRange of the click.
+   * Caller must have already acquired a slot from BotSlotSystem.
+   * Returns true if deployment succeeded (asteroid found within range).
    */
-  deployBot(worldX: number, worldY: number, entities: GameEntity[], player: Player): boolean {
-    // Check for available charge
-    const slot = this.findInactiveSlot();
-    if (!slot) return false;
-
+  deployBot(worldX: number, worldY: number, entities: GameEntity[], player: Player, slotIndex: number): boolean {
     // Find nearest asteroid within range
     let nearest: Asteroid | null = null;
     let nearestDistSq = this.deployRange * this.deployRange;
@@ -124,22 +98,26 @@ export class MiningBotSystem {
 
     if (!nearest) return false;
 
-    // Activate the bot
-    slot.x = player.x;
-    slot.y = player.y;
-    slot.vx = 0;
-    slot.vy = 0;
-    slot.angle = 0;
-    slot.targetAsteroid = nearest;
-    slot.state = MiningBotState.Deploying;
-    slot.miningProgress = 0;
-    slot.miningRate = (nearest.energyValue / MINING_DURATION) * this.miningRateMultiplier;
-    slot.lifetime = 0;
-    slot.active = true;
-    slot.aggroTimer = AGGRO_CHECK_INTERVAL;
-    slot.energyAccum = 0;
-    slot.energyTextTimer = 0;
+    // Create and activate the bot
+    const bot: MiningBot = {
+      x: player.x,
+      y: player.y,
+      vx: 0,
+      vy: 0,
+      angle: 0,
+      targetAsteroid: nearest,
+      state: MiningBotState.Deploying,
+      miningProgress: 0,
+      miningRate: (nearest.energyValue / MINING_DURATION) * this.miningRateMultiplier,
+      lifetime: 0,
+      active: true,
+      aggroTimer: AGGRO_CHECK_INTERVAL,
+      energyAccum: 0,
+      energyTextTimer: 0,
+      slotIndex,
+    };
 
+    this.bots.push(bot);
     return true;
   }
 
@@ -149,7 +127,7 @@ export class MiningBotSystem {
     entities: GameEntity[],
     addFloatingText: FloatingTextCallback,
   ): void {
-    for (let i = 0; i < this.bots.length; i++) {
+    for (let i = this.bots.length - 1; i >= 0; i--) {
       const bot = this.bots[i];
       if (!bot.active) continue;
 
@@ -171,6 +149,14 @@ export class MiningBotSystem {
       bot.vy *= decay;
       bot.x += bot.vx * dt;
       bot.y += bot.vy * dt;
+
+      // If bot became inactive this frame, release slot and remove from array
+      if (!bot.active) {
+        if (this.onSlotRelease && bot.slotIndex >= 0) {
+          this.onSlotRelease(bot.slotIndex);
+        }
+        this.bots.splice(i, 1);
+      }
     }
   }
 
@@ -325,46 +311,26 @@ export class MiningBotSystem {
     }
   }
 
-  private findInactiveSlot(): MiningBot | null {
-    for (let i = 0; i < this.bots.length; i++) {
-      if (!this.bots[i].active) return this.bots[i];
-    }
-    return null;
-  }
-
-  /** Get all bot slots (including inactive) — used for rendering */
+  /** Get all active bots — used for rendering */
   getBots(): readonly MiningBot[] {
     return this.bots;
   }
 
   /** Number of currently deployed (active) bots */
   getActiveCount(): number {
-    let count = 0;
-    for (let i = 0; i < this.bots.length; i++) {
-      if (this.bots[i].active) count++;
-    }
-    return count;
+    return this.bots.length;
   }
 
-  /** Number of available charges (maxBots - active) */
-  getAvailableCharges(): number {
-    return this.maxBots - this.getActiveCount();
-  }
-
-  /** Reset all bots to inactive state */
+  /** Reset all bots — releases slots and clears array */
   reset(): void {
-    for (let i = 0; i < this.bots.length; i++) {
-      const bot = this.bots[i];
-      bot.active = false;
-      bot.targetAsteroid = null;
-      bot.state = MiningBotState.Deploying;
-      bot.miningProgress = 0;
-      bot.lifetime = 0;
-      bot.vx = 0;
-      bot.vy = 0;
-      bot.aggroTimer = AGGRO_CHECK_INTERVAL;
-      bot.energyAccum = 0;
-      bot.energyTextTimer = 0;
+    if (this.onSlotRelease) {
+      for (let i = 0; i < this.bots.length; i++) {
+        const bot = this.bots[i];
+        if (bot.slotIndex >= 0) {
+          this.onSlotRelease(bot.slotIndex);
+        }
+      }
     }
+    this.bots.length = 0;
   }
 }

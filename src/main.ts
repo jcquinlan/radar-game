@@ -30,6 +30,7 @@ import { TowRopeSystem } from './systems/TowRopeSystem';
 import { OrbitBotSystem } from './systems/OrbitBotSystem';
 import { CombatBotSystem } from './systems/CombatBotSystem';
 import { MiningBotSystem, MiningBotState } from './systems/MiningBotSystem';
+import { BotSlotSystem } from './systems/BotSlotSystem';
 import { createZoomState, adjustZoom, updateZoom, resetZoom, ZOOM_WHEEL_SENSITIVITY, ZOOM_KEY_STEP, ZoomState } from './systems/ZoomState';
 import { Minimap } from './ui/Minimap';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
@@ -93,6 +94,7 @@ let towRopeSystem: TowRopeSystem;
 let orbitBotSystem: OrbitBotSystem;
 let combatBotSystem: CombatBotSystem;
 let miningBotSystem: MiningBotSystem;
+let botSlotSystem: BotSlotSystem;
 let minimap: Minimap;
 let homeBase: HomeBase;
 let homebaseUpgradeSystem: HomebaseUpgradeSystem;
@@ -164,6 +166,10 @@ function startRun() {
   orbitBotSystem = new OrbitBotSystem(player);
   combatBotSystem = new CombatBotSystem();
   miningBotSystem = new MiningBotSystem();
+  botSlotSystem = new BotSlotSystem();
+  // Wire slot release callbacks
+  miningBotSystem.onSlotRelease = (slotIndex) => botSlotSystem.releaseSlot(slotIndex);
+  combatBotSystem.onSlotRelease = (slotIndex) => botSlotSystem.releaseSlot(slotIndex);
   bossSystem = new BossSystem();
   currentBoss = null;
   pingSystem = new PingSystem({ maxRadius: radar.getRadius() });
@@ -173,7 +179,7 @@ function startRun() {
   damageFlash = 0;
 
   // Apply persistent homebase upgrades to this run's systems
-  homebaseUpgradeSystem.applyUpgrades(player, radar, pingSystem, miningBotSystem, combatBotSystem);
+  homebaseUpgradeSystem.applyUpgrades(player, radar, pingSystem, miningBotSystem, combatBotSystem, botSlotSystem);
 
   input.attach();
   input.attachMouse(canvas);
@@ -240,6 +246,9 @@ function init() {
   orbitBotSystem = new OrbitBotSystem(player);
   combatBotSystem = new CombatBotSystem();
   miningBotSystem = new MiningBotSystem();
+  botSlotSystem = new BotSlotSystem();
+  miningBotSystem.onSlotRelease = (slotIndex) => botSlotSystem.releaseSlot(slotIndex);
+  combatBotSystem.onSlotRelease = (slotIndex) => botSlotSystem.releaseSlot(slotIndex);
   abilityBar = new AbilityBar();
   motionTrail = new MotionTrail();
   deathParticles = new DeathParticles(200);
@@ -664,8 +673,15 @@ const loop = new GameLoop({
     // Left-click: deploy mining bot near asteroid
     const leftClick = input.consumeClick();
     if (leftClick) {
-      if (miningBotSystem.deployBot(leftClick.worldX, leftClick.worldY, world.entities, player)) {
-        floatingText.add('MINING BOT DEPLOYED', leftClick.worldX, leftClick.worldY - 15, '#ffaa00');
+      const slotIdx = botSlotSystem.acquireSlot();
+      if (slotIdx >= 0) {
+        if (miningBotSystem.deployBot(leftClick.worldX, leftClick.worldY, world.entities, player, slotIdx)) {
+          floatingText.add('MINING BOT DEPLOYED', leftClick.worldX, leftClick.worldY - 15, '#ffaa00');
+        } else {
+          // No asteroid in range — release the slot immediately
+          botSlotSystem.releaseSlot(slotIdx);
+          floatingText.add('NO ASTEROID', leftClick.worldX, leftClick.worldY - 15, '#ff4444');
+        }
       } else {
         floatingText.add('NO CHARGES', leftClick.worldX, leftClick.worldY - 15, '#ff4444');
       }
@@ -674,7 +690,9 @@ const loop = new GameLoop({
     // Right-click: deploy combat bot
     const rightClick = input.consumeRightClick();
     if (rightClick) {
-      if (combatBotSystem.deployBot(rightClick.worldX, rightClick.worldY, player)) {
+      const slotIdx = botSlotSystem.acquireSlot();
+      if (slotIdx >= 0) {
+        combatBotSystem.deployBot(rightClick.worldX, rightClick.worldY, player, slotIdx);
         floatingText.add('COMBAT BOT DEPLOYED', rightClick.worldX, rightClick.worldY - 15, '#ff8844');
         screenShake.trigger(2);
       } else {
@@ -746,6 +764,9 @@ const loop = new GameLoop({
         (text, x, y, color) => floatingText.add(text, x, y, color),
         (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color),
       );
+
+      // Bot slot cooldowns
+      botSlotSystem.update(dt);
 
       // Mining bots — click-deployed asteroid miners
       miningBotSystem.update(
@@ -1562,8 +1583,6 @@ const loop = new GameLoop({
     // HUD
     hud.render(ctx, player, canvas.width, canvas.height, runTimer, homeBase,
       undefined,
-      { charges: combatBotSystem.getChargesRemaining(), maxBots: combatBotSystem.maxBots },
-      { available: miningBotSystem.getAvailableCharges(), max: miningBotSystem.maxBots },
       currentBoss);
 
     // Boss direction indicator — pulsing arrow on screen edge when boss is off-screen
