@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MiningBotSystem, MiningBotState } from './MiningBotSystem';
 import { Player } from '../entities/Player';
 import { createAsteroid, createEnemy, Asteroid, Enemy, GameEntity } from '../entities/Entity';
@@ -108,6 +108,29 @@ describe('MiningBotSystem', () => {
       const activeBot = bots.find(b => b.active);
       expect(activeBot).toBeDefined();
       expect(activeBot!.targetAsteroid).toBe(nearAsteroid);
+    });
+
+    it('launches bot with non-zero initial velocity toward asteroid', () => {
+      const asteroid = makeAsteroid(200, 0);
+      const entities: GameEntity[] = [asteroid];
+
+      system.deployBot(200, 0, entities, player);
+
+      const bot = system.getBots().find(b => b.active)!;
+      const speed = Math.sqrt(bot.vx * bot.vx + bot.vy * bot.vy);
+      expect(speed).toBeGreaterThan(0);
+    });
+
+    it('triggers screen shake on deployment', () => {
+      const onShake = vi.fn();
+      system.onShake = onShake;
+
+      const asteroid = makeAsteroid(60, 0);
+      const entities: GameEntity[] = [asteroid];
+
+      system.deployBot(60, 0, entities, player);
+
+      expect(onShake).toHaveBeenCalledWith(5);
     });
   });
 

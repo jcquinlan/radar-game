@@ -163,7 +163,9 @@ function startRun() {
   abilityEffects = new AbilityEffects();
   orbitBotSystem = new OrbitBotSystem(player);
   combatBotSystem = new CombatBotSystem();
+  combatBotSystem.onShake = (intensity) => screenShake.trigger(intensity);
   miningBotSystem = new MiningBotSystem();
+  miningBotSystem.onShake = (intensity) => screenShake.trigger(intensity);
   bossSystem = new BossSystem();
   currentBoss = null;
   pingSystem = new PingSystem({ maxRadius: radar.getRadius() });
@@ -239,7 +241,9 @@ function init() {
   abilityEffects = new AbilityEffects();
   orbitBotSystem = new OrbitBotSystem(player);
   combatBotSystem = new CombatBotSystem();
+  combatBotSystem.onShake = (intensity) => screenShake.trigger(intensity);
   miningBotSystem = new MiningBotSystem();
+  miningBotSystem.onShake = (intensity) => screenShake.trigger(intensity);
   abilityBar = new AbilityBar();
   motionTrail = new MotionTrail();
   deathParticles = new DeathParticles(200);

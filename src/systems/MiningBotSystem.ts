@@ -53,6 +53,13 @@ const ENERGY_TEXT_INTERVAL = 2;
 // Deploy range — max distance from click to asteroid (default, overridden by upgrades)
 const DEFAULT_DEPLOY_RANGE = 100;
 
+// Launch spread — missile-style punchy launch
+const LAUNCH_SPEED = 60;
+const CLOSE_SPREAD = Math.PI * (30 / 180);   // ±30° half-spread at close range
+const FAR_SPREAD = Math.PI * 1.2 * 0.5;      // ±108° half-spread at far range
+const CLOSE_DIST = 80;
+const FAR_DIST = 250;
+
 export class MiningBotSystem {
   private bots: MiningBot[];
   maxBots: number;
@@ -60,6 +67,8 @@ export class MiningBotSystem {
   miningRateMultiplier: number;
   /** Max deploy distance from click to asteroid — increased by mining range upgrade */
   deployRange: number;
+  /** Screen shake callback — wired up by main.ts */
+  onShake: (intensity: number) => void = () => {};
 
   constructor(maxBots = 3) {
     this.maxBots = maxBots;
@@ -120,11 +129,20 @@ export class MiningBotSystem {
 
     if (!nearest) return false;
 
+    // Compute missile-style launch angle with distance-scaled spread
+    const dx = nearest.x - player.x;
+    const dy = nearest.y - player.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const directAngle = Math.atan2(dy, dx);
+    const spreadT = Math.min(1, Math.max(0, (dist - CLOSE_DIST) / (FAR_DIST - CLOSE_DIST)));
+    const halfSpread = CLOSE_SPREAD + (FAR_SPREAD - CLOSE_SPREAD) * spreadT;
+    const launchAngle = directAngle + (Math.random() - 0.5) * 2 * halfSpread;
+
     // Activate the bot
     slot.x = player.x;
     slot.y = player.y;
-    slot.vx = 0;
-    slot.vy = 0;
+    slot.vx = Math.cos(launchAngle) * LAUNCH_SPEED;
+    slot.vy = Math.sin(launchAngle) * LAUNCH_SPEED;
     slot.angle = 0;
     slot.targetAsteroid = nearest;
     slot.state = MiningBotState.Deploying;
@@ -135,6 +153,8 @@ export class MiningBotSystem {
     slot.aggroTimer = AGGRO_CHECK_INTERVAL;
     slot.energyAccum = 0;
     slot.energyTextTimer = 0;
+
+    this.onShake(5);
 
     return true;
   }
