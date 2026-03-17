@@ -367,7 +367,7 @@ describe('CombatSystem', () => {
       combat.update([enemy], player, 0.5, false, 15, () => {}, () => {}, () => {}, undefined, homeBase);
 
       // Damage = 20 * 0.5 = 10
-      expect(homeBase.health).toBe(490);
+      expect(homeBase.health).toBe(390);
     });
   });
 

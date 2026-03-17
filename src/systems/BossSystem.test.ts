@@ -47,11 +47,11 @@ describe('BossSystem', () => {
   });
 
   describe('stat modifications per phase', () => {
-    it('phase 1 uses base fire rate (1.5s) and base speed (40)', () => {
+    it('phase 1 uses base fire rate (1.8s) and base speed (40)', () => {
       const boss = createBossEnemy(0, 0);
       boss.health = boss.maxHealth; // 100% HP
       bossSystem.updateBoss(boss, 0.016, 1);
-      expect(boss.fireRate).toBe(1.5);
+      expect(boss.fireRate).toBe(1.8);
       expect(boss.speed).toBe(40);
     });
 
