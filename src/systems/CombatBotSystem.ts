@@ -23,7 +23,7 @@ export interface CombatBot {
 const BOT_HEALTH = 30;
 const BOT_DAMAGE = 4;
 const BOT_RANGE = 200;
-const BOT_FIRE_RATE = 0.8;
+const BOT_FIRE_RATE = 1.5;
 const BOT_LIFETIME = 20;
 
 // Projectile config

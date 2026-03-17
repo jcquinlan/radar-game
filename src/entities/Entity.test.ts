@@ -42,8 +42,8 @@ describe('Entity factories', () => {
     expect(hb.x).toBe(100);
     expect(hb.y).toBe(200);
     expect(hb.radius).toBe(150);
-    expect(hb.health).toBe(500);
-    expect(hb.maxHealth).toBe(500);
+    expect(hb.health).toBe(400);
+    expect(hb.maxHealth).toBe(400);
     // Buildings initialized at level 0
     expect(hb.buildings.player).toEqual({ level: 0, maxLevel: 5 });
     expect(hb.buildings.mining).toEqual({ level: 0, maxLevel: 5 });
@@ -128,16 +128,16 @@ describe('Entity factories', () => {
     expect(boss.type).toBe('enemy');
     expect(boss.isBoss).toBe(true);
     expect(boss.bossPhase).toBe(1);
-    expect(boss.health).toBe(500);
-    expect(boss.maxHealth).toBe(500);
-    expect(boss.damage).toBe(20);
+    expect(boss.health).toBe(350);
+    expect(boss.maxHealth).toBe(350);
+    expect(boss.damage).toBe(15);
     expect(boss.speed).toBe(40);
     expect(boss.chaseRange).toBe(500);
     expect(boss.waveEnemy).toBe(true);
     expect(boss.visible).toBe(true);
     expect(boss.aggro).toBe(true);
-    expect(boss.fireRate).toBe(1.5);
-    expect(boss.projectileSpeed).toBe(140);
+    expect(boss.fireRate).toBe(1.8);
+    expect(boss.projectileSpeed).toBe(130);
   });
 
   it('boss enemy defaults differ from regular enemy', () => {

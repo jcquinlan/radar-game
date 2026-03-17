@@ -55,7 +55,7 @@ describe('CombatBotSystem', () => {
       expect(bot.maxHealth).toBe(30);
       expect(bot.damage).toBe(4);
       expect(bot.range).toBe(200);
-      expect(bot.fireRate).toBe(0.8);
+      expect(bot.fireRate).toBe(1.5);
       expect(bot.maxLifetime).toBe(20);
       expect(bot.lifetime).toBe(20);
     });
@@ -82,8 +82,8 @@ describe('CombatBotSystem', () => {
       const enemy = makeEnemy(100, 0);
       const entities: GameEntity[] = [enemy];
 
-      // Advance past fire rate (0.8s)
-      for (let i = 0; i < 60; i++) {
+      // Advance past fire rate (1.5s)
+      for (let i = 0; i < 100; i++) {
         system.update(1 / 60, entities, addFloatingText, onDeath, onImpact);
       }
 

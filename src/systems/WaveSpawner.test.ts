@@ -94,10 +94,10 @@ describe('spawnBoss', () => {
     expect(boss.aggro).toBe(true);
   });
 
-  it('boss has 500+ HP base (scaled by run count)', () => {
+  it('boss has 350+ HP base (scaled by run count)', () => {
     const boss = spawnBoss(1);
-    // At runCount 1: difficulty = 1.15, so HP = floor(500 * 1.15) = 575
-    expect(boss.health).toBeGreaterThanOrEqual(500);
+    // At runCount 1: difficulty = 1.15, so HP = floor(350 * 1.15) = 402
+    expect(boss.health).toBeGreaterThanOrEqual(350);
     expect(boss.maxHealth).toBe(boss.health);
   });
 
