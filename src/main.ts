@@ -30,7 +30,7 @@ import { TowRopeSystem } from './systems/TowRopeSystem';
 import { OrbitBotSystem } from './systems/OrbitBotSystem';
 import { CombatBotSystem } from './systems/CombatBotSystem';
 import { MiningBotSystem, MiningBotState } from './systems/MiningBotSystem';
-import { BotSlotSystem } from './systems/BotSlotSystem';
+import { BotSlotSystem, SlotState } from './systems/BotSlotSystem';
 import { createZoomState, adjustZoom, updateZoom, resetZoom, ZOOM_WHEEL_SENSITIVITY, ZOOM_KEY_STEP, ZoomState } from './systems/ZoomState';
 import { Minimap } from './ui/Minimap';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
@@ -673,7 +673,7 @@ const loop = new GameLoop({
     // Left-click: deploy mining bot near asteroid
     const leftClick = input.consumeClick();
     if (leftClick) {
-      const slotIdx = botSlotSystem.acquireSlot();
+      const slotIdx = botSlotSystem.acquireSlot('mining');
       if (slotIdx >= 0) {
         if (miningBotSystem.deployBot(leftClick.worldX, leftClick.worldY, world.entities, player, slotIdx)) {
           floatingText.add('MINING BOT DEPLOYED', leftClick.worldX, leftClick.worldY - 15, '#ffaa00');
@@ -690,7 +690,7 @@ const loop = new GameLoop({
     // Right-click: deploy combat bot
     const rightClick = input.consumeRightClick();
     if (rightClick) {
-      const slotIdx = botSlotSystem.acquireSlot();
+      const slotIdx = botSlotSystem.acquireSlot('combat');
       if (slotIdx >= 0) {
         combatBotSystem.deployBot(rightClick.worldX, rightClick.worldY, player, slotIdx);
         floatingText.add('COMBAT BOT DEPLOYED', rightClick.worldX, rightClick.worldY - 15, '#ff8844');
@@ -1560,6 +1560,40 @@ const loop = new GameLoop({
     ctx.closePath();
     ctx.fill();
     ctx.restore();
+
+    // Bot slot UI — row of small circles below the player indicator
+    {
+      const slots = botSlotSystem.getSlots();
+      const slotRadius = 4;
+      const slotSpacing = 12;
+      const totalWidth = (slots.length - 1) * slotSpacing;
+      const startX = cx - totalWidth / 2;
+      const slotY = cy + 16;
+
+      for (let i = 0; i < slots.length; i++) {
+        const sx = startX + i * slotSpacing;
+        const slot = slots[i];
+
+        ctx.beginPath();
+        ctx.arc(sx, slotY, slotRadius, 0, Math.PI * 2);
+
+        if (slot.state === SlotState.Ready) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+        } else if (slot.state === SlotState.ActiveMining) {
+          ctx.fillStyle = '#ffaa00';
+          ctx.fill();
+        } else if (slot.state === SlotState.ActiveCombat) {
+          ctx.fillStyle = '#ff8844';
+          ctx.fill();
+        } else {
+          // Cooldown — outline only, dim
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+      }
+    }
 
     // Damage flash vignette — red overlay that fades when player takes damage
     if (damageFlash > 0) {
