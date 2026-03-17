@@ -81,9 +81,9 @@ export class BlipRenderer {
           currentSize = 4;
           color = enemyRangedColor;
         }
-        // Bosses render at 1.5x size
+        // Bosses render at 2x size with a pulsing effect
         if (enemy.isBoss) {
-          currentSize *= 1.5;
+          currentSize *= 2;
         }
       }
 
