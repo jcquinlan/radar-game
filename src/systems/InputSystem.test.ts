@@ -180,4 +180,48 @@ describe('InputSystem mouse tracking', () => {
     expect(click!.worldX).toBe(30);
     expect(click!.worldY).toBe(40);
   });
+
+  it('right-click produces a pending right-click, not a left-click', () => {
+    input.attachMouse(canvas);
+    input.setCoordinateConverter((cx, cy) => ({
+      worldX: cx + 500,
+      worldY: cy + 500,
+    }));
+
+    canvas.dispatchEvent(new MouseEvent('mousedown', { clientX: 100, clientY: 200, button: 2 }));
+
+    expect(input.consumeClick()).toBeNull();
+    const right = input.consumeRightClick();
+    expect(right).not.toBeNull();
+    expect(right!.worldX).toBe(600);
+    expect(right!.worldY).toBe(700);
+  });
+
+  it('consumeRightClick returns click once then null', () => {
+    input.attachMouse(canvas);
+
+    canvas.dispatchEvent(new MouseEvent('mousedown', { clientX: 50, clientY: 50, button: 2 }));
+
+    expect(input.consumeRightClick()).not.toBeNull();
+    expect(input.consumeRightClick()).toBeNull();
+  });
+
+  it('left and right clicks are tracked independently', () => {
+    input.attachMouse(canvas);
+
+    canvas.dispatchEvent(new MouseEvent('mousedown', { clientX: 10, clientY: 10, button: 0 }));
+    canvas.dispatchEvent(new MouseEvent('mousedown', { clientX: 90, clientY: 90, button: 2 }));
+
+    expect(input.consumeClick()).not.toBeNull();
+    expect(input.consumeRightClick()).not.toBeNull();
+  });
+
+  it('detachMouse clears pending right-click', () => {
+    input.attachMouse(canvas);
+
+    canvas.dispatchEvent(new MouseEvent('mousedown', { clientX: 50, clientY: 50, button: 2 }));
+
+    input.detachMouse(canvas);
+    expect(input.consumeRightClick()).toBeNull();
+  });
 });

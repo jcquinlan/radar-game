@@ -5,9 +5,24 @@ import { getTheme } from '../themes/theme';
 type FloatingTextCallback = (text: string, x: number, y: number, color: string) => void;
 type DeathCallback = (x: number, y: number, sourceX: number, sourceY: number, color: string) => void;
 
+export const enum CombatBotState {
+  FlyingToTarget = 0,
+  SeekingEnemy = 1,
+  ChasingEnemy = 2,
+  OrbitingEnemy = 3,
+}
+
 export interface CombatBot {
   x: number;
   y: number;
+  vx: number;
+  vy: number;
+  angle: number;
+  state: CombatBotState;
+  targetEnemy: Enemy | null;
+  /** World position the bot was sent to (click location) */
+  targetX: number;
+  targetY: number;
   health: number;
   maxHealth: number;
   damage: number;
@@ -25,6 +40,24 @@ const BOT_DAMAGE = 4;
 const BOT_RANGE = 200;
 const BOT_FIRE_RATE = 1.5;
 const BOT_LIFETIME = 20;
+
+// Movement — matches OrbitBotSystem's inertia model
+const BOT_SPEED = 140;
+const BOT_FRICTION = 2.5;
+const BOT_ACCEL = BOT_SPEED * BOT_FRICTION;
+
+// Orbit
+const ENEMY_ORBIT_RADIUS = 50;
+const ORBIT_ARRIVAL_THRESHOLD = 15;
+const ORBIT_ANGULAR_SPEED = 2.4;
+
+// Arrival at click target
+const TARGET_ARRIVAL_RADIUS = 30;
+const TARGET_ARRIVAL_RADIUS_SQ = TARGET_ARRIVAL_RADIUS * TARGET_ARRIVAL_RADIUS;
+
+// Detection range for auto-aggro
+const DETECTION_RANGE = 250;
+const DETECTION_RANGE_SQ = DETECTION_RANGE * DETECTION_RANGE;
 
 // Projectile config
 const PROJECTILE_SPEED = 180;
@@ -63,16 +96,23 @@ export class CombatBotSystem {
   }
 
   /**
-   * Deploy a combat bot at the given world coordinates.
+   * Deploy a combat bot from the player's position toward a target world position.
    * Returns true if deployed, false if no charges remain.
    */
-  deployBot(worldX: number, worldY: number): boolean {
+  deployBot(targetX: number, targetY: number, player: Player): boolean {
     const activeBots = this.bots.filter(b => b.active).length;
     if (activeBots >= this.maxBots) return false;
 
     const bot: CombatBot = {
-      x: worldX,
-      y: worldY,
+      x: player.x,
+      y: player.y,
+      vx: 0,
+      vy: 0,
+      angle: 0,
+      state: CombatBotState.FlyingToTarget,
+      targetEnemy: null,
+      targetX,
+      targetY,
       health: BOT_HEALTH,
       maxHealth: BOT_HEALTH,
       damage: this.baseDamage,
@@ -104,8 +144,6 @@ export class CombatBotSystem {
     onImpact: DeathCallback,
     player?: Player,
   ): void {
-    const rangeSq = BOT_RANGE * BOT_RANGE;
-
     for (let bi = 0; bi < this.bots.length; bi++) {
       const bot = this.bots[bi];
       if (!bot.active) continue;
@@ -117,30 +155,44 @@ export class CombatBotSystem {
         continue;
       }
 
-      // Find nearest enemy within range
-      let nearestEnemy: Enemy | null = null;
-      let nearestDistSq = rangeSq;
+      // State machine
+      switch (bot.state) {
+        case CombatBotState.FlyingToTarget:
+          this.flyToTarget(bot, dt);
+          // Check for enemies while flying — auto-aggro
+          this.checkForEnemyAggro(bot, entities);
+          break;
 
-      for (let ei = 0; ei < entities.length; ei++) {
-        const e = entities[ei];
-        if (!e.active || e.type !== 'enemy') continue;
-        const dx = e.x - bot.x;
-        const dy = e.y - bot.y;
-        const distSq = dx * dx + dy * dy;
-        if (distSq < nearestDistSq) {
-          nearestDistSq = distSq;
-          nearestEnemy = e as Enemy;
-        }
+        case CombatBotState.SeekingEnemy:
+          this.checkForEnemyAggro(bot, entities);
+          break;
+
+        case CombatBotState.ChasingEnemy:
+          if (!bot.targetEnemy || !bot.targetEnemy.active) {
+            bot.targetEnemy = null;
+            bot.state = CombatBotState.SeekingEnemy;
+            break;
+          }
+          this.chaseEnemy(bot, dt);
+          break;
+
+        case CombatBotState.OrbitingEnemy:
+          if (!bot.targetEnemy || !bot.targetEnemy.active) {
+            bot.targetEnemy = null;
+            bot.state = CombatBotState.SeekingEnemy;
+            break;
+          }
+          this.orbitEnemy(bot, dt);
+          this.fireAtTarget(bot, dt);
+          break;
       }
 
-      // Fire at nearest enemy
-      if (nearestEnemy) {
-        bot.fireTimer -= dt;
-        if (bot.fireTimer <= 0) {
-          bot.fireTimer = bot.fireRate;
-          this.fireProjectile(bot, nearestEnemy);
-        }
-      }
+      // Apply friction and move
+      const decay = Math.exp(-BOT_FRICTION * dt);
+      bot.vx *= decay;
+      bot.vy *= decay;
+      bot.x += bot.vx * dt;
+      bot.y += bot.vy * dt;
 
       // Enemy contact damage to bot
       for (let ei = 0; ei < entities.length; ei++) {
@@ -166,6 +218,100 @@ export class CombatBotSystem {
 
     // Update projectiles
     this.updateProjectiles(dt, entities, addFloatingText, onDeath, onImpact, player);
+  }
+
+  private flyToTarget(bot: CombatBot, dt: number): void {
+    const dx = bot.targetX - bot.x;
+    const dy = bot.targetY - bot.y;
+    const distSq = dx * dx + dy * dy;
+
+    if (distSq < TARGET_ARRIVAL_RADIUS_SQ) {
+      // Arrived at click location — start seeking enemies
+      bot.state = CombatBotState.SeekingEnemy;
+      return;
+    }
+
+    // Steer toward target
+    const dist = Math.sqrt(distSq);
+    if (dist > 0) {
+      bot.vx += (dx / dist) * BOT_ACCEL * dt;
+      bot.vy += (dy / dist) * BOT_ACCEL * dt;
+    }
+  }
+
+  private checkForEnemyAggro(bot: CombatBot, entities: GameEntity[]): void {
+    let nearest: Enemy | null = null;
+    let nearestDistSq = DETECTION_RANGE_SQ;
+
+    for (let i = 0; i < entities.length; i++) {
+      const e = entities[i];
+      if (!e.active || e.type !== 'enemy') continue;
+      const dx = e.x - bot.x;
+      const dy = e.y - bot.y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq < nearestDistSq) {
+        nearestDistSq = distSq;
+        nearest = e as Enemy;
+      }
+    }
+
+    if (nearest) {
+      bot.targetEnemy = nearest;
+      bot.state = CombatBotState.ChasingEnemy;
+    }
+  }
+
+  private chaseEnemy(bot: CombatBot, dt: number): void {
+    const target = bot.targetEnemy!;
+    const dx = target.x - bot.x;
+    const dy = target.y - bot.y;
+    const distSq = dx * dx + dy * dy;
+
+    const arrivalDist = ENEMY_ORBIT_RADIUS + ORBIT_ARRIVAL_THRESHOLD;
+    if (distSq < arrivalDist * arrivalDist) {
+      // Close enough — start orbiting
+      bot.state = CombatBotState.OrbitingEnemy;
+      bot.angle = Math.atan2(bot.y - target.y, bot.x - target.x);
+      return;
+    }
+
+    // Steer toward enemy
+    const dist = Math.sqrt(distSq);
+    if (dist > 0) {
+      bot.vx += (dx / dist) * BOT_ACCEL * dt;
+      bot.vy += (dy / dist) * BOT_ACCEL * dt;
+    }
+  }
+
+  private orbitEnemy(bot: CombatBot, dt: number): void {
+    const target = bot.targetEnemy!;
+    bot.angle += ORBIT_ANGULAR_SPEED * dt;
+
+    // Target position on the orbit circle
+    const orbitX = target.x + Math.cos(bot.angle) * ENEMY_ORBIT_RADIUS;
+    const orbitY = target.y + Math.sin(bot.angle) * ENEMY_ORBIT_RADIUS;
+
+    // Steer toward orbit position
+    const dx = orbitX - bot.x;
+    const dy = orbitY - bot.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist > 1) {
+      const steerStrength = Math.min(dist / ENEMY_ORBIT_RADIUS, 2.0);
+      bot.vx += (dx / dist) * BOT_ACCEL * steerStrength * dt;
+      bot.vy += (dy / dist) * BOT_ACCEL * steerStrength * dt;
+    }
+  }
+
+  private fireAtTarget(bot: CombatBot, dt: number): void {
+    const target = bot.targetEnemy;
+    if (!target || !target.active) return;
+
+    bot.fireTimer -= dt;
+    if (bot.fireTimer > 0) return;
+    bot.fireTimer = bot.fireRate;
+
+    this.fireProjectile(bot, target);
   }
 
   private fireProjectile(bot: CombatBot, target: Enemy): void {

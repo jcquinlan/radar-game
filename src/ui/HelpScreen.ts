@@ -1,6 +1,6 @@
 import { getTheme } from '../themes/theme';
 
-const SECTIONS: { title: string; lines: string[] }[] = [
+const STATIC_SECTIONS: { title: string; lines: string[] }[] = [
   {
     title: 'THE BASICS',
     lines: [
@@ -54,14 +54,21 @@ const SECTIONS: { title: string; lines: string[] }[] = [
       'Defense Slots — +1 defense slot per level',
     ],
   },
-  {
-    title: 'CONTROLS',
-    lines: [
-      '[E] Upgrades panel  [K] Rebind keys',
-      '[H] This help screen  [Esc] Pause',
-    ],
-  },
 ];
+
+function buildSections(upgradesKey: string): { title: string; lines: string[] }[] {
+  const displayKey = upgradesKey.length === 1 ? upgradesKey.toUpperCase() : upgradesKey;
+  return [
+    ...STATIC_SECTIONS,
+    {
+      title: 'CONTROLS',
+      lines: [
+        `[${displayKey}] Upgrades panel  [K] Rebind keys`,
+        '[H] This help screen  [Esc] Pause',
+      ],
+    },
+  ];
+}
 
 export class HelpScreen {
   private visible = false;
@@ -81,10 +88,11 @@ export class HelpScreen {
     if (this.scrollY > 0) this.scrollY = 0;
   }
 
-  render(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number): void {
+  render(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number, upgradesKey = 'e'): void {
     if (!this.visible) return;
 
     const theme = getTheme();
+    const sections = buildSections(upgradesKey);
 
     ctx.save();
 
@@ -136,13 +144,13 @@ export class HelpScreen {
 
     // Calculate total content height for scroll clamping
     let totalHeight = 10;
-    for (const section of SECTIONS) {
+    for (const section of sections) {
       totalHeight += 22 + section.lines.length * 16 + 14;
     }
     const minScroll = Math.min(0, -(totalHeight - contentHeight + 10));
     if (this.scrollY < minScroll) this.scrollY = minScroll;
 
-    for (const section of SECTIONS) {
+    for (const section of sections) {
       // Section title
       ctx.font = 'bold 13px monospace';
       ctx.fillStyle = theme.ui.textPrimary;

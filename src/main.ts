@@ -465,8 +465,8 @@ window.addEventListener('keydown', (e) => {
     }
   }
 
-  // Only handle remaining keys during active gameplay or pause
-  if (!isActiveGameplay(gameState) && gameState !== 'paused') return;
+  // Only handle remaining keys during active gameplay, pause, or base_mode
+  if (!isActiveGameplay(gameState) && gameState !== 'paused' && gameState !== 'base_mode') return;
 
   // Key remap screen captures keys when listening — skip other handlers
   if (keyRemapScreen && keyRemapScreen.isListening()) return;
@@ -661,38 +661,24 @@ const loop = new GameLoop({
     // Spawn entities in new areas
     world.updateSpawning(player.x, player.y);
 
-    // Click-to-deploy: mining bot if near asteroid, combat bot otherwise
-    const click = input.consumeClick();
-    if (click) {
-      // Check if click is near an asteroid (within mining deploy range)
-      let nearAsteroid = false;
-      const deployRangeSq = miningBotSystem.deployRange * miningBotSystem.deployRange;
-      for (let i = 0; i < world.entities.length; i++) {
-        const e = world.entities[i];
-        if (!e.active || e.type !== 'asteroid') continue;
-        const adx = e.x - click.worldX;
-        const ady = e.y - click.worldY;
-        if (adx * adx + ady * ady < deployRangeSq) {
-          nearAsteroid = true;
-          break;
-        }
-      }
-
-      if (nearAsteroid) {
-        // Priority: deploy mining bot near asteroid
-        if (miningBotSystem.deployBot(click.worldX, click.worldY, world.entities, player)) {
-          floatingText.add('MINING BOT DEPLOYED', click.worldX, click.worldY - 15, '#ffaa00');
-        } else {
-          floatingText.add('NO CHARGES', click.worldX, click.worldY - 15, '#ff4444');
-        }
+    // Left-click: deploy mining bot near asteroid
+    const leftClick = input.consumeClick();
+    if (leftClick) {
+      if (miningBotSystem.deployBot(leftClick.worldX, leftClick.worldY, world.entities, player)) {
+        floatingText.add('MINING BOT DEPLOYED', leftClick.worldX, leftClick.worldY - 15, '#ffaa00');
       } else {
-        // No asteroid nearby: deploy combat bot
-        if (combatBotSystem.deployBot(click.worldX, click.worldY)) {
-          floatingText.add('COMBAT BOT DEPLOYED', click.worldX, click.worldY - 15, '#ff8844');
-          screenShake.trigger(2);
-        } else {
-          floatingText.add('NO CHARGES', click.worldX, click.worldY - 15, '#ff4444');
-        }
+        floatingText.add('NO CHARGES', leftClick.worldX, leftClick.worldY - 15, '#ff4444');
+      }
+    }
+
+    // Right-click: deploy combat bot
+    const rightClick = input.consumeRightClick();
+    if (rightClick) {
+      if (combatBotSystem.deployBot(rightClick.worldX, rightClick.worldY, player)) {
+        floatingText.add('COMBAT BOT DEPLOYED', rightClick.worldX, rightClick.worldY - 15, '#ff8844');
+        screenShake.trigger(2);
+      } else {
+        floatingText.add('NO CHARGES', rightClick.worldX, rightClick.worldY - 15, '#ff4444');
       }
     }
 
@@ -1060,6 +1046,16 @@ const loop = new GameLoop({
         ctx.fillText(`Runs completed: ${saveData.runCount}`, bcx, bcy + 190);
       }
 
+      // Upgrades key hint
+      {
+        const ub = keyRemapScreen.getExtraBinding('upgrades');
+        const uk = ub ? ub.key : 'e';
+        const displayKey = uk.length === 1 ? uk.toUpperCase() : uk;
+        ctx.font = '12px monospace';
+        ctx.fillStyle = 'rgba(136, 170, 136, 0.8)';
+        ctx.fillText(`Press [${displayKey}] for upgrades`, bcx, bcy + 210);
+      }
+
       // --- Upgrade buildings rendered around the homebase ---
       const buildingRadius = 110;
       const buildingDefs = [
@@ -1202,7 +1198,7 @@ const loop = new GameLoop({
       }
     }
 
-    // Combat bots — orange/red squares with health indicator
+    // Combat bots — orange circles (like orbit bot) with health indicator
     for (let i = 0; i < combatBotSystem.bots.length; i++) {
       const bot = combatBotSystem.bots[i];
       if (!bot.active) continue;
@@ -1216,17 +1212,19 @@ const loop = new GameLoop({
       const lifeFrac = bot.lifetime / bot.maxLifetime;
       const pulseAlpha = lifeFrac > 0.25 ? 0.8 : 0.4 + Math.sin(player.survivalTime * 8) * 0.4;
       ctx.globalAlpha = pulseAlpha;
+      ctx.beginPath();
+      ctx.arc(bsx, bsy, 5, 0, Math.PI * 2);
       ctx.fillStyle = '#ff8844';
-      ctx.fillRect(bsx - 4, bsy - 4, 8, 8);
+      ctx.fill();
 
       // Health bar above bot (only if damaged)
       if (bot.health < bot.maxHealth) {
         const hpFrac = bot.health / bot.maxHealth;
         ctx.globalAlpha = 0.7;
         ctx.fillStyle = '#333';
-        ctx.fillRect(bsx - 6, bsy - 9, 12, 2);
+        ctx.fillRect(bsx - 6, bsy - 10, 12, 2);
         ctx.fillStyle = hpFrac > 0.5 ? '#ff8844' : '#ff4444';
-        ctx.fillRect(bsx - 6, bsy - 9, 12 * hpFrac, 2);
+        ctx.fillRect(bsx - 6, bsy - 10, 12 * hpFrac, 2);
       }
       ctx.globalAlpha = 1;
     }
@@ -1665,7 +1663,8 @@ const loop = new GameLoop({
     keyRemapScreen.render(ctx, abilitySystem.abilities, canvas.width, canvas.height);
 
     // Help screen
-    helpScreen.render(ctx, canvas.width, canvas.height);
+    const upgradesBinding = keyRemapScreen.getExtraBinding('upgrades');
+    helpScreen.render(ctx, canvas.width, canvas.height, upgradesBinding ? upgradesBinding.key : 'e');
 
     // Pause menu (on top of everything except shader)
     pauseMenu.render(ctx, canvas.width, canvas.height);
