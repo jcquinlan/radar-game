@@ -1,4 +1,4 @@
-import { Enemy, EnemySubtype, createEnemy } from '../entities/Entity';
+import { Enemy, EnemySubtype, createEnemy, createBossEnemy } from '../entities/Entity';
 import { scaleEnemy } from '../world/POIGenerator';
 
 /**
@@ -50,4 +50,25 @@ export function spawnWave(runCount: number): Enemy[] {
   }
 
   return enemies;
+}
+
+/**
+ * Spawn a boss enemy at a random direction, far from the origin.
+ * Distance scales slightly with run count.
+ *
+ * @param runCount - Current run number (1-based).
+ * @returns The boss enemy (caller adds to world entity list).
+ */
+export function spawnBoss(runCount: number): Enemy {
+  const angle = Math.random() * Math.PI * 2;
+  const distance = 2000 + Math.random() * 1000; // 2000-3000px from origin
+  const x = Math.cos(angle) * distance;
+  const y = Math.sin(angle) * distance;
+  const boss = createBossEnemy(x, y);
+  // Scale boss stats with run count (mild — boss is already strong)
+  const difficulty = 1 + runCount * 0.15;
+  boss.health = Math.floor(boss.health * difficulty);
+  boss.maxHealth = boss.health;
+  boss.damage = Math.floor(boss.damage * difficulty);
+  return boss;
 }

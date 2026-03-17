@@ -54,9 +54,13 @@ export class CombatSystem {
 
       const enemy = entity as Enemy;
 
+      // Boss always targets the player directly (not the base)
+      const enemyTargetX = enemy.isBoss ? player.x : aiTargetX;
+      const enemyTargetY = enemy.isBoss ? player.y : aiTargetY;
+
       // Distance to AI target (for chase/fire behavior)
-      const tdx = aiTargetX - enemy.x;
-      const tdy = aiTargetY - enemy.y;
+      const tdx = enemyTargetX - enemy.x;
+      const tdy = enemyTargetY - enemy.y;
       const targetDistSq = tdx * tdx + tdy * tdy;
 
       // Distance to player (for contact damage — always relevant)

@@ -1,5 +1,5 @@
 import { Player } from '../entities/Player';
-import { HomeBase } from '../entities/Entity';
+import { Enemy, HomeBase } from '../entities/Entity';
 import { getThreatLevel } from '../world/World';
 import { getTheme } from '../themes/theme';
 
@@ -36,6 +36,7 @@ export class HUD {
     defenseHint?: { show: boolean; defenseCount: number; maxDefenses: number },
     combatBotHint?: { charges: number; maxBots: number },
     minerInfo?: { available: number; max: number },
+    boss?: Enemy | null,
   ): void {
     const padding = 20;
     const barWidth = 200;
@@ -161,6 +162,31 @@ export class HUD {
         ctx.shadowBlur = 4;
         ctx.fillText(formatTime(runTimer), canvasWidth / 2, y + 20);
       }
+      ctx.restore();
+    }
+
+    // Boss HP bar (wide bar below the timer, top center)
+    if (boss && boss.active) {
+      ctx.save();
+      const bossBarWidth = Math.min(400, canvasWidth * 0.4);
+      const bossBarHeight = 14;
+      const bossBarX = (canvasWidth - bossBarWidth) / 2;
+      const bossBarY = y + 30;
+      const bossHpRatio = Math.max(0, boss.health / boss.maxHealth);
+
+      // Phase label
+      const phaseLabel = boss.bossPhase === 3 ? ' [ENRAGED]' : boss.bossPhase === 2 ? ' [AGGRESSIVE]' : '';
+
+      this.renderBar(
+        ctx,
+        bossBarX,
+        bossBarY,
+        bossBarWidth,
+        bossBarHeight,
+        bossHpRatio,
+        '#ff3333',
+        `BOSS${phaseLabel}: ${Math.ceil(boss.health)}/${boss.maxHealth}`
+      );
       ctx.restore();
     }
 

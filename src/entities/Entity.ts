@@ -46,6 +46,8 @@ export interface Enemy extends Entity {
   waveEnemy: boolean;
   /** Whether this enemy is a wave boss (renders larger) */
   isBoss: boolean;
+  /** Boss behavior phase (1-3), driven by HP thresholds. Only meaningful when isBoss is true. */
+  bossPhase: number;
   /** Whether this enemy has been aggro'd by taking player damage (chases regardless of range) */
   aggro: boolean;
 }
@@ -178,6 +180,7 @@ export function createEnemy(x: number, y: number, subtype?: EnemySubtype): Enemy
     wanderTimer: 1 + Math.random() * 2,
     waveEnemy: false,
     isBoss: false,
+    bossPhase: 0,
     aggro: false,
   };
 }
@@ -256,6 +259,38 @@ export function createAsteroid(x: number, y: number, size?: AsteroidSize): Aster
   };
 }
 
+
+export function createBossEnemy(x: number, y: number): Enemy {
+  return {
+    x,
+    y,
+    type: 'enemy',
+    subtype: 'ranged',
+    active: true,
+    visible: true,
+    pingedThisWave: false,
+    health: 500,
+    maxHealth: 500,
+    damage: 20,
+    speed: 40,
+    chaseRange: 500,
+    energyDrop: 100,
+    fireRate: 1.5,
+    projectileSpeed: 140,
+    lastFireTime: -Infinity,
+    vx: 0,
+    vy: 0,
+    friction: 1.5,
+    ghostX: null,
+    ghostY: null,
+    wanderAngle: Math.random() * Math.PI * 2,
+    wanderTimer: 1 + Math.random() * 2,
+    waveEnemy: true,
+    isBoss: true,
+    bossPhase: 1,
+    aggro: true,
+  };
+}
 
 export function createHomeBase(x: number, y: number): HomeBase {
   return {

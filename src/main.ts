@@ -9,7 +9,8 @@ import { InputSystem } from './systems/InputSystem';
 import { PingSystem } from './systems/PingSystem';
 import { CombatSystem } from './systems/CombatSystem';
 import { Enemy, GameEntity, Dropoff, HomeBase, createHomeBase } from './entities/Entity';
-import { spawnWave } from './systems/WaveSpawner';
+import { spawnWave, spawnBoss } from './systems/WaveSpawner';
+import { BossSystem } from './systems/BossSystem';
 import { HomebaseUpgradeSystem } from './systems/HomebaseUpgradeSystem';
 import { World } from './world/World';
 import { HUD } from './ui/HUD';
@@ -115,6 +116,10 @@ const salvageBuffer: import('./entities/Entity').Salvage[] = [];
 let startRunBounds: { x: number; y: number; width: number; height: number } | null = null;
 /** Click handler for base_mode START RUN button */
 let baseModeClickHandler: ((e: MouseEvent) => void) | null = null;
+/** Boss system for phase-based boss behavior */
+let bossSystem: BossSystem = new BossSystem();
+/** Current boss reference during final_wave (null when no boss is active) */
+let currentBoss: Enemy | null = null;
 
 function showMainMenu() {
   gameState = 'menu';
@@ -159,6 +164,8 @@ function startRun() {
   orbitBotSystem = new OrbitBotSystem(player);
   combatBotSystem = new CombatBotSystem();
   miningBotSystem = new MiningBotSystem();
+  bossSystem = new BossSystem();
+  currentBoss = null;
   pingSystem = new PingSystem({ maxRadius: radar.getRadius() });
   homeBase = createHomeBase(0, 0);
   resolutionLevel = 0;
@@ -605,10 +612,18 @@ const loop = new GameLoop({
         for (const enemy of waveEnemies) {
           world.entities.push(enemy);
         }
+
+        // Spawn the boss far from the base
+        bossSystem.reset();
+        const boss = spawnBoss(runCount);
+        currentBoss = boss;
+        world.entities.push(boss);
+
         gameState = 'final_wave';
 
         // Show WAVE INCOMING floating text
         floatingText.add('WAVE INCOMING', 0, -30, '#ffff00');
+        floatingText.add('BOSS DETECTED', 0, -50, '#ff3333');
 
         return;
       }
@@ -797,6 +812,14 @@ const loop = new GameLoop({
       );
     }
 
+    // Boss system update — phase transitions and minion spawning
+    if (gameState === 'final_wave' && currentBoss && currentBoss.active) {
+      const newMinions = bossSystem.updateBoss(currentBoss, dt, runCount);
+      for (const minion of newMinions) {
+        world.entities.push(minion);
+      }
+    }
+
     // Decrement salvage damage flash timers
     for (let i = 0; i < salvageBuffer.length; i++) {
       const s = salvageBuffer[i];
@@ -898,11 +921,20 @@ const loop = new GameLoop({
         return;
       }
 
-      // All wave enemies dead — wave survived, show results
+      // Boss killed — round won! (primary win condition)
+      if (currentBoss && !currentBoss.active) {
+        currentBoss = null;
+        runCount++;
+        showRunResults();
+        return;
+      }
+
+      // Fallback: all wave enemies dead (if boss somehow missed) — wave survived
       const waveEnemiesAlive = world.entities.some(
         (e: GameEntity) => e.active && e.type === 'enemy' && (e as Enemy).waveEnemy
       );
       if (!waveEnemiesAlive) {
+        currentBoss = null;
         runCount++;
         showRunResults();
         return;
@@ -1531,7 +1563,57 @@ const loop = new GameLoop({
     hud.render(ctx, player, canvas.width, canvas.height, runTimer, homeBase,
       undefined,
       { charges: combatBotSystem.getChargesRemaining(), maxBots: combatBotSystem.maxBots },
-      { available: miningBotSystem.getAvailableCharges(), max: miningBotSystem.maxBots });
+      { available: miningBotSystem.getAvailableCharges(), max: miningBotSystem.maxBots },
+      currentBoss);
+
+    // Boss direction indicator — pulsing arrow on screen edge when boss is off-screen
+    if (currentBoss && currentBoss.active && gameState === 'final_wave') {
+      // World-space offset from player to boss
+      const bossDx = currentBoss.x - player.x;
+      const bossDy = currentBoss.y - player.y;
+      const bossDist = Math.sqrt(bossDx * bossDx + bossDy * bossDy);
+
+      // Only show indicator if boss is outside the visible radar radius
+      const visibleRadius = radar.getRadius() * zoom.current;
+      if (bossDist > visibleRadius * 0.8) {
+        // Calculate angle in screen space (rotated by player heading)
+        const worldAngle = Math.atan2(bossDy, bossDx);
+        const screenAngle = worldAngle - player.heading - Math.PI / 2;
+
+        // Position the indicator at the edge of the screen
+        const edgeMargin = 40;
+        const edgeX = cx + Math.cos(screenAngle) * (visibleRadius - edgeMargin);
+        const edgeY = cy + Math.sin(screenAngle) * (visibleRadius - edgeMargin);
+
+        // Pulsing alpha
+        const pulse = 0.5 + Math.sin(performance.now() / 300) * 0.3;
+
+        ctx.save();
+        ctx.translate(edgeX, edgeY);
+        ctx.rotate(screenAngle + Math.PI / 2);
+
+        // Arrow triangle pointing outward
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = '#ff3333';
+        ctx.shadowColor = '#ff3333';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.moveTo(0, -10);
+        ctx.lineTo(-7, 6);
+        ctx.lineTo(7, 6);
+        ctx.closePath();
+        ctx.fill();
+
+        // Distance label
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = pulse * 0.8;
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${Math.floor(bossDist)}m`, 0, 18);
+
+        ctx.restore();
+      }
+    }
 
     // Tutorial hints
     if (currentLevelConfig && currentLevelConfig.hints.length > 0) {
