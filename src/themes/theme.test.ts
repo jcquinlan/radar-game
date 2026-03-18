@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { getTheme, setTheme, getThemeNames, cycleTheme } from './theme';
+import { getTheme, setTheme, getThemeNames, cycleTheme, getEnemyColor } from './theme';
+import type { Enemy } from '../entities/Entity';
 
 describe('theme system', () => {
   beforeEach(() => {
@@ -141,6 +142,33 @@ describe('theme system', () => {
     expect(theme.entities.enemy).toBe('#ff4141');
     expect(theme.entities.salvage).toBe('#ffaa00');
     expect(theme.entities.dropoff).toBe('#ffdd00');
+  });
+
+  describe('getEnemyColor', () => {
+    it('returns enemyScout color for scout subtype', () => {
+      const enemy = { subtype: 'scout', isBoss: false } as Enemy;
+      expect(getEnemyColor(enemy)).toBe(getTheme().entities.enemyScout);
+    });
+
+    it('returns enemyBrute color for brute subtype', () => {
+      const enemy = { subtype: 'brute', isBoss: false } as Enemy;
+      expect(getEnemyColor(enemy)).toBe(getTheme().entities.enemyBrute);
+    });
+
+    it('returns enemyRanged color for ranged subtype', () => {
+      const enemy = { subtype: 'ranged', isBoss: false } as Enemy;
+      expect(getEnemyColor(enemy)).toBe(getTheme().entities.enemyRanged);
+    });
+
+    it('returns enemyBoss color for boss enemies regardless of subtype', () => {
+      const enemy = { subtype: 'ranged', isBoss: true } as Enemy;
+      expect(getEnemyColor(enemy)).toBe(getTheme().entities.enemyBoss);
+    });
+
+    it('returns base enemy color for unknown subtype', () => {
+      const enemy = { subtype: 'unknown' as string, isBoss: false } as Enemy;
+      expect(getEnemyColor(enemy)).toBe(getTheme().entities.enemy);
+    });
   });
 });
 
