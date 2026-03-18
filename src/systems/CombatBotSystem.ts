@@ -238,8 +238,8 @@ export class CombatBotSystem {
             bot.health = 0;
             bot.active = false;
             this.releaseBotSlot(bot);
-            onDeath(bot.x, bot.y, enemy.x, enemy.y, '#ff8844');
-            addFloatingText('BOT DESTROYED', bot.x, bot.y, '#ff8844');
+            onDeath(bot.x, bot.y, enemy.x, enemy.y, getTheme().entities.combatBot);
+            addFloatingText('BOT DESTROYED', bot.x, bot.y, getTheme().entities.combatBot);
             this.bots.splice(bi, 1);
             break;
           }
@@ -407,7 +407,7 @@ export class CombatBotSystem {
 
           const theme = getTheme();
           addFloatingText(`-${p.damage}`, enemy.x, enemy.y, theme.events.damage);
-          onImpact(enemy.x, enemy.y, p.x, p.y, '#ff8844');
+          onImpact(enemy.x, enemy.y, p.x, p.y, getTheme().entities.combatBot);
 
           if (enemy.health <= 0 && enemy.active) {
             enemy.active = false;
