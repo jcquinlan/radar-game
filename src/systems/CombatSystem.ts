@@ -1,6 +1,6 @@
 import { Enemy, GameEntity, HomeBase, Projectile, Salvage } from '../entities/Entity';
 import { Player } from '../entities/Player';
-import { getTheme } from '../themes/theme';
+import { getTheme, getEnemyColor } from '../themes/theme';
 import type { DeathCallback } from './AbilitySystem';
 
 type FloatingTextCallback = (text: string, x: number, y: number, color: string) => void;
@@ -153,8 +153,7 @@ export class CombatSystem {
           }
           if (enemy.health <= 0 && enemy.active) {
             enemy.active = false;
-            const deathColor = enemy.subtype === 'ranged' ? getTheme().entities.enemyRanged : getTheme().entities.enemy;
-            onDeath(enemy.x, enemy.y, player.x, player.y, deathColor);
+            onDeath(enemy.x, enemy.y, player.x, player.y, getEnemyColor(enemy));
             player.addEnergy(enemy.energyDrop);
             player.kills++;
             player.score += 50;

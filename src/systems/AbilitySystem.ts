@@ -1,6 +1,6 @@
 import { Player } from '../entities/Player';
 import { GameEntity, Enemy } from '../entities/Entity';
-import { getTheme } from '../themes/theme';
+import { getTheme, getEnemyColor } from '../themes/theme';
 
 export type FloatingTextCallback = (text: string, x: number, y: number, color: string) => void;
 export type DeathCallback = (x: number, y: number, sourceX: number, sourceY: number, color: string) => void;
@@ -196,8 +196,7 @@ export class AbilitySystem {
 
         if (enemy.health <= 0) {
           enemy.active = false;
-          const deathColor = enemy.subtype === 'ranged' ? getTheme().entities.enemyRanged : getTheme().entities.enemy;
-          onDeath(enemy.x, enemy.y, this.player.x, this.player.y, deathColor);
+          onDeath(enemy.x, enemy.y, this.player.x, this.player.y, getEnemyColor(enemy));
           this.player.addEnergy(enemy.energyDrop);
           this.player.kills++;
           this.player.score += 50;
@@ -306,8 +305,7 @@ export class AbilitySystem {
 
         if (hitEnemy.health <= 0 && hitEnemy.active) {
           hitEnemy.active = false;
-          const deathColor = hitEnemy.subtype === 'ranged' ? getTheme().entities.enemyRanged : getTheme().entities.enemy;
-          onDeath(hitEnemy.x, hitEnemy.y, missile.x, missile.y, deathColor);
+          onDeath(hitEnemy.x, hitEnemy.y, missile.x, missile.y, getEnemyColor(hitEnemy));
           this.player.addEnergy(hitEnemy.energyDrop);
           this.player.kills++;
           this.player.score += 50;
