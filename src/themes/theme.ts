@@ -27,6 +27,12 @@ export interface ColorTheme {
     salvage: string;
     dropoff: string;
     asteroid: string;
+    enemyScout: string;
+    enemyBrute: string;
+    enemyBoss: string;
+    miningBot: string;
+    combatBot: string;
+    botProjectile: string;
   };
 
   ui: {
