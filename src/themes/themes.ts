@@ -22,6 +22,12 @@ const classic: ColorTheme = {
     salvage: '#ffaa00',
     dropoff: '#ffdd00',
     asteroid: '#cc8844',
+    enemyScout: '#ff4141',
+    enemyBrute: '#cc2222',
+    enemyBoss: '#ff44aa',
+    miningBot: '#44ddff',
+    combatBot: '#4488ff',
+    botProjectile: '#44ddff',
   },
 
   ui: {
@@ -97,6 +103,12 @@ const ocean: ColorTheme = {
     salvage: '#ffcc33',
     dropoff: '#ffee55',
     asteroid: '#aa9966',
+    enemyScout: '#ff5566',
+    enemyBrute: '#cc3344',
+    enemyBoss: '#ff44cc',
+    miningBot: '#44ffcc',
+    combatBot: '#44aaff',
+    botProjectile: '#44ffcc',
   },
 
   ui: {
@@ -172,6 +184,12 @@ const ember: ColorTheme = {
     salvage: '#cc88ff',
     dropoff: '#ffdd66',
     asteroid: '#dd7744',
+    enemyScout: '#ff2244',
+    enemyBrute: '#bb1122',
+    enemyBoss: '#ff44aa',
+    miningBot: '#44bbff',
+    combatBot: '#4488dd',
+    botProjectile: '#44bbff',
   },
 
   ui: {

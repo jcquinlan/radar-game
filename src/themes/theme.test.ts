@@ -31,6 +31,12 @@ describe('theme system', () => {
     expect(theme.entities.allyBeacon).toBeDefined();
     expect(theme.entities.salvage).toBeDefined();
     expect(theme.entities.dropoff).toBeDefined();
+    expect(theme.entities.enemyScout).toBeDefined();
+    expect(theme.entities.enemyBrute).toBeDefined();
+    expect(theme.entities.enemyBoss).toBeDefined();
+    expect(theme.entities.miningBot).toBeDefined();
+    expect(theme.entities.combatBot).toBeDefined();
+    expect(theme.entities.botProjectile).toBeDefined();
 
     // UI colors
     expect(theme.ui.textPrimary).toBeDefined();
