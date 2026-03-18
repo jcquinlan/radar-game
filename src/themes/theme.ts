@@ -1,4 +1,5 @@
 import { THEMES } from './themes';
+import type { Enemy } from '../entities/Entity';
 
 export interface ColorTheme {
   name: string;
@@ -20,6 +21,12 @@ export interface ColorTheme {
     resource: string;
     enemy: string;
     enemyRanged: string;
+    /** Scout enemy — fast, low HP */
+    enemyScout: string;
+    /** Brute enemy — slow, tanky */
+    enemyBrute: string;
+    /** Boss enemy — large, multi-phase */
+    enemyBoss: string;
     ally: string;
     allyHealer: string;
     allyShield: string;
@@ -27,11 +34,11 @@ export interface ColorTheme {
     salvage: string;
     dropoff: string;
     asteroid: string;
-    enemyScout: string;
-    enemyBrute: string;
-    enemyBoss: string;
+    /** Friendly mining bot (cool color — cyan) */
     miningBot: string;
+    /** Friendly combat bot (cool color — blue) */
     combatBot: string;
+    /** Combat bot projectile (cool color — light blue) */
     botProjectile: string;
   };
 
@@ -105,4 +112,16 @@ export function cycleTheme(): void {
   const idx = names.indexOf(currentTheme.name);
   const next = names[(idx + 1) % names.length];
   setTheme(next);
+}
+
+/** Return the theme color for an enemy based on subtype and boss status */
+export function getEnemyColor(enemy: Enemy): string {
+  const entities = currentTheme.entities;
+  if (enemy.isBoss) return entities.enemyBoss;
+  switch (enemy.subtype) {
+    case 'scout': return entities.enemyScout;
+    case 'brute': return entities.enemyBrute;
+    case 'ranged': return entities.enemyRanged;
+    default: return entities.enemy;
+  }
 }
