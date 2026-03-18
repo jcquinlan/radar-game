@@ -1,5 +1,5 @@
 import { Player } from '../entities/Player';
-import { GameEntity, HomeBase } from '../entities/Entity';
+import { GameEntity, Enemy, HomeBase } from '../entities/Entity';
 import { getTheme } from '../themes/theme';
 
 // Collapsed constants
@@ -132,8 +132,14 @@ export class Minimap {
 
   getEntityColor(entity: GameEntity): string {
     const e = getTheme().entities;
+    if (entity.type === 'enemy') {
+      const enemy = entity as Enemy;
+      if (enemy.isBoss) return e.enemyBoss;
+      if (enemy.subtype === 'scout') return e.enemyScout;
+      if (enemy.subtype === 'brute') return e.enemyBrute;
+      return e.enemyRanged;
+    }
     return entity.type === 'dropoff' ? e.dropoff
-      : entity.type === 'enemy' ? e.enemy
       : entity.type === 'salvage' ? e.salvage
       : entity.type === 'resource' ? e.resource
       : entity.type === 'asteroid' ? e.asteroid

@@ -15,6 +15,82 @@ const GLOW_RADIUS_MULT = 2.5;
 /** Glow alpha — the faked glow circle's opacity */
 const GLOW_ALPHA = 0.15;
 
+/** Pre-computed angle constants for hexagon vertices (60-degree increments) */
+const HEX_COS: number[] = [];
+const HEX_SIN: number[] = [];
+for (let i = 0; i < 6; i++) {
+  const angle = (i / 6) * Math.PI * 2 - Math.PI / 2; // Start from top
+  HEX_COS[i] = Math.cos(angle);
+  HEX_SIN[i] = Math.sin(angle);
+}
+
+/** Pre-computed angle constants for triangle vertices (pointing up) */
+const TRI_COS: number[] = [];
+const TRI_SIN: number[] = [];
+for (let i = 0; i < 3; i++) {
+  const angle = (i / 3) * Math.PI * 2 - Math.PI / 2; // Start from top
+  TRI_COS[i] = Math.cos(angle);
+  TRI_SIN[i] = Math.sin(angle);
+}
+
+/** Draw a triangle (scout shape) centered at (cx, cy) with given radius */
+function drawTriangle(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number): void {
+  ctx.beginPath();
+  ctx.moveTo(cx + TRI_COS[0] * radius, cy + TRI_SIN[0] * radius);
+  ctx.lineTo(cx + TRI_COS[1] * radius, cy + TRI_SIN[1] * radius);
+  ctx.lineTo(cx + TRI_COS[2] * radius, cy + TRI_SIN[2] * radius);
+  ctx.closePath();
+}
+
+/** Draw a square (brute shape) centered at (cx, cy) with given half-size */
+function drawSquare(ctx: CanvasRenderingContext2D, cx: number, cy: number, halfSize: number): void {
+  ctx.beginPath();
+  ctx.rect(cx - halfSize, cy - halfSize, halfSize * 2, halfSize * 2);
+}
+
+/** Draw a diamond (ranged shape) centered at (cx, cy) with given radius */
+function drawDiamond(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number): void {
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - radius);       // top
+  ctx.lineTo(cx + radius, cy);       // right
+  ctx.lineTo(cx, cy + radius);       // bottom
+  ctx.lineTo(cx - radius, cy);       // left
+  ctx.closePath();
+}
+
+/** Draw a hexagon (boss shape) centered at (cx, cy) with given radius */
+function drawHexagon(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number): void {
+  ctx.beginPath();
+  ctx.moveTo(cx + HEX_COS[0] * radius, cy + HEX_SIN[0] * radius);
+  for (let i = 1; i < 6; i++) {
+    ctx.lineTo(cx + HEX_COS[i] * radius, cy + HEX_SIN[i] * radius);
+  }
+  ctx.closePath();
+}
+
+/**
+ * Draw the appropriate enemy shape based on subtype and boss status.
+ * After calling, the path is ready for fill() — caller sets fillStyle before calling fill().
+ */
+function drawEnemyShape(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  size: number,
+  enemy: Enemy
+): void {
+  if (enemy.isBoss) {
+    drawHexagon(ctx, cx, cy, size);
+  } else if (enemy.subtype === 'scout') {
+    drawTriangle(ctx, cx, cy, size);
+  } else if (enemy.subtype === 'brute') {
+    drawSquare(ctx, cx, cy, size);
+  } else {
+    // ranged
+    drawDiamond(ctx, cx, cy, size);
+  }
+}
+
 export class BlipRenderer {
   private time = 0;
 
@@ -34,7 +110,6 @@ export class BlipRenderer {
     worldRotation?: number
   ): void {
     const themeColors = getTheme().entities;
-    const enemyRangedColor = themeColors.enemyRanged;
     const radarRadiusSq = radarRadius * radarRadius;
 
     for (const entity of entities) {
@@ -69,21 +144,23 @@ export class BlipRenderer {
 
       let currentSize = size;
 
-      // Enemy subtype sizes and effects
+      // Enemy subtype sizes, colors, and effects
       if (entity.type === 'enemy') {
         const enemy = entity as Enemy;
-        if (enemy.subtype === 'scout') {
+        if (enemy.isBoss) {
+          // Boss: large pulsing hexagon
+          currentSize = (8 + Math.sin(this.time * 3) * 2) * 2;
+          color = themeColors.enemyBoss;
+        } else if (enemy.subtype === 'scout') {
           currentSize = 3 + Math.sin(this.time * 6) * 1;
+          color = themeColors.enemyScout;
         } else if (enemy.subtype === 'brute') {
           currentSize = 7 + Math.sin(this.time * 2) * 2;
+          color = themeColors.enemyBrute;
         } else {
-          // ranged: steady medium with a different color tint
+          // ranged: steady medium diamond
           currentSize = 4;
-          color = enemyRangedColor;
-        }
-        // Bosses render at 2x size with a pulsing effect
-        if (enemy.isBoss) {
-          currentSize *= 2;
+          color = themeColors.enemyRanged;
         }
       }
 
@@ -190,7 +267,23 @@ export class BlipRenderer {
         }
 
         ctx.restore();
+      } else if (entity.type === 'enemy') {
+        const enemy = entity as Enemy;
+
+        // Faked glow: larger, lower-alpha circle behind the blip
+        ctx.globalAlpha = GLOW_ALPHA;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, currentSize * GLOW_RADIUS_MULT, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Main blip — subtype-specific shape
+        drawEnemyShape(ctx, screenX, screenY, currentSize, enemy);
+        ctx.fillStyle = color;
+        ctx.fill();
       } else {
+        // Non-enemy, non-salvage entities (resource, etc.) — circle blip
         // Faked glow: larger, lower-alpha circle behind the blip
         ctx.globalAlpha = GLOW_ALPHA;
         ctx.beginPath();
@@ -222,13 +315,22 @@ export class BlipRenderer {
         if (entity.type === 'resource') {
           label = 'E';
         } else if (entity.type === 'enemy') {
-          label = '!';
+          const enemy = entity as Enemy;
+          if (enemy.isBoss) {
+            label = 'BOSS';
+          } else if (enemy.subtype === 'scout') {
+            label = 'S';
+          } else if (enemy.subtype === 'brute') {
+            label = 'B';
+          } else {
+            label = 'R';
+          }
         } else if (entity.type === 'salvage') {
           label = 'S';
         } else {
           label = '';
         }
-        ctx.fillText(label, screenX + size + 2, screenY + 3);
+        ctx.fillText(label, screenX + currentSize + 2, screenY + 3);
         ctx.restore();
       }
     }
@@ -260,16 +362,22 @@ export class BlipRenderer {
     ctx.globalAlpha = 0.35;
 
     const theme = getTheme();
-    let color = theme.entities.enemy;
-    let ghostSize = BLIP_SIZES.enemy;
+    let color: string;
+    let ghostSize: number;
 
-    if (enemy.subtype === 'ranged') {
-      color = theme.entities.enemyRanged;
-      ghostSize = 4;
+    if (enemy.isBoss) {
+      color = theme.entities.enemyBoss;
+      ghostSize = 10;
+    } else if (enemy.subtype === 'scout') {
+      color = theme.entities.enemyScout;
+      ghostSize = 3;
     } else if (enemy.subtype === 'brute') {
+      color = theme.entities.enemyBrute;
       ghostSize = 7;
     } else {
-      ghostSize = 3;
+      // ranged
+      color = theme.entities.enemyRanged;
+      ghostSize = 4;
     }
 
     // Dashed ring outline
@@ -288,10 +396,9 @@ export class BlipRenderer {
     ctx.fillStyle = color;
     ctx.fill();
 
-    // Ghost blip fill
+    // Ghost blip fill — subtype-specific shape
     ctx.globalAlpha = 0.35;
-    ctx.beginPath();
-    ctx.arc(screenX, screenY, ghostSize, 0, Math.PI * 2);
+    drawEnemyShape(ctx, screenX, screenY, ghostSize, enemy);
     ctx.fillStyle = color;
     ctx.fill();
 
