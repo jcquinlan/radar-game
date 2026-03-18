@@ -2,11 +2,18 @@ import { HomebaseUpgradeSystem, BuildingCategory } from '../systems/HomebaseUpgr
 import { SaveData } from '../systems/SaveSystem';
 import { getTheme } from '../themes/theme';
 
-const TABS: { id: BuildingCategory; label: string; color: string }[] = [
-  { id: 'player', label: 'PLAYER', color: '#00ff41' },
-  { id: 'mining', label: 'MINING', color: '#ffaa00' },
-  { id: 'combat', label: 'COMBAT', color: '#ff4444' },
+const TAB_DEFS: { id: BuildingCategory; label: string }[] = [
+  { id: 'player', label: 'PLAYER' },
+  { id: 'mining', label: 'MINING' },
+  { id: 'combat', label: 'COMBAT' },
 ];
+
+function getTabColor(id: BuildingCategory): string {
+  const theme = getTheme();
+  if (id === 'mining') return theme.entities.miningBot;
+  if (id === 'combat') return theme.entities.combatBot;
+  return theme.radar.primary;
+}
 
 export class UpgradePanel {
   private visible = false;
@@ -120,10 +127,10 @@ export class UpgradePanel {
     // Tabs
     this.tabBounds = [];
     const tabY = panelY + 30;
-    const tabWidth = Math.floor((panelWidth - padding * 2) / TABS.length);
+    const tabWidth = Math.floor((panelWidth - padding * 2) / TAB_DEFS.length);
 
-    for (let i = 0; i < TABS.length; i++) {
-      const tab = TABS[i];
+    for (let i = 0; i < TAB_DEFS.length; i++) {
+      const tab = TAB_DEFS[i];
       const tx = panelX + padding + i * tabWidth;
       const isActive = tab.id === this.activeTab;
 
@@ -141,13 +148,13 @@ export class UpgradePanel {
 
       // Tab border (bottom highlight for active)
       if (isActive) {
-        ctx.fillStyle = tab.color;
+        ctx.fillStyle = getTabColor(tab.id);
         ctx.fillRect(tx, tabY + tabHeight - 2, tabWidth, 2);
       }
 
       // Tab label
       ctx.font = isActive ? 'bold 11px monospace' : '11px monospace';
-      ctx.fillStyle = isActive ? tab.color : theme.ui.textDisabled;
+      ctx.fillStyle = isActive ? getTabColor(tab.id) : theme.ui.textDisabled;
       ctx.textAlign = 'center';
       ctx.fillText(tab.label, tx + tabWidth / 2, tabY + 20);
       ctx.textAlign = 'left';

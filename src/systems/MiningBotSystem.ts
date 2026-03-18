@@ -1,5 +1,6 @@
 import { Player } from '../entities/Player';
 import { Asteroid, Enemy, GameEntity } from '../entities/Entity';
+import { getTheme } from '../themes/theme';
 
 export type FloatingTextCallback = (text: string, x: number, y: number, color: string) => void;
 
@@ -246,7 +247,7 @@ export class MiningBotSystem {
     if (bot.energyTextTimer <= 0) {
       const shown = Math.round(bot.energyAccum);
       if (shown > 0) {
-        addFloatingText(`+${shown}E`, target.x, target.y - 20, '#ffaa00');
+        addFloatingText(`+${shown}E`, target.x, target.y - 20, getTheme().entities.miningBot);
       }
       bot.energyAccum = 0;
       bot.energyTextTimer = ENERGY_TEXT_INTERVAL;

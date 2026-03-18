@@ -676,7 +676,7 @@ const loop = new GameLoop({
       const slotIdx = botSlotSystem.acquireSlot();
       if (slotIdx >= 0) {
         if (miningBotSystem.deployBot(leftClick.worldX, leftClick.worldY, world.entities, player, slotIdx)) {
-          floatingText.add('MINING BOT DEPLOYED', leftClick.worldX, leftClick.worldY - 15, '#ffaa00');
+          floatingText.add('MINING BOT DEPLOYED', leftClick.worldX, leftClick.worldY - 15, getTheme().entities.miningBot);
         } else {
           // No asteroid in range — cancel the slot (no cooldown)
           botSlotSystem.cancelSlot(slotIdx);
@@ -693,7 +693,7 @@ const loop = new GameLoop({
       const slotIdx = botSlotSystem.acquireSlot();
       if (slotIdx >= 0) {
         combatBotSystem.deployBot(rightClick.worldX, rightClick.worldY, player, slotIdx);
-        floatingText.add('COMBAT BOT DEPLOYED', rightClick.worldX, rightClick.worldY - 15, '#ff8844');
+        floatingText.add('COMBAT BOT DEPLOYED', rightClick.worldX, rightClick.worldY - 15, getTheme().entities.combatBot);
         screenShake.trigger(2);
       } else {
         floatingText.add('NO CHARGES', rightClick.worldX, rightClick.worldY - 15, '#ff4444');
@@ -867,7 +867,7 @@ const loop = new GameLoop({
       const cb = combatBotSystem.bots[i];
       if (!cb.active) continue;
       const cbid = `cb${i}`;
-      motionTrail.track(cbid, cb.x, cb.y, cb.vx, cb.vy, '#ff8844', dt);
+      motionTrail.track(cbid, cb.x, cb.y, cb.vx, cb.vy, theme.entities.combatBot, dt);
       activeTrailIds.add(cbid);
     }
     // Mining bot trails
@@ -876,7 +876,7 @@ const loop = new GameLoop({
       const mb = miningBots[i];
       if (!mb.active) continue;
       const mbid = `mb${i}`;
-      motionTrail.track(mbid, mb.x, mb.y, mb.vx, mb.vy, '#ffaa00', dt);
+      motionTrail.track(mbid, mb.x, mb.y, mb.vx, mb.vy, theme.entities.miningBot, dt);
       activeTrailIds.add(mbid);
     }
     // Combat bot projectile trails
@@ -884,7 +884,7 @@ const loop = new GameLoop({
       const cbp = combatBotSystem.botProjectiles[i];
       if (!cbp.active) continue;
       const cbpid = `cbp${i}`;
-      motionTrail.track(cbpid, cbp.x, cbp.y, cbp.vx, cbp.vy, '#ff8844', dt);
+      motionTrail.track(cbpid, cbp.x, cbp.y, cbp.vx, cbp.vy, theme.entities.botProjectile, dt);
       activeTrailIds.add(cbpid);
     }
     motionTrail.prune(activeTrailIds);
@@ -1085,8 +1085,8 @@ const loop = new GameLoop({
       const buildingRadius = 110;
       const buildingDefs = [
         { angle: -Math.PI / 2, label: 'PLAYER', color: '#00ff41', icon: 'P', tab: 'player' as const },
-        { angle: -Math.PI / 2 + (2 * Math.PI / 3), label: 'MINING', color: '#ffaa00', icon: 'M', tab: 'mining' as const },
-        { angle: -Math.PI / 2 + (4 * Math.PI / 3), label: 'COMBAT', color: '#ff4444', icon: 'C', tab: 'combat' as const },
+        { angle: -Math.PI / 2 + (2 * Math.PI / 3), label: 'MINING', color: getTheme().entities.miningBot, icon: 'M', tab: 'mining' as const },
+        { angle: -Math.PI / 2 + (4 * Math.PI / 3), label: 'COMBAT', color: getTheme().entities.combatBot, icon: 'C', tab: 'combat' as const },
       ];
       for (const bld of buildingDefs) {
         const bx = bcx + Math.cos(bld.angle) * buildingRadius;
@@ -1223,50 +1223,64 @@ const loop = new GameLoop({
       }
     }
 
-    // Combat bots — orange circles with health indicator
-    for (let i = 0; i < combatBotSystem.bots.length; i++) {
-      const bot = combatBotSystem.bots[i];
-      if (!bot.active) continue;
-      const bdx = bot.x - player.x;
-      const bdy = bot.y - player.y;
-      if (bdx * bdx + bdy * bdy > viewRadiusSq) continue;
-      const bsx = cx + bdx;
-      const bsy = cy + bdy;
+    // Combat bots — blue chevrons with health indicator
+    {
+      const combatColor = theme.entities.combatBot;
+      for (let i = 0; i < combatBotSystem.bots.length; i++) {
+        const bot = combatBotSystem.bots[i];
+        if (!bot.active) continue;
+        const bdx = bot.x - player.x;
+        const bdy = bot.y - player.y;
+        if (bdx * bdx + bdy * bdy > viewRadiusSq) continue;
+        const bsx = cx + bdx;
+        const bsy = cy + bdy;
 
-      // Pulsing glow based on remaining lifetime
-      const lifeFrac = bot.lifetime / bot.maxLifetime;
-      const pulseAlpha = lifeFrac > 0.25 ? 0.8 : 0.4 + Math.sin(player.survivalTime * 8) * 0.4;
-      ctx.globalAlpha = pulseAlpha;
-      ctx.beginPath();
-      ctx.arc(bsx, bsy, 5, 0, Math.PI * 2);
-      ctx.fillStyle = '#ff8844';
-      ctx.fill();
+        // Pulsing glow based on remaining lifetime
+        const lifeFrac = bot.lifetime / bot.maxLifetime;
+        const pulseAlpha = lifeFrac > 0.25 ? 0.8 : 0.4 + Math.sin(player.survivalTime * 8) * 0.4;
+        ctx.globalAlpha = pulseAlpha;
 
-      // Health bar above bot (only if damaged)
-      if (bot.health < bot.maxHealth) {
-        const hpFrac = bot.health / bot.maxHealth;
-        ctx.globalAlpha = 0.7;
-        ctx.fillStyle = '#333';
-        ctx.fillRect(bsx - 6, bsy - 10, 12, 2);
-        ctx.fillStyle = hpFrac > 0.5 ? '#ff8844' : '#ff4444';
-        ctx.fillRect(bsx - 6, bsy - 10, 12 * hpFrac, 2);
+        // Chevron/arrow shape — signals active, aggressive friendly
+        ctx.beginPath();
+        ctx.moveTo(bsx, bsy - 5);
+        ctx.lineTo(bsx + 4, bsy + 3);
+        ctx.lineTo(bsx + 1, bsy + 1);
+        ctx.lineTo(bsx, bsy + 4);
+        ctx.lineTo(bsx - 1, bsy + 1);
+        ctx.lineTo(bsx - 4, bsy + 3);
+        ctx.closePath();
+        ctx.fillStyle = combatColor;
+        ctx.fill();
+
+        // Health bar above bot (only if damaged)
+        if (bot.health < bot.maxHealth) {
+          const hpFrac = bot.health / bot.maxHealth;
+          ctx.globalAlpha = 0.7;
+          ctx.fillStyle = '#333';
+          ctx.fillRect(bsx - 6, bsy - 10, 12, 2);
+          ctx.fillStyle = hpFrac > 0.5 ? combatColor : '#ff4444';
+          ctx.fillRect(bsx - 6, bsy - 10, 12 * hpFrac, 2);
+        }
+        ctx.globalAlpha = 1;
       }
-      ctx.globalAlpha = 1;
     }
 
-    // Combat bot projectiles — small orange dots
-    for (let i = 0; i < combatBotSystem.botProjectiles.length; i++) {
-      const p = combatBotSystem.botProjectiles[i];
-      if (!p.active) continue;
-      const pdx = p.x - player.x;
-      const pdy = p.y - player.y;
-      if (pdx * pdx + pdy * pdy > viewRadiusSq) continue;
-      const psx = cx + pdx;
-      const psy = cy + pdy;
-      ctx.beginPath();
-      ctx.arc(psx, psy, 2.5, 0, Math.PI * 2);
-      ctx.fillStyle = '#ff8844';
-      ctx.fill();
+    // Combat bot projectiles — small cyan dots
+    {
+      const projColor = theme.entities.botProjectile;
+      for (let i = 0; i < combatBotSystem.botProjectiles.length; i++) {
+        const p = combatBotSystem.botProjectiles[i];
+        if (!p.active) continue;
+        const pdx = p.x - player.x;
+        const pdy = p.y - player.y;
+        if (pdx * pdx + pdy * pdy > viewRadiusSq) continue;
+        const psx = cx + pdx;
+        const psy = cy + pdy;
+        ctx.beginPath();
+        ctx.arc(psx, psy, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = projColor;
+        ctx.fill();
+      }
     }
 
     // Dropoff zones — pulsing ring markers
@@ -1411,6 +1425,7 @@ const loop = new GameLoop({
 
     // Render mining bots and laser lines
     {
+      const miningColor = theme.entities.miningBot;
       const bots = miningBotSystem.getBots();
       for (let i = 0; i < bots.length; i++) {
         const mb = bots[i];
@@ -1428,7 +1443,7 @@ const loop = new GameLoop({
           const tarX = cx + tarx;
           const tarY = cy + tary;
           ctx.save();
-          ctx.strokeStyle = '#ffaa00';
+          ctx.strokeStyle = miningColor;
           ctx.globalAlpha = 0.6;
           ctx.lineWidth = 1;
           ctx.beginPath();
@@ -1438,14 +1453,20 @@ const loop = new GameLoop({
           ctx.restore();
         }
 
-        // Bot dot
+        // Bot dot — double circle (filled inner + outer ring)
         ctx.save();
-        ctx.shadowColor = '#ffaa00';
+        ctx.shadowColor = miningColor;
         ctx.shadowBlur = 8;
         ctx.beginPath();
         ctx.arc(mbX, mbY, 3, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffaa00';
+        ctx.fillStyle = miningColor;
         ctx.fill();
+        // Outer ring
+        ctx.beginPath();
+        ctx.arc(mbX, mbY, 5, 0, Math.PI * 2);
+        ctx.strokeStyle = miningColor;
+        ctx.lineWidth = 1;
+        ctx.stroke();
         ctx.restore();
       }
     }
