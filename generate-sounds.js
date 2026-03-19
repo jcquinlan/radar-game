@@ -204,43 +204,72 @@ const launchBotParams = {
   sample_size: 16,
 };
 
-// Radar ping: clean, sonar-like blip — sine tone with quick attack, gentle decay
-const pingParams = {
-  oldParams: true,
-  wave_type: 0, // square (gives a sharper sonar character than pure sine)
-  p_env_attack: 0.01,
-  p_env_sustain: 0.08,
-  p_env_decay: 0.35,
-  p_env_punch: 0.15,
-  p_base_freq: 0.5, // mid-high pitch
-  p_freq_limit: 0,
-  p_freq_ramp: -0.05, // very slight downward sweep
-  p_freq_dramp: 0,
-  p_vib_strength: 0,
-  p_vib_speed: 0,
-  p_arp_mod: 0,
-  p_arp_speed: 0,
-  p_duty: 0.9, // near-sine duty cycle on square wave
-  p_duty_ramp: 0,
-  p_repeat_speed: 0,
-  p_pha_offset: 0,
-  p_pha_ramp: 0,
-  p_lpf_freq: 0.6, // low-pass to soften the tone
-  p_lpf_ramp: -0.1,
-  p_lpf_resonance: 0.2,
-  p_hpf_freq: 0.15,
-  p_hpf_ramp: 0,
-  sound_vol: 0.4,
-  sample_rate: SAMPLE_RATE,
-  sample_size: 16,
-};
-
 console.log("Generating sound effects...");
 generateSfx("shoot", shootParams);
 generateSfx("explode", explodeParams);
 generateSfx("enemy_death", enemyDeathParams);
 generateSfx("launch_bot", launchBotParams);
-generateSfx("ping", pingParams);
+
+// Radar ping: low-pitched sonar blip with ~1s reverb tail
+// Hand-synthesized because sfxr can't do long reverb tails
+{
+  const pingDuration = 1.3; // total length including reverb decay
+  const pingSamples = Math.floor(pingDuration * SAMPLE_RATE);
+  const pingBuf = new Float64Array(pingSamples);
+  const freq = 180; // low sonar tone
+
+  // Initial blip: quick attack, short sustain, then exponential decay
+  for (let i = 0; i < pingSamples; i++) {
+    const t = i / SAMPLE_RATE;
+
+    // Sharp attack (~5ms), then exponential decay over ~1s
+    const attack = Math.min(t / 0.005, 1);
+    const decay = Math.exp(-t * 4.5); // long tail
+    const env = attack * decay;
+
+    // Sine tone with slight detuned pair for warmth
+    const sig = Math.sin(2 * Math.PI * freq * t) * 0.7
+              + Math.sin(2 * Math.PI * freq * 1.002 * t) * 0.3;
+
+    pingBuf[i] = sig * env;
+  }
+
+  // Simulate reverb: layer delayed copies with decay and LPF
+  const delays = [
+    { ms: 60,  gain: 0.25 },
+    { ms: 130, gain: 0.18 },
+    { ms: 210, gain: 0.12 },
+    { ms: 340, gain: 0.08 },
+    { ms: 500, gain: 0.05 },
+    { ms: 720, gain: 0.03 },
+  ];
+
+  // Copy dry signal, then mix in delayed reflections
+  const dry = Float64Array.from(pingBuf);
+  for (const { ms, gain } of delays) {
+    const delaySamples = Math.floor((ms / 1000) * SAMPLE_RATE);
+    // Simple one-pole LPF state for each reflection (darker = more distant)
+    let lpfState = 0;
+    const lpfCoeff = 0.4 + (ms / 1000) * 0.4; // later reflections are darker
+    for (let i = 0; i < pingSamples - delaySamples; i++) {
+      const src = dry[i];
+      lpfState += lpfCoeff * (src - lpfState);
+      pingBuf[i + delaySamples] += lpfState * gain;
+    }
+  }
+
+  // Normalize
+  let peak = 0;
+  for (let i = 0; i < pingSamples; i++) {
+    if (Math.abs(pingBuf[i]) > peak) peak = Math.abs(pingBuf[i]);
+  }
+  const pingGain = 0.7 / peak;
+  for (let i = 0; i < pingSamples; i++) pingBuf[i] *= pingGain;
+
+  const pingWav = encodeWav(pingBuf, SAMPLE_RATE);
+  writeFileSync(join(OUT_DIR, "ping.wav"), pingWav);
+  console.log(`  ping.wav — ${pingSamples} samples (${pingDuration}s)`);
+}
 
 // ─── Background music: spacey ambient loop ──────────────────────────
 //
