@@ -124,6 +124,7 @@ let currentBoss: Enemy | null = null;
 
 function showMainMenu() {
   gameState = 'menu';
+  audioSystem.stopMusic();
   levelManager.returnToMenu();
   mainMenuScreen.show(
     canvas,
@@ -194,6 +195,11 @@ function startRun() {
 
 function enterBaseMode() {
   gameState = 'base_mode';
+  // Initialize and start music on first entry into base mode
+  audioSystem.init().then(() => {
+    audioSystem.resume();
+    audioSystem.startMusic();
+  });
   baseModeClickHandler = (e: MouseEvent) => {
     if (gameState !== 'base_mode' || !startRunBounds) return;
     const rect = canvas.getBoundingClientRect();
@@ -325,6 +331,7 @@ function showRunResults() {
   saveSaveData(saveData);
 
   gameState = 'results';
+  audioSystem.stopMusic();
   towRopeSystem.clear();
   deathParticles.reset();
   resultsScreen.show(canvas, {
@@ -347,6 +354,7 @@ function showRunFailed() {
   saveSaveData(saveData);
 
   gameState = 'game_over';
+  audioSystem.stopMusic();
   towRopeSystem.clear();
   deathParticles.reset();
   resultsScreen.show(canvas, {
@@ -378,6 +386,7 @@ function cleanupCurrentGame() {
 
 function onLevelComplete() {
   gameState = 'level_complete';
+  audioSystem.stopMusic();
   const hasNext = levelManager.hasNextLevel();
   levelCompleteScreen.show(
     canvas,
@@ -407,9 +416,11 @@ function togglePause() {
   if (gameState === 'paused') {
     gameState = previousState;
     pauseMenu.close(canvas);
+    audioSystem.resumeAudio();
   } else {
     previousState = gameState;
     gameState = 'paused';
+    audioSystem.pauseAudio();
     // Close other panels when pausing
     if (keyRemapScreen && keyRemapScreen.isVisible()) keyRemapScreen.toggle();
     pauseMenu.open(canvas, {
@@ -585,6 +596,9 @@ showMainMenu();
 
 const loop = new GameLoop({
   update(dt) {
+    // Audio system needs to tick every frame (music silence timer)
+    audioSystem.update(dt);
+
     if (!isActiveGameplay(gameState)) return;
 
     // Zoom lerp
