@@ -70,13 +70,14 @@ function writeString(view, offset, str) {
 // ─── SFX via jsfxr ──────────────────────────────────────────────────
 
 function generateSfx(name, params) {
-  const buffer = sfxr.toBuffer(params);
-  // jsfxr buffer contains float samples in [-1, 1]
-  const wav = encodeWav(buffer, SAMPLE_RATE);
+  // toWave().buffer gives normalized float samples in [-1, 1]
+  // (toBuffer() returns raw PCM bytes, not floats — wrong for our encoder)
+  const floats = sfxr.toWave(params).buffer;
+  const wav = encodeWav(floats, SAMPLE_RATE);
   const path = join(OUT_DIR, `${name}.wav`);
   writeFileSync(path, wav);
-  const duration = (buffer.length / SAMPLE_RATE).toFixed(2);
-  console.log(`  ${name}.wav — ${buffer.length} samples (${duration}s)`);
+  const duration = (floats.length / SAMPLE_RATE).toFixed(2);
+  console.log(`  ${name}.wav — ${floats.length} samples (${duration}s)`);
 }
 
 // Shoot: short punchy laser/projectile
