@@ -63,6 +63,18 @@ describe('CombatSystem', () => {
     expect(combat.projectiles.length).toBeGreaterThan(0);
   });
 
+  it('tracks projectilesFiredThisFrame counter and resets each update', () => {
+    const enemy = createEnemy(150, 0, 'ranged');
+    enemy.fireRate = 0;
+    combat.update([enemy], player, 1);
+    expect(combat.projectilesFiredThisFrame).toBeGreaterThan(0);
+
+    // Next update with no fire — counter resets
+    enemy.fireRate = 999;
+    combat.update([enemy], player, 0.001);
+    expect(combat.projectilesFiredThisFrame).toBe(0);
+  });
+
   it('projectiles deal damage on contact with the player', () => {
     combat.projectiles.push({
       x: 5, y: 0,
