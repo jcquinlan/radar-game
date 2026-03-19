@@ -201,6 +201,26 @@ describe('CombatBotSystem', () => {
     });
   });
 
+  describe('projectilesFiredThisFrame counter', () => {
+    it('counts projectiles fired and resets each update', () => {
+      system.deployBot(500, 0, player, 0);
+      const enemy = makeEnemy(50, 0, 100);
+      const entities: GameEntity[] = [enemy];
+
+      // Run enough frames for the bot to reach and fire at the enemy
+      let firedAny = false;
+      for (let i = 0; i < 300; i++) {
+        system.update(1 / 60, entities, addFloatingText, onDeath, onImpact, player);
+        if (system.projectilesFiredThisFrame > 0) firedAny = true;
+      }
+      expect(firedAny).toBe(true);
+
+      // Frame with no entities — counter should be 0
+      system.update(1 / 60, [], addFloatingText, onDeath, onImpact, player);
+      expect(system.projectilesFiredThisFrame).toBe(0);
+    });
+  });
+
   describe('lifetime and slot release', () => {
     it('deactivates bot and releases slot after lifetime expires', () => {
       system.deployBot(100, 0, player, 3);
