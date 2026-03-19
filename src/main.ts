@@ -42,6 +42,7 @@ import { MainMenuScreen } from './ui/MainMenuScreen';
 import { LevelCompleteScreen } from './ui/LevelCompleteScreen';
 import { ResultsScreen } from './ui/ResultsScreen';
 import { calculateCurrency, calculateReducedCurrency, loadSaveData, saveSaveData, SaveData } from './systems/SaveSystem';
+import { audioSystem } from './systems/AudioSystem';
 
 type GameState = 'menu' | 'playing' | 'level_complete' | 'base_mode' | 'run_active' | 'final_wave' | 'results' | 'game_over' | 'paused';
 
@@ -521,8 +522,10 @@ window.addEventListener('keydown', (e) => {
 
   const addText = (text: string, x: number, y: number, color: string) =>
     floatingText.add(text, x, y, color);
-  const onDeath = (x: number, y: number, srcX: number, srcY: number, color: string) =>
+  const onDeath = (x: number, y: number, srcX: number, srcY: number, color: string) => {
     deathParticles.emitFromSource(x, y, srcX, srcY, color);
+    audioSystem.play('enemy_death');
+  };
 
   for (const ability of abilitySystem.abilities) {
     if (e.key === ability.keybind) {
@@ -530,6 +533,7 @@ window.addEventListener('keydown', (e) => {
         if (abilitySystem.activate('damage_blast', world.entities, addText, onDeath)) {
           abilityEffects.triggerBlast();
           screenShake.trigger(4);
+          audioSystem.play('explode');
         }
       } else if (ability.id === 'heal_over_time') {
         if (abilitySystem.activate('heal_over_time', world.entities, addText, onDeath)) {
@@ -548,6 +552,7 @@ window.addEventListener('keydown', (e) => {
           abilityEffects.triggerMissileLaunch(player.x, player.y);
           floatingText.add('MISSILE!', player.x, player.y - 25, t.abilities.homing_missile);
           screenShake.trigger(3);
+          audioSystem.play('shoot');
         }
       }
       break;
@@ -677,6 +682,7 @@ const loop = new GameLoop({
       if (slotIdx >= 0) {
         if (miningBotSystem.deployBot(leftClick.worldX, leftClick.worldY, world.entities, player, slotIdx)) {
           floatingText.add('MINING BOT DEPLOYED', leftClick.worldX, leftClick.worldY - 15, getTheme().entities.miningBot);
+          audioSystem.play('launch_bot');
         } else {
           // No asteroid in range — cancel the slot (no cooldown)
           botSlotSystem.cancelSlot(slotIdx);
@@ -695,6 +701,7 @@ const loop = new GameLoop({
         combatBotSystem.deployBot(rightClick.worldX, rightClick.worldY, player, slotIdx);
         floatingText.add('COMBAT BOT DEPLOYED', rightClick.worldX, rightClick.worldY - 15, getTheme().entities.combatBot);
         screenShake.trigger(2);
+        audioSystem.play('launch_bot');
       } else {
         floatingText.add('NO CHARGES', rightClick.worldX, rightClick.worldY - 15, '#ff4444');
       }
@@ -706,7 +713,11 @@ const loop = new GameLoop({
     hud.update(dt);
 
     // Ping system — expanding circle detection
+    const wasPingActive = pingSystem.getState().active;
     const events = pingSystem.update(world.entities, player, dt);
+    if (!wasPingActive && pingSystem.getState().active) {
+      audioSystem.play('ping');
+    }
 
     // Feed ping state to radar for rendering
     radar.setPingState(pingSystem.getState());
@@ -778,10 +789,13 @@ const loop = new GameLoop({
     combatBotSystem.update(
       dt, world.entities,
       (text, x, y, color) => floatingText.add(text, x, y, color),
-      (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color),
-      (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color, 5),
+      (x, y, srcX, srcY, color) => { deathParticles.emitFromSource(x, y, srcX, srcY, color); audioSystem.play('enemy_death'); },
+      (x, y, srcX, srcY, color) => { deathParticles.emitFromSource(x, y, srcX, srcY, color, 5); audioSystem.play('explode'); },
       player,
     );
+    if (combatBotSystem.projectilesFiredThisFrame > 0) {
+      audioSystem.play('shoot');
+    }
 
     // Combat — only if enabled
     let alive = true;
@@ -806,12 +820,15 @@ const loop = new GameLoop({
       alive = combatSystem.update(
         world.entities, player, dt, abilitySystem.isDashing(), 15,
         (text, x, y, color) => floatingText.add(text, x, y, color),
-        (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color),
-        (x, y, srcX, srcY, color) => deathParticles.emitFromSource(x, y, srcX, srcY, color, 5),
+        (x, y, srcX, srcY, color) => { deathParticles.emitFromSource(x, y, srcX, srcY, color); audioSystem.play('enemy_death'); },
+        (x, y, srcX, srcY, color) => { deathParticles.emitFromSource(x, y, srcX, srcY, color, 5); audioSystem.play('explode'); },
         targetPos,
         baseTarget,
         salvageBuffer.length > 0 ? salvageBuffer : undefined,
       );
+      if (combatSystem.projectilesFiredThisFrame > 0) {
+        audioSystem.play('shoot');
+      }
     }
 
     // Boss system update — phase transitions and minion spawning

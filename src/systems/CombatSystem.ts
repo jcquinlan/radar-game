@@ -8,6 +8,8 @@ type FloatingTextCallback = (text: string, x: number, y: number, color: string) 
 export class CombatSystem {
   projectiles: Projectile[] = [];
   onShake: (intensity: number) => void = () => {};
+  /** Number of enemy projectiles fired this frame (reset each update). */
+  projectilesFiredThisFrame = 0;
   private gameTime = 0;
   private ramHitEnemies: Set<Enemy> = new Set();
   private wasRamActive = false;
@@ -38,6 +40,7 @@ export class CombatSystem {
     salvage?: Salvage[],
   ): boolean {
     this.gameTime += dt;
+    this.projectilesFiredThisFrame = 0;
 
     // AI target: use override if provided, otherwise chase the player
     const aiTargetX = targetPos ? targetPos.x : player.x;
@@ -102,6 +105,7 @@ export class CombatSystem {
             active: true,
             lifetime: 3,
           });
+          this.projectilesFiredThisFrame++;
         }
       }
 

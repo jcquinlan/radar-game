@@ -88,6 +88,8 @@ export class CombatBotSystem {
   baseLifetime = BOT_LIFETIME;
   /** Callback invoked with slot index when a bot becomes inactive */
   onSlotRelease: ((slotIndex: number) => void) | null = null;
+  /** Number of bot projectiles fired this frame (reset each update). */
+  projectilesFiredThisFrame = 0;
   /** Screen shake callback — wired up by main.ts */
   onShake: (intensity: number) => void = () => {};
 
@@ -171,6 +173,7 @@ export class CombatBotSystem {
     onImpact: DeathCallback,
     player?: Player,
   ): void {
+    this.projectilesFiredThisFrame = 0;
     for (let bi = this.bots.length - 1; bi >= 0; bi--) {
       const bot = this.bots[bi];
       if (!bot.active) continue;
@@ -368,6 +371,7 @@ export class CombatBotSystem {
     slot.damage = bot.damage;
     slot.lifetime = PROJECTILE_LIFETIME;
     slot.active = true;
+    this.projectilesFiredThisFrame++;
   }
 
   private updateProjectiles(
