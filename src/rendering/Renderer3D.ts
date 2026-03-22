@@ -379,6 +379,33 @@ export class Renderer3D {
     gl.uniform1f(this.uDamageFlash, 0);
   }
 
+  /**
+   * Draw a mesh with a pre-built model matrix, tint color, and damage flash.
+   * Use this when you need arbitrary transforms (banking, bobbing) that
+   * drawMesh/drawMeshTinted cannot express.
+   */
+  drawMeshWithMatrix(
+    handle: MeshHandle,
+    modelMatrix: Float32Array,
+    tintR: number,
+    tintG: number,
+    tintB: number,
+    flash: number,
+  ): void {
+    const { gl } = this;
+    this.tintArray[0] = tintR;
+    this.tintArray[1] = tintG;
+    this.tintArray[2] = tintB;
+    gl.uniform3fv(this.uTintColor, this.tintArray);
+    gl.uniform1f(this.uDamageFlash, flash);
+    gl.uniformMatrix4fv(this.uModel, false, modelMatrix);
+    gl.bindVertexArray(handle.vao);
+    gl.drawElements(gl.TRIANGLES, handle.indexCount, gl.UNSIGNED_SHORT, 0);
+    // Reset to defaults
+    gl.uniform3fv(this.uTintColor, this.defaultTint);
+    gl.uniform1f(this.uDamageFlash, 0);
+  }
+
   /** End the frame. Currently a no-op but reserved for future use. */
   endFrame(): void {
     // Reserved for future batch finalization, post-processing, etc.
