@@ -128,6 +128,8 @@ let baseModeClickHandler: ((e: MouseEvent) => void) | null = null;
 let bossSystem: BossSystem = new BossSystem();
 /** Current boss reference during final_wave (null when no boss is active) */
 let currentBoss: Enemy | null = null;
+/** Last frame's thrust input — captured in update, used in render for 3D player glow */
+let lastThrust = 0;
 
 function showMainMenu() {
   gameState = 'menu';
@@ -650,6 +652,7 @@ const loop = new GameLoop({
 
     // Tank-style movement: A/D turn, W/S thrust along heading
     const { turn, thrust } = input.getTankInput();
+    lastThrust = thrust;
     const oldX = player.x;
     const oldY = player.y;
 
@@ -1161,6 +1164,24 @@ const loop = new GameLoop({
 
       // Render home base with HP-based red tinting and pulse
       entityRenderer3d.renderHomeBase(homeBase, player.survivalTime);
+
+      // Render enemies with subtype-specific 3D meshes and animations
+      entityRenderer3d.renderEnemies(
+        world.entities,
+        player.x,
+        player.y,
+        viewRadius3d,
+        player.survivalTime,
+      );
+
+      // Render player ship with banking and engine glow
+      entityRenderer3d.renderPlayer(
+        player.x,
+        player.y,
+        player.turnVelocity,
+        lastThrust,
+        player.survivalTime,
+      );
 
       renderer3d.endFrame();
     }

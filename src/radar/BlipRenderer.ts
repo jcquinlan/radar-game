@@ -268,20 +268,8 @@ export class BlipRenderer {
 
         ctx.restore();
       } else if (entity.type === 'enemy') {
-        const enemy = entity as Enemy;
-
-        // Faked glow: larger, lower-alpha circle behind the blip
-        ctx.globalAlpha = GLOW_ALPHA;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, currentSize * GLOW_RADIUS_MULT, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.globalAlpha = 1;
-
-        // Main blip — subtype-specific shape
-        drawEnemyShape(ctx, screenX, screenY, currentSize, enemy);
-        ctx.fillStyle = color;
-        ctx.fill();
+        // Enemy shapes are rendered in 3D — skip 2D shape drawing.
+        // Labels still render below (2D overlay).
       } else {
         // Non-enemy, non-salvage entities (resource, etc.) — circle blip
         // Faked glow: larger, lower-alpha circle behind the blip
