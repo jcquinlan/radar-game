@@ -81,6 +81,8 @@ export class ShaderPipeline {
     glCanvas.style.left = '0';
     glCanvas.style.width = '100%';
     glCanvas.style.height = '100%';
+    // Sit on top of both the 3D canvas (z-index 0) and the 2D canvas (z-index 1)
+    glCanvas.style.zIndex = '2';
     // Let clicks pass through to the source canvas underneath (preserves event handlers)
     glCanvas.style.pointerEvents = 'none';
 

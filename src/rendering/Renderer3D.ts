@@ -65,6 +65,24 @@ export interface MeshHandle {
   indexBuffer: WebGLBuffer;
 }
 
+// ─── Hex color parsing ──────────────────────────────────────────────────
+
+/** Parse a hex color string (#rgb, #rrggbb) into [r, g, b] floats 0-1 */
+function parseHexColor(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  let r: number, g: number, b: number;
+  if (h.length === 3) {
+    r = parseInt(h[0] + h[0], 16) / 255;
+    g = parseInt(h[1] + h[1], 16) / 255;
+    b = parseInt(h[2] + h[2], 16) / 255;
+  } else {
+    r = parseInt(h.substring(0, 2), 16) / 255;
+    g = parseInt(h.substring(2, 4), 16) / 255;
+    b = parseInt(h.substring(4, 6), 16) / 255;
+  }
+  return [r, g, b];
+}
+
 // ─── Camera height and tilt ──────────────────────────────────────────────
 
 /** Camera height above the ground plane */
@@ -92,6 +110,12 @@ export class Renderer3D {
   private uModel: WebGLUniformLocation | null;
   private uLightDir: WebGLUniformLocation | null;
   private uAmbient: WebGLUniformLocation | null;
+
+  // Clear color (defaults to transparent black)
+  private clearR = 0;
+  private clearG = 0;
+  private clearB = 0;
+  private clearA = 1;
 
   // Current camera matrices (reused each frame)
   private projectionMatrix: Float32Array = mat4.identity();
@@ -136,6 +160,7 @@ export class Renderer3D {
     canvas3d.style.width = '100%';
     canvas3d.style.height = '100%';
     canvas3d.style.pointerEvents = 'none';
+    canvas3d.style.zIndex = '0';
 
     const gl = canvas3d.getContext('webgl2');
     if (!gl) return null;
@@ -238,8 +263,8 @@ export class Renderer3D {
       gl.viewport(0, 0, w, h);
     }
 
-    // Clear
-    gl.clearColor(0, 0, 0, 0);
+    // Clear with the configured background color
+    gl.clearColor(this.clearR, this.clearG, this.clearB, this.clearA);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     gl.useProgram(this.program);
@@ -315,6 +340,24 @@ export class Renderer3D {
     this.canvas3d.width = w;
     this.canvas3d.height = h;
     this.gl.viewport(0, 0, w, h);
+  }
+
+  /**
+   * Set the clear color from a CSS hex color string (e.g. '#0a0a0a').
+   * Called each frame or when the theme changes so the 3D background
+   * matches the game's theme.
+   */
+  setClearColor(hex: string): void {
+    const [r, g, b] = parseHexColor(hex);
+    this.clearR = r;
+    this.clearG = g;
+    this.clearB = b;
+    this.clearA = 1;
+  }
+
+  /** Get the underlying 3D canvas element (for compositing into the 2D canvas) */
+  getCanvas(): HTMLCanvasElement {
+    return this.canvas3d;
   }
 
   /** Clean up all GPU resources */
