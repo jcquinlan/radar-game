@@ -68,19 +68,27 @@ if (renderer3d) {
 /** Whether to use 3D rendering. Set to false when WebGL2 is unavailable or user disables it. */
 let use3D = renderer3d !== null;
 
-// Handle WebGL context loss/restore — graceful fallback to 2D
-if (renderer3d) {
-  renderer3d.onContextLost = () => {
+// Handle WebGL context loss/restore — graceful fallback to 2D.
+// On context loss, switch to 2D immediately. On restore, recreate all GPU resources
+// (shaders, buffers, VAOs are invalidated by context loss).
+function attachContextHandlers(r: Renderer3D): void {
+  r.onContextLost = () => {
     use3D = false;
   };
-  renderer3d.onContextRestored = () => {
-    // Reinitialize 3D resources after context restore
+  r.onContextRestored = () => {
+    if (entityRenderer3d) entityRenderer3d.dispose();
+    entityRenderer3d = null;
+    if (renderer3d) renderer3d.dispose();
+    renderer3d = Renderer3D.create(canvas);
     if (renderer3d) {
-      if (entityRenderer3d) entityRenderer3d.dispose();
       entityRenderer3d = new EntityRenderer3D(renderer3d);
+      attachContextHandlers(renderer3d);
       use3D = true;
     }
   };
+}
+if (renderer3d) {
+  attachContextHandlers(renderer3d);
 }
 const pauseMenu = new PauseMenu();
 const helpScreen = new HelpScreen();
