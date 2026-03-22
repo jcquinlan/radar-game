@@ -1,8 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { EntityRenderer3D } from './EntityRenderer3D';
 import type { Renderer3D, MeshHandle } from './Renderer3D';
-import type { Asteroid, Enemy, HomeBase, GameEntity } from '../entities/Entity';
-import { createAsteroid, createEnemy, createHomeBase, createBossEnemy } from '../entities/Entity';
+import type { Asteroid, Enemy, HomeBase, GameEntity, Salvage, Projectile } from '../entities/Entity';
+import { createAsteroid, createEnemy, createHomeBase, createBossEnemy, createSalvage } from '../entities/Entity';
+import type { MiningBot } from '../systems/MiningBotSystem';
+import { MiningBotState } from '../systems/MiningBotSystem';
+import type { CombatBot } from '../systems/CombatBotSystem';
+import { CombatBotState } from '../systems/CombatBotSystem';
+import type { Missile } from '../systems/AbilitySystem';
 
 // ─── Mock Renderer ──────────────────────────────────────────────────────
 
@@ -78,12 +83,12 @@ function makeBoss(overrides: Partial<Enemy> = {}): Enemy {
 
 describe('EntityRenderer3D', () => {
   describe('constructor', () => {
-    it('uploads 30 asteroid meshes + 1 home base + 1 player + 4 enemy meshes = 36 uploads', () => {
+    it('uploads 30 asteroid + 1 home base + 1 player + 4 enemy + 2 bot + 1 salvage + 1 projectile = 40 meshes', () => {
       const { renderer } = createMockRenderer();
       const entityRenderer = new EntityRenderer3D(renderer);
 
-      // 10 small + 10 medium + 10 large + 1 home base + 1 player + 4 enemies = 36
-      expect(renderer.uploadMesh).toHaveBeenCalledTimes(36);
+      // 10 small + 10 medium + 10 large + 1 home base + 1 player + 4 enemies + 2 bots + 1 salvage + 1 projectile = 40
+      expect(renderer.uploadMesh).toHaveBeenCalledTimes(40);
 
       entityRenderer.dispose();
     });
@@ -511,15 +516,368 @@ describe('EntityRenderer3D', () => {
     });
   });
 
+  describe('renderMiningBots', () => {
+    function makeMiningBot(overrides: Partial<MiningBot> = {}): MiningBot {
+      return {
+        x: 50, y: 60, vx: 0, vy: 0, angle: 0,
+        targetAsteroid: null, state: MiningBotState.Mining,
+        miningProgress: 0, miningRate: 1, lifetime: 30,
+        active: true, aggroTimer: 5, energyAccum: 0,
+        energyTextTimer: 0, slotIndex: 0,
+        ...overrides,
+      };
+    }
+
+    it('renders active mining bots within view radius', () => {
+      const { renderer, drawMeshTintedCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const bots = [makeMiningBot({ x: 30, y: 40 })];
+      entityRenderer.renderMiningBots(bots, 0, 0, 500, 1.0);
+
+      expect(drawMeshTintedCalls.length).toBe(1);
+      expect(drawMeshTintedCalls[0].worldX).toBe(30);
+      expect(drawMeshTintedCalls[0].worldY).toBe(40);
+
+      entityRenderer.dispose();
+    });
+
+    it('culls mining bots outside view radius', () => {
+      const { renderer, drawMeshTintedCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const bots = [makeMiningBot({ x: 2000, y: 2000 })];
+      entityRenderer.renderMiningBots(bots, 0, 0, 100, 1.0);
+
+      expect(drawMeshTintedCalls.length).toBe(0);
+
+      entityRenderer.dispose();
+    });
+
+    it('skips inactive mining bots', () => {
+      const { renderer, drawMeshTintedCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const bots = [makeMiningBot({ active: false })];
+      entityRenderer.renderMiningBots(bots, 0, 0, 500, 1.0);
+
+      expect(drawMeshTintedCalls.length).toBe(0);
+
+      entityRenderer.dispose();
+    });
+
+    it('applies time-based rotation when mining', () => {
+      const { renderer, drawMeshTintedCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const bots = [makeMiningBot({ state: MiningBotState.Mining })];
+      entityRenderer.renderMiningBots(bots, 0, 0, 500, 0);
+      const rot0 = drawMeshTintedCalls[0].rotationY;
+
+      drawMeshTintedCalls.length = 0;
+      entityRenderer.renderMiningBots(bots, 0, 0, 500, 5);
+      const rot5 = drawMeshTintedCalls[0].rotationY;
+
+      expect(rot5).toBeGreaterThan(rot0);
+
+      entityRenderer.dispose();
+    });
+  });
+
+  describe('renderCombatBots', () => {
+    function makeCombatBot(overrides: Partial<CombatBot> = {}): CombatBot {
+      return {
+        x: 50, y: 60, vx: 1, vy: 0, angle: 0,
+        state: CombatBotState.SeekingEnemy, targetEnemy: null,
+        targetX: 100, targetY: 100,
+        health: 30, maxHealth: 30, damage: 4,
+        fireRate: 1.5, fireTimer: 0, range: 200,
+        lifetime: 20, maxLifetime: 20,
+        active: true, slotIndex: 0,
+        ...overrides,
+      };
+    }
+
+    it('renders active combat bots within view radius', () => {
+      const { renderer, drawMeshWithMatrixCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const bots = [makeCombatBot({ x: 30, y: 40 })];
+      entityRenderer.renderCombatBots(bots, 0, 0, 500, 1.0);
+
+      expect(drawMeshWithMatrixCalls.length).toBe(1);
+
+      entityRenderer.dispose();
+    });
+
+    it('culls combat bots outside view radius', () => {
+      const { renderer, drawMeshWithMatrixCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const bots = [makeCombatBot({ x: 2000, y: 2000 })];
+      entityRenderer.renderCombatBots(bots, 0, 0, 100, 1.0);
+
+      expect(drawMeshWithMatrixCalls.length).toBe(0);
+
+      entityRenderer.dispose();
+    });
+
+    it('skips inactive combat bots', () => {
+      const { renderer, drawMeshWithMatrixCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const bots = [makeCombatBot({ active: false })];
+      entityRenderer.renderCombatBots(bots, 0, 0, 500, 1.0);
+
+      expect(drawMeshWithMatrixCalls.length).toBe(0);
+
+      entityRenderer.dispose();
+    });
+
+    it('dims tint when combat bot lifetime is low', () => {
+      const { renderer, drawMeshWithMatrixCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      // Full lifetime
+      const freshBots = [makeCombatBot({ lifetime: 20, maxLifetime: 20 })];
+      entityRenderer.renderCombatBots(freshBots, 0, 0, 500, 0);
+      const freshTint = drawMeshWithMatrixCalls[0].tintR;
+
+      drawMeshWithMatrixCalls.length = 0;
+
+      // Nearly expired
+      const dyingBots = [makeCombatBot({ lifetime: 1, maxLifetime: 20 })];
+      entityRenderer.renderCombatBots(dyingBots, 0, 0, 500, 0);
+      const dyingTint = drawMeshWithMatrixCalls[0].tintR;
+
+      expect(dyingTint).toBeLessThan(freshTint);
+
+      entityRenderer.dispose();
+    });
+  });
+
+  describe('renderSalvage', () => {
+    function makeSalvageEntity(overrides: Partial<Salvage> = {}): Salvage {
+      const base = createSalvage(50, 60);
+      return { ...base, ...overrides };
+    }
+
+    it('renders active visible salvage as rotating diamonds', () => {
+      const { renderer, drawMeshTintedCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const entities: GameEntity[] = [makeSalvageEntity({ x: 30, y: 40 })];
+      entityRenderer.renderSalvage(entities, 0, 0, 500, 1.0);
+
+      expect(drawMeshTintedCalls.length).toBe(1);
+      expect(drawMeshTintedCalls[0].worldX).toBe(30);
+      expect(drawMeshTintedCalls[0].worldY).toBe(40);
+
+      entityRenderer.dispose();
+    });
+
+    it('culls salvage outside view radius', () => {
+      const { renderer, drawMeshTintedCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const entities: GameEntity[] = [makeSalvageEntity({ x: 2000, y: 2000 })];
+      entityRenderer.renderSalvage(entities, 0, 0, 100, 1.0);
+
+      expect(drawMeshTintedCalls.length).toBe(0);
+
+      entityRenderer.dispose();
+    });
+
+    it('skips inactive salvage', () => {
+      const { renderer, drawMeshTintedCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const entities: GameEntity[] = [makeSalvageEntity({ active: false })];
+      entityRenderer.renderSalvage(entities, 0, 0, 500, 1.0);
+
+      expect(drawMeshTintedCalls.length).toBe(0);
+
+      entityRenderer.dispose();
+    });
+
+    it('skips invisible salvage', () => {
+      const { renderer, drawMeshTintedCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const entities: GameEntity[] = [makeSalvageEntity({ visible: false })];
+      entityRenderer.renderSalvage(entities, 0, 0, 500, 1.0);
+
+      expect(drawMeshTintedCalls.length).toBe(0);
+
+      entityRenderer.dispose();
+    });
+
+    it('applies damage flash when damageFlash > 0', () => {
+      const { renderer, drawMeshTintedCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const entities: GameEntity[] = [makeSalvageEntity({ damageFlash: 0.5 })];
+      entityRenderer.renderSalvage(entities, 0, 0, 500, 1.0);
+
+      expect(drawMeshTintedCalls[0].flash).toBeCloseTo(0.5, 1);
+
+      entityRenderer.dispose();
+    });
+
+    it('rotates based on time', () => {
+      const { renderer, drawMeshTintedCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const entities: GameEntity[] = [makeSalvageEntity()];
+      entityRenderer.renderSalvage(entities, 0, 0, 500, 0);
+      const rot0 = drawMeshTintedCalls[0].rotationY;
+
+      drawMeshTintedCalls.length = 0;
+      entityRenderer.renderSalvage(entities, 0, 0, 500, 5);
+      const rot5 = drawMeshTintedCalls[0].rotationY;
+
+      expect(rot5).toBeGreaterThan(rot0);
+
+      entityRenderer.dispose();
+    });
+
+    it('skips non-salvage entities', () => {
+      const { renderer, drawMeshTintedCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const entities: GameEntity[] = [
+        makeAsteroid({ x: 10, y: 20 }),
+        makeEnemy({ x: 30, y: 40 }),
+      ];
+      entityRenderer.renderSalvage(entities, 0, 0, 500, 1.0);
+
+      expect(drawMeshTintedCalls.length).toBe(0);
+
+      entityRenderer.dispose();
+    });
+  });
+
+  describe('renderProjectiles', () => {
+    function makeProjectile(overrides: Partial<Projectile> = {}): Projectile {
+      return {
+        x: 50, y: 60, vx: 0, vy: -100,
+        damage: 8, active: true, lifetime: 2,
+        ...overrides,
+      };
+    }
+
+    function makeMissile(overrides: Partial<Missile> = {}): Missile {
+      return {
+        x: 50, y: 60, vx: 0, vy: -100,
+        speed: 200, damage: 20, lifetime: 5,
+        turnRate: 3, active: true,
+        ...overrides,
+      };
+    }
+
+    it('renders active enemy projectiles with red tint', () => {
+      const { renderer, drawMeshWithMatrixCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      entityRenderer.renderProjectiles(
+        [makeProjectile()], [], [], 0, 0, 500, 0,
+      );
+
+      expect(drawMeshWithMatrixCalls.length).toBe(1);
+      // Red tint: R > G and R > B
+      expect(drawMeshWithMatrixCalls[0].tintR).toBeGreaterThan(drawMeshWithMatrixCalls[0].tintG);
+
+      entityRenderer.dispose();
+    });
+
+    it('renders combat bot projectiles with blue tint', () => {
+      const { renderer, drawMeshWithMatrixCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      entityRenderer.renderProjectiles(
+        [], [makeProjectile()], [], 0, 0, 500, 0,
+      );
+
+      expect(drawMeshWithMatrixCalls.length).toBe(1);
+      // Blue tint: B > R
+      expect(drawMeshWithMatrixCalls[0].tintB).toBeGreaterThan(drawMeshWithMatrixCalls[0].tintR);
+
+      entityRenderer.dispose();
+    });
+
+    it('renders homing missiles with orange tint', () => {
+      const { renderer, drawMeshWithMatrixCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      entityRenderer.renderProjectiles(
+        [], [], [makeMissile()], 0, 0, 500, 0,
+      );
+
+      expect(drawMeshWithMatrixCalls.length).toBe(1);
+      // Orange: R > B
+      expect(drawMeshWithMatrixCalls[0].tintR).toBeGreaterThan(drawMeshWithMatrixCalls[0].tintB);
+
+      entityRenderer.dispose();
+    });
+
+    it('culls projectiles outside view radius', () => {
+      const { renderer, drawMeshWithMatrixCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      entityRenderer.renderProjectiles(
+        [makeProjectile({ x: 2000, y: 2000 })],
+        [makeProjectile({ x: 2000, y: 2000 })],
+        [makeMissile({ x: 2000, y: 2000 })],
+        0, 0, 100, 0,
+      );
+
+      expect(drawMeshWithMatrixCalls.length).toBe(0);
+
+      entityRenderer.dispose();
+    });
+
+    it('skips inactive projectiles', () => {
+      const { renderer, drawMeshWithMatrixCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      entityRenderer.renderProjectiles(
+        [makeProjectile({ active: false })],
+        [makeProjectile({ active: false })],
+        [makeMissile({ active: false })],
+        0, 0, 500, 0,
+      );
+
+      expect(drawMeshWithMatrixCalls.length).toBe(0);
+
+      entityRenderer.dispose();
+    });
+
+    it('renders all three projectile types simultaneously', () => {
+      const { renderer, drawMeshWithMatrixCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      entityRenderer.renderProjectiles(
+        [makeProjectile({ x: 10, y: 10 })],
+        [makeProjectile({ x: 20, y: 20 })],
+        [makeMissile({ x: 30, y: 30 })],
+        0, 0, 500, 0,
+      );
+
+      expect(drawMeshWithMatrixCalls.length).toBe(3);
+
+      entityRenderer.dispose();
+    });
+  });
+
   describe('dispose', () => {
-    it('deletes all uploaded meshes including player and enemy handles', () => {
+    it('deletes all uploaded meshes including bots, salvage, and projectile handles', () => {
       const { renderer } = createMockRenderer();
       const entityRenderer = new EntityRenderer3D(renderer);
 
       entityRenderer.dispose();
 
-      // 30 asteroid + 1 home base + 1 player + 4 enemies = 36 deletions
-      expect(renderer.deleteMesh).toHaveBeenCalledTimes(36);
+      // 30 asteroid + 1 home base + 1 player + 4 enemies + 2 bots + 1 salvage + 1 projectile = 40
+      expect(renderer.deleteMesh).toHaveBeenCalledTimes(40);
     });
   });
 });

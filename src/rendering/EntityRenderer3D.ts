@@ -9,7 +9,11 @@
  */
 
 import type { Renderer3D, MeshHandle } from './Renderer3D';
-import type { Asteroid, Enemy, GameEntity, HomeBase } from '../entities/Entity';
+import type { Asteroid, Enemy, GameEntity, HomeBase, Projectile, Salvage } from '../entities/Entity';
+import type { MiningBot } from '../systems/MiningBotSystem';
+import { MiningBotState } from '../systems/MiningBotSystem';
+import type { CombatBot } from '../systems/CombatBotSystem';
+import type { Missile } from '../systems/AbilitySystem';
 import { mat4 } from './math3d';
 import {
   createAsteroidMesh,
@@ -19,6 +23,10 @@ import {
   createBruteMesh,
   createRangedMesh,
   createBossMesh,
+  createMiningBotMesh,
+  createCombatBotMesh,
+  createSalvageMesh,
+  createProjectileMesh,
 } from './meshes';
 
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -63,6 +71,33 @@ const BOSS_PULSE_AMP = 0.08;
 /** Boss pulse: frequency multiplier */
 const BOSS_PULSE_FREQ = 2;
 
+/** Mining bot orbit rotation speed (rad/s) */
+const MINING_BOT_SPIN_SPEED = 3;
+
+/** Combat bot lifetime pulse frequency */
+const COMBAT_BOT_PULSE_FREQ = 4;
+
+/** Combat bot lifetime pulse: minimum tint multiplier when near expiry */
+const COMBAT_BOT_PULSE_DIM = 0.4;
+
+/** Salvage rotation speed (rad/s) */
+const SALVAGE_ROTATION_SPEED = 1.5;
+
+/** Salvage pulse amplitude */
+const SALVAGE_PULSE_AMP = 0.15;
+
+/** Salvage pulse frequency */
+const SALVAGE_PULSE_FREQ = 3;
+
+/** Enemy projectile scale */
+const ENEMY_PROJ_SCALE = 1.0;
+
+/** Combat bot projectile scale (tiny) */
+const COMBAT_BOT_PROJ_SCALE = 0.5;
+
+/** Homing missile scale (larger) */
+const HOMING_MISSILE_SCALE = 1.5;
+
 // ─── Position hash for deterministic seeding ────────────────────────────
 
 /** Hash a position into a deterministic integer seed */
@@ -94,6 +129,14 @@ export class EntityRenderer3D {
   private rangedHandle: MeshHandle;
   private bossHandle: MeshHandle;
 
+  // Bot meshes
+  private miningBotHandle: MeshHandle;
+  private combatBotHandle: MeshHandle;
+
+  // Salvage and projectile meshes
+  private salvageHandle: MeshHandle;
+  private projectileHandle: MeshHandle;
+
   constructor(renderer: Renderer3D) {
     this.renderer = renderer;
 
@@ -123,6 +166,14 @@ export class EntityRenderer3D {
     this.bruteHandle = renderer.uploadMesh(createBruteMesh());
     this.rangedHandle = renderer.uploadMesh(createRangedMesh());
     this.bossHandle = renderer.uploadMesh(createBossMesh());
+
+    // Pre-generate bot meshes
+    this.miningBotHandle = renderer.uploadMesh(createMiningBotMesh());
+    this.combatBotHandle = renderer.uploadMesh(createCombatBotMesh());
+
+    // Pre-generate salvage and projectile meshes
+    this.salvageHandle = renderer.uploadMesh(createSalvageMesh());
+    this.projectileHandle = renderer.uploadMesh(createProjectileMesh());
   }
 
   /**
@@ -363,6 +414,221 @@ export class EntityRenderer3D {
     this.renderer.drawMeshWithMatrix(this.bossHandle, model, tintR, tintG, tintB, 0);
   }
 
+  /**
+   * Render all active mining bots as 3D icospheres.
+   * Bots in Mining state spin around their orbit angle.
+   * Bots in Deploying state face their movement direction.
+   */
+  renderMiningBots(
+    bots: readonly MiningBot[],
+    playerX: number,
+    playerY: number,
+    viewRadius: number,
+    time: number,
+  ): void {
+    const viewRadiusSq = viewRadius * viewRadius;
+
+    for (let i = 0; i < bots.length; i++) {
+      const bot = bots[i];
+      if (!bot.active) continue;
+
+      // Visibility culling
+      const dx = bot.x - playerX;
+      const dy = bot.y - playerY;
+      if (dx * dx + dy * dy > viewRadiusSq) continue;
+
+      // Rotation: spinning when mining, heading-based when deploying
+      const rotY = bot.state === MiningBotState.Mining
+        ? time * MINING_BOT_SPIN_SPEED
+        : -Math.atan2(bot.vx, bot.vy);
+
+      this.renderer.drawMeshTinted(
+        this.miningBotHandle,
+        bot.x,
+        bot.y,
+        rotY,
+        1,
+        1, 1, 1, // white tint (no tint)
+        0, // no flash
+      );
+    }
+  }
+
+  /**
+   * Render all active combat bots as 3D chevrons.
+   * Facing movement direction. Lifetime-based pulsing: brighter when fresh, dimmer near expiry.
+   */
+  renderCombatBots(
+    bots: readonly CombatBot[],
+    playerX: number,
+    playerY: number,
+    viewRadius: number,
+    time: number,
+  ): void {
+    const viewRadiusSq = viewRadius * viewRadius;
+
+    for (let i = 0; i < bots.length; i++) {
+      const bot = bots[i];
+      if (!bot.active) continue;
+
+      // Visibility culling
+      const dx = bot.x - playerX;
+      const dy = bot.y - playerY;
+      if (dx * dx + dy * dy > viewRadiusSq) continue;
+
+      // Heading from velocity
+      const heading = (bot.vx !== 0 || bot.vy !== 0)
+        ? -Math.atan2(bot.vx, bot.vy)
+        : 0;
+
+      // Lifetime-based pulse: bots near expiry dim and pulse faster
+      const lifetimeRatio = bot.maxLifetime > 0 ? bot.lifetime / bot.maxLifetime : 1;
+      const baseBrightness = COMBAT_BOT_PULSE_DIM + (1 - COMBAT_BOT_PULSE_DIM) * lifetimeRatio;
+      const pulseSpeed = COMBAT_BOT_PULSE_FREQ * (2 - lifetimeRatio); // faster when dying
+      const pulse = baseBrightness + Math.sin(time * pulseSpeed) * 0.1 * (1 - lifetimeRatio);
+
+      const tint = Math.max(COMBAT_BOT_PULSE_DIM, Math.min(1.2, pulse));
+
+      let model = mat4.translate(mat4.identity(), bot.x, 0, bot.y);
+      model = mat4.rotateY(model, heading);
+
+      this.renderer.drawMeshWithMatrix(
+        this.combatBotHandle,
+        model,
+        tint, tint, tint,
+        0, // no flash
+      );
+    }
+  }
+
+  /**
+   * Render all active visible salvage as rotating 3D diamonds.
+   * Applies damage flash and gentle pulsing tint.
+   */
+  renderSalvage(
+    entities: readonly GameEntity[],
+    playerX: number,
+    playerY: number,
+    viewRadius: number,
+    time: number,
+  ): void {
+    const viewRadiusSq = viewRadius * viewRadius;
+
+    for (let i = 0; i < entities.length; i++) {
+      const entity = entities[i];
+      if (entity.type !== 'salvage' || !entity.active || !entity.visible) continue;
+
+      const salvage = entity as Salvage;
+
+      // Visibility culling
+      const dx = salvage.x - playerX;
+      const dy = salvage.y - playerY;
+      if (dx * dx + dy * dy > viewRadiusSq) continue;
+
+      // Rotation: constant Y-axis spin
+      const rotY = time * SALVAGE_ROTATION_SPEED;
+
+      // Pulsing scale
+      const pulse = 1 + Math.sin(time * SALVAGE_PULSE_FREQ) * SALVAGE_PULSE_AMP;
+
+      // Damage flash
+      const flash = salvage.damageFlash > 0 ? Math.min(salvage.damageFlash, 1) : 0;
+
+      this.renderer.drawMeshTinted(
+        this.salvageHandle,
+        salvage.x,
+        salvage.y,
+        rotY,
+        pulse,
+        1, 1, 1, // white tint (mesh has amber color baked in)
+        flash,
+      );
+    }
+  }
+
+  /**
+   * Render all active projectiles as small 3D elongated shapes.
+   * Enemy projectiles, combat bot projectiles (from CombatSystem), and homing missiles
+   * all use the same mesh at different scales and tint colors.
+   */
+  renderProjectiles(
+    enemyProjectiles: readonly Projectile[],
+    combatBotProjectiles: readonly Projectile[],
+    homingMissiles: readonly Missile[],
+    playerX: number,
+    playerY: number,
+    viewRadius: number,
+    _time: number,
+  ): void {
+    const viewRadiusSq = viewRadius * viewRadius;
+
+    // Enemy projectiles — red tint, normal scale
+    for (let i = 0; i < enemyProjectiles.length; i++) {
+      const p = enemyProjectiles[i];
+      if (!p.active) continue;
+
+      const dx = p.x - playerX;
+      const dy = p.y - playerY;
+      if (dx * dx + dy * dy > viewRadiusSq) continue;
+
+      const heading = -Math.atan2(p.vx, p.vy);
+      let model = mat4.translate(mat4.identity(), p.x, 0, p.y);
+      model = mat4.rotateY(model, heading);
+      model = mat4.scale(model, ENEMY_PROJ_SCALE, ENEMY_PROJ_SCALE, ENEMY_PROJ_SCALE);
+
+      this.renderer.drawMeshWithMatrix(
+        this.projectileHandle,
+        model,
+        1.2, 0.4, 0.3, // red tint
+        0,
+      );
+    }
+
+    // Combat bot projectiles — blue tint, tiny scale
+    for (let i = 0; i < combatBotProjectiles.length; i++) {
+      const p = combatBotProjectiles[i];
+      if (!p.active) continue;
+
+      const dx = p.x - playerX;
+      const dy = p.y - playerY;
+      if (dx * dx + dy * dy > viewRadiusSq) continue;
+
+      const heading = -Math.atan2(p.vx, p.vy);
+      let model = mat4.translate(mat4.identity(), p.x, 0, p.y);
+      model = mat4.rotateY(model, heading);
+      model = mat4.scale(model, COMBAT_BOT_PROJ_SCALE, COMBAT_BOT_PROJ_SCALE, COMBAT_BOT_PROJ_SCALE);
+
+      this.renderer.drawMeshWithMatrix(
+        this.projectileHandle,
+        model,
+        0.4, 0.6, 1.2, // blue tint
+        0,
+      );
+    }
+
+    // Homing missiles — orange tint, larger scale
+    for (let i = 0; i < homingMissiles.length; i++) {
+      const m = homingMissiles[i];
+      if (!m.active) continue;
+
+      const dx = m.x - playerX;
+      const dy = m.y - playerY;
+      if (dx * dx + dy * dy > viewRadiusSq) continue;
+
+      const heading = -Math.atan2(m.vx, m.vy);
+      let model = mat4.translate(mat4.identity(), m.x, 0, m.y);
+      model = mat4.rotateY(model, heading);
+      model = mat4.scale(model, HOMING_MISSILE_SCALE, HOMING_MISSILE_SCALE, HOMING_MISSILE_SCALE);
+
+      this.renderer.drawMeshWithMatrix(
+        this.projectileHandle,
+        model,
+        1.3, 0.7, 0.2, // orange tint
+        0,
+      );
+    }
+  }
+
   /** Clean up all GPU resources */
   dispose(): void {
     const sizes = ['small', 'medium', 'large'] as const;
@@ -377,5 +643,9 @@ export class EntityRenderer3D {
     this.renderer.deleteMesh(this.bruteHandle);
     this.renderer.deleteMesh(this.rangedHandle);
     this.renderer.deleteMesh(this.bossHandle);
+    this.renderer.deleteMesh(this.miningBotHandle);
+    this.renderer.deleteMesh(this.combatBotHandle);
+    this.renderer.deleteMesh(this.salvageHandle);
+    this.renderer.deleteMesh(this.projectileHandle);
   }
 }

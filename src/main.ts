@@ -1174,6 +1174,44 @@ const loop = new GameLoop({
         player.survivalTime,
       );
 
+      // Render salvage as rotating 3D diamonds
+      entityRenderer3d.renderSalvage(
+        world.entities,
+        player.x,
+        player.y,
+        viewRadius3d,
+        player.survivalTime,
+      );
+
+      // Render mining bots as 3D icospheres
+      entityRenderer3d.renderMiningBots(
+        miningBotSystem.getBots(),
+        player.x,
+        player.y,
+        viewRadius3d,
+        player.survivalTime,
+      );
+
+      // Render combat bots as 3D chevrons with lifetime pulse
+      entityRenderer3d.renderCombatBots(
+        combatBotSystem.bots,
+        player.x,
+        player.y,
+        viewRadius3d,
+        player.survivalTime,
+      );
+
+      // Render all projectile types as 3D shapes
+      entityRenderer3d.renderProjectiles(
+        combatSystem.projectiles,
+        combatBotSystem.botProjectiles,
+        abilitySystem.missiles,
+        player.x,
+        player.y,
+        viewRadius3d,
+        player.survivalTime,
+      );
+
       // Render player ship with banking and engine glow
       entityRenderer3d.renderPlayer(
         player.x,
