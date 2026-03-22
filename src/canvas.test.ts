@@ -27,6 +27,12 @@ describe('createCanvas', () => {
     expect(canvas.height).toBe(768);
   });
 
+  it('positions canvas with z-index for 3D layering', () => {
+    const canvas = createCanvas('game-canvas');
+    expect(canvas.style.position).toBe('absolute');
+    expect(canvas.style.zIndex).toBe('1');
+  });
+
   it('resizes canvas when the window resizes', () => {
     Object.defineProperty(window, 'innerWidth', { value: 800, writable: true });
     Object.defineProperty(window, 'innerHeight', { value: 600, writable: true });
