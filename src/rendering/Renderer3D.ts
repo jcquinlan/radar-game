@@ -38,7 +38,7 @@ uniform vec3 uTintColor;
 uniform float uDamageFlash;
 uniform float uSpecular;   // 0 = matte, 1 = full specular shine
 uniform vec3 uEmissive;    // additive glow color (independent of lighting)
-uniform vec3 uViewDir;     // camera look direction (set once per frame)
+uniform vec3 uViewDir;     // direction from scene toward camera (set once per frame)
 
 out vec4 fragColor;
 
@@ -351,10 +351,11 @@ export class Renderer3D {
     this.viewMatrix = mat4.lookAt(eye, target, up);
     gl.uniformMatrix4fv(this.uView, false, this.viewMatrix);
 
-    // Compute and set view direction (eye -> target, normalized) for specular
-    const vdx = target[0] - eye[0];
-    const vdy = target[1] - eye[1];
-    const vdz = target[2] - eye[2];
+    // Compute view direction (target -> eye, normalized) for Blinn-Phong specular.
+    // In Blinn-Phong, V points from fragment toward the camera.
+    const vdx = eye[0] - target[0];
+    const vdy = eye[1] - target[1];
+    const vdz = eye[2] - target[2];
     const vdLen = Math.sqrt(vdx * vdx + vdy * vdy + vdz * vdz);
     if (vdLen > 0) {
       this.viewDirArray[0] = vdx / vdLen;
