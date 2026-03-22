@@ -60,11 +60,13 @@ if (shaderPipeline) {
   damageDistortionEffect = dmgEffect;
 }
 // 3D renderer (renders behind the 2D canvas — optional, null if WebGL2 unavailable)
-const renderer3d = Renderer3D.create(canvas);
+let renderer3d = Renderer3D.create(canvas);
 let entityRenderer3d: EntityRenderer3D | null = null;
 if (renderer3d) {
   entityRenderer3d = new EntityRenderer3D(renderer3d);
 }
+/** Whether to use 3D rendering. Set to false when WebGL2 is unavailable or user disables it. */
+let use3D = renderer3d !== null;
 const pauseMenu = new PauseMenu();
 const helpScreen = new HelpScreen();
 const levelManager = new LevelManager();
@@ -1145,8 +1147,8 @@ const loop = new GameLoop({
 
     const theme = getTheme();
 
-    // 3D renderer pass — renders background, asteroids, and home base
-    if (renderer3d && entityRenderer3d) {
+    // 3D renderer pass — renders entities as 3D meshes on a separate WebGL2 canvas
+    if (use3D && renderer3d && entityRenderer3d) {
       renderer3d.setClearColor(theme.radar.background);
       renderer3d.beginFrame(player.x, player.y, player.heading, zoom.current);
 
@@ -1224,15 +1226,12 @@ const loop = new GameLoop({
       renderer3d.endFrame();
     }
 
-    // Clear the 2D canvas transparently so the 3D scene shows through,
-    // then blit the 3D canvas as the background layer for compositing.
-    // The ShaderPipeline reads only the 2D canvas, so we must composite
-    // the 3D content into it before the shader pass.
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (renderer3d) {
+    // When 3D is active: clear transparently and blit the 3D canvas as background.
+    // When 3D is off: draw an opaque background for the 2D fallback path.
+    if (use3D && renderer3d) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(renderer3d.getCanvas(), 0, 0);
     } else {
-      // Fallback when WebGL2 is unavailable — draw opaque background
       ctx.fillStyle = theme.radar.background;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
@@ -1254,22 +1253,21 @@ const loop = new GameLoop({
     const viewRadius = Math.sqrt(canvas.width * canvas.width + canvas.height * canvas.height) / 2 / zoom.current;
     ambientParticles.renderDeep(ctx, cx, cy, viewRadius, player.x, player.y);
 
-    // ── 3D MIGRATION ──────────────────────────────────────────────────────
-    // The following entity rendering has been removed from the 2D canvas.
-    // These will be rendered by the 3D renderer in subsequent work items:
-    //   - Motion trails (MotionTrail)
-    //   - Home base (boundary ring, hexagon)
-    //   - Combat bots (chevrons, health bars)
-    //   - Combat bot projectiles
-    //   - Dropoff zones (pulsing rings)
-    //   - Tow ropes and towed salvage
-    //   - Entity blips (asteroids, enemies, salvage via BlipRenderer)
-    //   - Death particles
-    //   - Enemy projectiles
-    //   - Mining bots and laser lines
-    //   - Homing missiles
-    //   - Mouse cursor crosshair
-    // ────────────────────────────────────────────────────────────────────────
+    // Entity blips (2D fallback) — when 3D is active, only render ghost-blips and labels.
+    // When 3D is off, render full entity shapes.
+    const worldRot = -player.heading - Math.PI / 2;
+    blipRenderer.renderBlips(
+      ctx,
+      world.entities,
+      player.x,
+      player.y,
+      cx,
+      cy,
+      viewRadius,
+      resolutionLevel,
+      worldRot,
+      !use3D,
+    );
 
     // Sweep effects (radar ping visual feedback — stays on 2D overlay)
     sweepEffects.render(ctx, cx, cy);
@@ -1295,7 +1293,16 @@ const loop = new GameLoop({
     ctx.fill();
     ctx.restore();
 
-    // [3D-MIGRATION] Player heading indicator — removed from 2D, will be rendered in 3D
+    // Player heading indicator — only shown in 2D mode (3D renders the player ship)
+    if (!use3D) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 8);
+      ctx.lineTo(cx - 5, cy + 5);
+      ctx.lineTo(cx + 5, cy + 5);
+      ctx.closePath();
+      ctx.fillStyle = '#00ff41';
+      ctx.fill();
+    }
 
     // Bot slot UI — row of small circles below the player indicator
     {
