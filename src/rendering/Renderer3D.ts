@@ -157,6 +157,14 @@ export class Renderer3D {
   private projectionMatrix: Float32Array = mat4.identity();
   private viewMatrix: Float32Array = mat4.identity();
 
+  /** Callback invoked when the WebGL context is lost */
+  onContextLost: (() => void) | null = null;
+  /** Callback invoked when the WebGL context is restored */
+  onContextRestored: (() => void) | null = null;
+
+  private contextLostHandler: ((e: Event) => void) | null = null;
+  private contextRestoredHandler: ((e: Event) => void) | null = null;
+
   private constructor(gl: WebGL2RenderingContext, canvas3d: HTMLCanvasElement, program: WebGLProgram) {
     this.gl = gl;
     this.canvas3d = canvas3d;
@@ -231,7 +239,20 @@ export class Renderer3D {
       const vertexShader = compileShader(gl, gl.VERTEX_SHADER, VERTEX_SOURCE);
       const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SOURCE);
       const program = createProgram(gl, vertexShader, fragmentShader);
-      return new Renderer3D(gl, canvas3d, program);
+      const renderer = new Renderer3D(gl, canvas3d, program);
+
+      // Context loss/restore event listeners
+      renderer.contextLostHandler = (e: Event) => {
+        e.preventDefault(); // allows context to be restored
+        if (renderer.onContextLost) renderer.onContextLost();
+      };
+      renderer.contextRestoredHandler = () => {
+        if (renderer.onContextRestored) renderer.onContextRestored();
+      };
+      canvas3d.addEventListener('webglcontextlost', renderer.contextLostHandler);
+      canvas3d.addEventListener('webglcontextrestored', renderer.contextRestoredHandler);
+
+      return renderer;
     } catch {
       canvas3d.remove();
       return null;
@@ -511,62 +532,17 @@ export class Renderer3D {
     return this.canvas3d;
   }
 
-  /** Clean up all GPU resources */
+  /** Clean up all GPU resources and event listeners */
   dispose(): void {
     const { gl } = this;
+    if (this.contextLostHandler) {
+      this.canvas3d.removeEventListener('webglcontextlost', this.contextLostHandler);
+    }
+    if (this.contextRestoredHandler) {
+      this.canvas3d.removeEventListener('webglcontextrestored', this.contextRestoredHandler);
+    }
     gl.deleteProgram(this.program);
     this.canvas3d.remove();
   }
 }
 
-// ─── Test mesh: colored cube ─────────────────────────────────────────────
-
-/** Create a colored cube mesh centered at origin with given half-size */
-export function createTestCube(halfSize = 15): Mesh {
-  const s = halfSize;
-
-  // 6 faces, 4 vertices each = 24 vertices
-  // Each face has a unique normal and color
-  const positions: number[] = [];
-  const normals: number[] = [];
-  const colors: number[] = [];
-  const indices: number[] = [];
-
-  const faces: {
-    verts: [number, number, number][];
-    normal: [number, number, number];
-    color: [number, number, number];
-  }[] = [
-    // Front face (+Z)
-    { verts: [[-s, -s, s], [s, -s, s], [s, s, s], [-s, s, s]], normal: [0, 0, 1], color: [0.2, 0.8, 0.2] },
-    // Back face (-Z)
-    { verts: [[s, -s, -s], [-s, -s, -s], [-s, s, -s], [s, s, -s]], normal: [0, 0, -1], color: [0.8, 0.2, 0.2] },
-    // Top face (+Y)
-    { verts: [[-s, s, s], [s, s, s], [s, s, -s], [-s, s, -s]], normal: [0, 1, 0], color: [0.2, 0.6, 0.9] },
-    // Bottom face (-Y)
-    { verts: [[-s, -s, -s], [s, -s, -s], [s, -s, s], [-s, -s, s]], normal: [0, -1, 0], color: [0.9, 0.6, 0.2] },
-    // Right face (+X)
-    { verts: [[s, -s, s], [s, -s, -s], [s, s, -s], [s, s, s]], normal: [1, 0, 0], color: [0.8, 0.8, 0.2] },
-    // Left face (-X)
-    { verts: [[-s, -s, -s], [-s, -s, s], [-s, s, s], [-s, s, -s]], normal: [-1, 0, 0], color: [0.6, 0.2, 0.8] },
-  ];
-
-  for (const face of faces) {
-    const baseIndex = positions.length / 3;
-    for (const v of face.verts) {
-      positions.push(v[0], v[1], v[2]);
-      normals.push(face.normal[0], face.normal[1], face.normal[2]);
-      colors.push(face.color[0], face.color[1], face.color[2]);
-    }
-    // Two triangles per face
-    indices.push(baseIndex, baseIndex + 1, baseIndex + 2);
-    indices.push(baseIndex, baseIndex + 2, baseIndex + 3);
-  }
-
-  return {
-    positions: new Float32Array(positions),
-    normals: new Float32Array(normals),
-    colors: new Float32Array(colors),
-    indices: new Uint16Array(indices),
-  };
-}
