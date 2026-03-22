@@ -145,23 +145,29 @@ describe('Renderer3D', () => {
 
         renderer.drawMeshTinted(mesh, 10, 20, 0, 1, 0.8, 0.2, 0.1, 0.5);
 
-        // Should have set tint color, then reset it (2 calls)
+        // Should have set tint + emissive, then reset both (4 uniform3fv calls)
         const uniform3fvCalls = (gl.uniform3fv as ReturnType<typeof vi.fn>).mock.calls;
-        expect(uniform3fvCalls.length).toBe(2);
+        expect(uniform3fvCalls.length).toBe(4);
         // First call: set tint (Float32Array)
         expect(Array.from(uniform3fvCalls[0][1])).toEqual([
           expect.closeTo(0.8, 4),
           expect.closeTo(0.2, 4),
           expect.closeTo(0.1, 4),
         ]);
-        // Second call: reset to white (Float32Array)
-        expect(Array.from(uniform3fvCalls[1][1])).toEqual([1, 1, 1]);
+        // Second call: set emissive (defaults to black)
+        expect(Array.from(uniform3fvCalls[1][1])).toEqual([0, 0, 0]);
+        // Third call: reset tint to white
+        expect(Array.from(uniform3fvCalls[2][1])).toEqual([1, 1, 1]);
+        // Fourth call: reset emissive to black
+        expect(Array.from(uniform3fvCalls[3][1])).toEqual([0, 0, 0]);
 
-        // Should have set flash, then reset it (2 calls)
+        // Should have set flash + specular, then reset both (4 uniform1f calls)
         const uniform1fCalls = (gl.uniform1f as ReturnType<typeof vi.fn>).mock.calls;
-        expect(uniform1fCalls.length).toBe(2);
-        expect(uniform1fCalls[0][1]).toBe(0.5);
-        expect(uniform1fCalls[1][1]).toBe(0);
+        expect(uniform1fCalls.length).toBe(4);
+        expect(uniform1fCalls[0][1]).toBe(0.5);  // flash set
+        expect(uniform1fCalls[1][1]).toBe(0);     // specular set (default 0)
+        expect(uniform1fCalls[2][1]).toBe(0);     // flash reset
+        expect(uniform1fCalls[3][1]).toBe(0);     // specular reset
       });
     });
   });

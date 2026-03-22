@@ -36,13 +36,31 @@ uniform vec3 uLightDir;
 uniform vec3 uAmbient;
 uniform vec3 uTintColor;
 uniform float uDamageFlash;
+uniform float uSpecular;   // 0 = matte, 1 = full specular shine
+uniform vec3 uEmissive;    // additive glow color (independent of lighting)
+uniform vec3 uViewDir;     // direction from scene toward camera (set once per frame)
 
 out vec4 fragColor;
 
 void main() {
   vec3 normal = normalize(vNormal);
-  float diffuse = max(dot(normal, uLightDir), 0.0);
-  vec3 lit = vColor * uTintColor * (uAmbient + vec3(diffuse));
+
+  // Diffuse (Lambertian)
+  float NdotL = max(dot(normal, uLightDir), 0.0);
+
+  // Blinn-Phong specular: half-vector between light and view
+  vec3 halfDir = normalize(uLightDir + uViewDir);
+  float NdotH = max(dot(normal, halfDir), 0.0);
+  // Shininess exponent 32 gives a tight specular highlight, good for metallic surfaces
+  float spec = uSpecular * pow(NdotH, 32.0) * NdotL; // spec only where lit
+
+  // Combine: ambient + diffuse + specular, then multiply by base color and tint
+  vec3 lighting = uAmbient + vec3(NdotL) + vec3(spec * 0.6);
+  vec3 lit = vColor * uTintColor * lighting;
+
+  // Add emissive glow (not affected by lighting — always visible)
+  lit += uEmissive;
+
   // Damage flash: mix toward white
   vec3 finalColor = mix(lit, vec3(1.0), uDamageFlash);
   fragColor = vec4(finalColor, 1.0);
@@ -72,7 +90,7 @@ export interface MeshHandle {
 // ─── Hex color parsing ──────────────────────────────────────────────────
 
 /** Parse a hex color string (#rgb, #rrggbb) into [r, g, b] floats 0-1 */
-function parseHexColor(hex: string): [number, number, number] {
+export function parseHexColor(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
   let r: number, g: number, b: number;
   if (h.length === 3) {
@@ -98,8 +116,8 @@ const ORTHO_HALF_SIZE = 400;
 
 // ─── Light direction (above-right, normalized) ──────────────────────────
 
-const LIGHT_DIR: Vec3 = vec3.normalize([0.4, 1.0, 0.3]);
-const AMBIENT: Vec3 = [0.3, 0.3, 0.3];
+const LIGHT_DIR: Vec3 = vec3.normalize([0.3, 0.9, 0.4]);
+const AMBIENT: Vec3 = [0.25, 0.25, 0.28]; // slightly blue-tinted ambient for depth
 
 // ─── Renderer class ─────────────────────────────────────────────────────
 
@@ -116,6 +134,9 @@ export class Renderer3D {
   private uAmbient: WebGLUniformLocation | null;
   private uTintColor: WebGLUniformLocation | null;
   private uDamageFlash: WebGLUniformLocation | null;
+  private uSpecular: WebGLUniformLocation | null;
+  private uEmissive: WebGLUniformLocation | null;
+  private uViewDir: WebGLUniformLocation | null;
 
   // Clear color (defaults to transparent black)
   private clearR = 0;
@@ -126,6 +147,11 @@ export class Renderer3D {
   // Pre-allocated arrays for tint uniforms (avoid per-frame allocation)
   private tintArray = new Float32Array([1, 1, 1]);
   private defaultTint = new Float32Array([1, 1, 1]);
+
+  // Pre-allocated arrays for material uniforms (avoid per-frame allocation)
+  private emissiveArray = new Float32Array([0, 0, 0]);
+  private defaultEmissive = new Float32Array([0, 0, 0]);
+  private viewDirArray = new Float32Array([0, 1, 0]);
 
   // Current camera matrices (reused each frame)
   private projectionMatrix: Float32Array = mat4.identity();
@@ -144,6 +170,9 @@ export class Renderer3D {
     this.uAmbient = gl.getUniformLocation(program, 'uAmbient');
     this.uTintColor = gl.getUniformLocation(program, 'uTintColor');
     this.uDamageFlash = gl.getUniformLocation(program, 'uDamageFlash');
+    this.uSpecular = gl.getUniformLocation(program, 'uSpecular');
+    this.uEmissive = gl.getUniformLocation(program, 'uEmissive');
+    this.uViewDir = gl.getUniformLocation(program, 'uViewDir');
 
     // Set static uniforms
     gl.uniform3fv(this.uLightDir, LIGHT_DIR);
@@ -152,6 +181,11 @@ export class Renderer3D {
     // Set default tint (white = no tint) and no flash
     gl.uniform3fv(this.uTintColor, this.defaultTint);
     gl.uniform1f(this.uDamageFlash, 0);
+
+    // Set default material: matte (no specular), no emissive glow
+    gl.uniform1f(this.uSpecular, 0);
+    gl.uniform3fv(this.uEmissive, this.defaultEmissive);
+    gl.uniform3fv(this.uViewDir, this.viewDirArray);
 
     // Enable depth testing
     gl.enable(gl.DEPTH_TEST);
@@ -316,6 +350,19 @@ export class Renderer3D {
 
     this.viewMatrix = mat4.lookAt(eye, target, up);
     gl.uniformMatrix4fv(this.uView, false, this.viewMatrix);
+
+    // Compute view direction (target -> eye, normalized) for Blinn-Phong specular.
+    // In Blinn-Phong, V points from fragment toward the camera.
+    const vdx = eye[0] - target[0];
+    const vdy = eye[1] - target[1];
+    const vdz = eye[2] - target[2];
+    const vdLen = Math.sqrt(vdx * vdx + vdy * vdy + vdz * vdz);
+    if (vdLen > 0) {
+      this.viewDirArray[0] = vdx / vdLen;
+      this.viewDirArray[1] = vdy / vdLen;
+      this.viewDirArray[2] = vdz / vdLen;
+    }
+    gl.uniform3fv(this.uViewDir, this.viewDirArray);
   }
 
   /**
@@ -345,7 +392,7 @@ export class Renderer3D {
   }
 
   /**
-   * Draw a mesh with tint color and damage flash.
+   * Draw a mesh with tint color, damage flash, and material properties.
    * @param handle Mesh handle from uploadMesh
    * @param worldX World X position
    * @param worldY World Y position (maps to 3D Z)
@@ -355,6 +402,10 @@ export class Renderer3D {
    * @param tintG Tint color green component (0-1, default 1)
    * @param tintB Tint color blue component (0-1, default 1)
    * @param flash Damage flash intensity (0 = none, 1 = full white)
+   * @param specular Specular intensity (0 = matte, 1 = full shine, default 0)
+   * @param emissiveR Emissive glow red (0-1, default 0)
+   * @param emissiveG Emissive glow green (0-1, default 0)
+   * @param emissiveB Emissive glow blue (0-1, default 0)
    */
   drawMeshTinted(
     handle: MeshHandle,
@@ -366,6 +417,10 @@ export class Renderer3D {
     tintG: number,
     tintB: number,
     flash: number,
+    specular = 0,
+    emissiveR = 0,
+    emissiveG = 0,
+    emissiveB = 0,
   ): void {
     const { gl } = this;
     this.tintArray[0] = tintR;
@@ -373,14 +428,21 @@ export class Renderer3D {
     this.tintArray[2] = tintB;
     gl.uniform3fv(this.uTintColor, this.tintArray);
     gl.uniform1f(this.uDamageFlash, flash);
+    gl.uniform1f(this.uSpecular, specular);
+    this.emissiveArray[0] = emissiveR;
+    this.emissiveArray[1] = emissiveG;
+    this.emissiveArray[2] = emissiveB;
+    gl.uniform3fv(this.uEmissive, this.emissiveArray);
     this.drawMesh(handle, worldX, worldY, rotationY, scaleVal);
     // Reset to defaults so subsequent drawMesh calls are unaffected
     gl.uniform3fv(this.uTintColor, this.defaultTint);
     gl.uniform1f(this.uDamageFlash, 0);
+    gl.uniform1f(this.uSpecular, 0);
+    gl.uniform3fv(this.uEmissive, this.defaultEmissive);
   }
 
   /**
-   * Draw a mesh with a pre-built model matrix, tint color, and damage flash.
+   * Draw a mesh with a pre-built model matrix, tint color, damage flash, and material properties.
    * Use this when you need arbitrary transforms (banking, bobbing) that
    * drawMesh/drawMeshTinted cannot express.
    */
@@ -391,6 +453,10 @@ export class Renderer3D {
     tintG: number,
     tintB: number,
     flash: number,
+    specular = 0,
+    emissiveR = 0,
+    emissiveG = 0,
+    emissiveB = 0,
   ): void {
     const { gl } = this;
     this.tintArray[0] = tintR;
@@ -398,12 +464,19 @@ export class Renderer3D {
     this.tintArray[2] = tintB;
     gl.uniform3fv(this.uTintColor, this.tintArray);
     gl.uniform1f(this.uDamageFlash, flash);
+    gl.uniform1f(this.uSpecular, specular);
+    this.emissiveArray[0] = emissiveR;
+    this.emissiveArray[1] = emissiveG;
+    this.emissiveArray[2] = emissiveB;
+    gl.uniform3fv(this.uEmissive, this.emissiveArray);
     gl.uniformMatrix4fv(this.uModel, false, modelMatrix);
     gl.bindVertexArray(handle.vao);
     gl.drawElements(gl.TRIANGLES, handle.indexCount, gl.UNSIGNED_SHORT, 0);
     // Reset to defaults
     gl.uniform3fv(this.uTintColor, this.defaultTint);
     gl.uniform1f(this.uDamageFlash, 0);
+    gl.uniform1f(this.uSpecular, 0);
+    gl.uniform3fv(this.uEmissive, this.defaultEmissive);
   }
 
   /** End the frame. Currently a no-op but reserved for future use. */

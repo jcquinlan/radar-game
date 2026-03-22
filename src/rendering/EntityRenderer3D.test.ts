@@ -23,6 +23,10 @@ function createMockRenderer() {
     tintG: number;
     tintB: number;
     flash: number;
+    specular: number;
+    emissiveR: number;
+    emissiveG: number;
+    emissiveB: number;
   }[] = [];
 
   const drawMeshWithMatrixCalls: {
@@ -32,6 +36,10 @@ function createMockRenderer() {
     tintG: number;
     tintB: number;
     flash: number;
+    specular: number;
+    emissiveR: number;
+    emissiveG: number;
+    emissiveB: number;
   }[] = [];
 
   const renderer = {
@@ -47,13 +55,13 @@ function createMockRenderer() {
       } as unknown as MeshHandle;
     }),
     drawMeshTinted: vi.fn(
-      (handle: MeshHandle, worldX: number, worldY: number, rotationY: number, scale: number, tintR: number, tintG: number, tintB: number, flash: number) => {
-        drawMeshTintedCalls.push({ handle, worldX, worldY, rotationY, scale, tintR, tintG, tintB, flash });
+      (handle: MeshHandle, worldX: number, worldY: number, rotationY: number, scale: number, tintR: number, tintG: number, tintB: number, flash: number, specular = 0, emissiveR = 0, emissiveG = 0, emissiveB = 0) => {
+        drawMeshTintedCalls.push({ handle, worldX, worldY, rotationY, scale, tintR, tintG, tintB, flash, specular, emissiveR, emissiveG, emissiveB });
       },
     ),
     drawMeshWithMatrix: vi.fn(
-      (handle: MeshHandle, modelMatrix: Float32Array, tintR: number, tintG: number, tintB: number, flash: number) => {
-        drawMeshWithMatrixCalls.push({ handle, modelMatrix, tintR, tintG, tintB, flash });
+      (handle: MeshHandle, modelMatrix: Float32Array, tintR: number, tintG: number, tintB: number, flash: number, specular = 0, emissiveR = 0, emissiveG = 0, emissiveB = 0) => {
+        drawMeshWithMatrixCalls.push({ handle, modelMatrix, tintR, tintG, tintB, flash, specular, emissiveR, emissiveG, emissiveB });
       },
     ),
     deleteMesh: vi.fn(),
@@ -864,6 +872,159 @@ describe('EntityRenderer3D', () => {
       );
 
       expect(drawMeshWithMatrixCalls.length).toBe(3);
+
+      entityRenderer.dispose();
+    });
+  });
+
+  describe('material properties', () => {
+    it('asteroids have zero specular (matte appearance)', () => {
+      const { renderer, drawMeshTintedCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const entities: GameEntity[] = [
+        makeAsteroid({ x: 10, y: 20, active: true }),
+      ];
+      entityRenderer.renderAsteroids(entities, 0, 0, 500, 1.0);
+
+      expect(drawMeshTintedCalls[0].specular).toBe(0);
+
+      entityRenderer.dispose();
+    });
+
+    it('player ship has metallic specular', () => {
+      const { renderer, drawMeshWithMatrixCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      entityRenderer.renderPlayer(0, 0, 0, 0, 0);
+
+      expect(drawMeshWithMatrixCalls[0].specular).toBeGreaterThan(0.5);
+
+      entityRenderer.dispose();
+    });
+
+    it('mining bots have metallic specular', () => {
+      const { renderer, drawMeshTintedCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const bots = [{
+        x: 50, y: 60, vx: 0, vy: 0, angle: 0,
+        targetAsteroid: null, state: MiningBotState.Mining,
+        miningProgress: 0, miningRate: 1, lifetime: 30,
+        active: true, aggroTimer: 5, energyAccum: 0,
+        energyTextTimer: 0, slotIndex: 0,
+      }] as MiningBot[];
+      entityRenderer.renderMiningBots(bots, 0, 0, 500, 1.0);
+
+      expect(drawMeshTintedCalls[0].specular).toBeGreaterThan(0.5);
+
+      entityRenderer.dispose();
+    });
+
+    it('combat bots have metallic specular', () => {
+      const { renderer, drawMeshWithMatrixCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const bots = [{
+        x: 50, y: 60, vx: 1, vy: 0, angle: 0,
+        state: CombatBotState.SeekingEnemy, targetEnemy: null,
+        targetX: 100, targetY: 100,
+        health: 30, maxHealth: 30, damage: 4,
+        fireRate: 1.5, fireTimer: 0, range: 200,
+        lifetime: 20, maxLifetime: 20,
+        active: true, slotIndex: 0,
+      }] as CombatBot[];
+      entityRenderer.renderCombatBots(bots, 0, 0, 500, 1.0);
+
+      expect(drawMeshWithMatrixCalls[0].specular).toBeGreaterThan(0.5);
+
+      entityRenderer.dispose();
+    });
+
+    it('boss at phase 2 has non-zero emissive glow', () => {
+      const { renderer, drawMeshWithMatrixCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const entities: GameEntity[] = [
+        makeBoss({ x: 10, y: 10, bossPhase: 2 }),
+      ];
+      entityRenderer.renderEnemies(entities, 0, 0, 500, 0);
+
+      // Phase 2 should have emissive > 0
+      expect(drawMeshWithMatrixCalls[0].emissiveR).toBeGreaterThan(0);
+
+      entityRenderer.dispose();
+    });
+
+    it('boss at phase 3 has stronger emissive than phase 2', () => {
+      const { renderer: renderer2, drawMeshWithMatrixCalls: calls2 } = createMockRenderer();
+      const er2 = new EntityRenderer3D(renderer2);
+      er2.renderEnemies([makeBoss({ x: 10, y: 10, bossPhase: 2 })] as GameEntity[], 0, 0, 500, 0);
+      const phase2EmR = calls2[0].emissiveR;
+      er2.dispose();
+
+      const { renderer: renderer3, drawMeshWithMatrixCalls: calls3 } = createMockRenderer();
+      const er3 = new EntityRenderer3D(renderer3);
+      er3.renderEnemies([makeBoss({ x: 10, y: 10, bossPhase: 3 })] as GameEntity[], 0, 0, 500, 0);
+      const phase3EmR = calls3[0].emissiveR;
+      er3.dispose();
+
+      expect(phase3EmR).toBeGreaterThan(phase2EmR);
+    });
+
+    it('boss at phase 1 has zero emissive', () => {
+      const { renderer, drawMeshWithMatrixCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      const entities: GameEntity[] = [
+        makeBoss({ x: 10, y: 10, bossPhase: 1 }),
+      ];
+      entityRenderer.renderEnemies(entities, 0, 0, 500, 0);
+
+      expect(drawMeshWithMatrixCalls[0].emissiveR).toBe(0);
+      expect(drawMeshWithMatrixCalls[0].emissiveG).toBe(0);
+      expect(drawMeshWithMatrixCalls[0].emissiveB).toBe(0);
+
+      entityRenderer.dispose();
+    });
+
+    it('enemy projectiles have non-zero emissive for bloom', () => {
+      const { renderer, drawMeshWithMatrixCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      entityRenderer.renderProjectiles(
+        [{ x: 50, y: 60, vx: 0, vy: -100, damage: 8, active: true, lifetime: 2 }],
+        [], [], 0, 0, 500, 0,
+      );
+
+      expect(drawMeshWithMatrixCalls[0].emissiveR).toBeGreaterThan(0);
+
+      entityRenderer.dispose();
+    });
+
+    it('player has engine emissive when thrusting forward', () => {
+      const { renderer, drawMeshWithMatrixCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      // Full thrust
+      entityRenderer.renderPlayer(0, 0, 0, 1, 0);
+
+      // Should have emissive > 0 when thrusting
+      expect(drawMeshWithMatrixCalls[0].emissiveG).toBeGreaterThan(0);
+
+      entityRenderer.dispose();
+    });
+
+    it('player has no engine emissive when not thrusting', () => {
+      const { renderer, drawMeshWithMatrixCalls } = createMockRenderer();
+      const entityRenderer = new EntityRenderer3D(renderer);
+
+      // No thrust
+      entityRenderer.renderPlayer(0, 0, 0, 0, 0);
+
+      expect(drawMeshWithMatrixCalls[0].emissiveR).toBe(0);
+      expect(drawMeshWithMatrixCalls[0].emissiveG).toBe(0);
+      expect(drawMeshWithMatrixCalls[0].emissiveB).toBe(0);
 
       entityRenderer.dispose();
     });
