@@ -41,7 +41,7 @@ npm run lint         # (not configured — echoes a no-op)
 - **Language:** TypeScript 5.7 (strict mode, ES2022 target)
 - **Bundler:** Vite 6.2 (dev server port 3232)
 - **Tests:** Vitest 3.0 with jsdom
-- **Rendering:** Canvas 2D API + optional WebGL2 post-processing (bloom + damage distortion shaders)
+- **Rendering:** Canvas 2D API + optional WebGL2 3D entity rendering + optional WebGL2 post-processing (bloom + damage distortion shaders)
 - **Dependencies:** Zero runtime dependencies. Only devDependencies: typescript, vite, vitest, jsdom.
 
 **Keep it zero-dep.** Do not add runtime dependencies. This game runs on Canvas 2D and math. If you think you need a library, you almost certainly don't — write the 20 lines of code instead.
@@ -89,29 +89,35 @@ The game uses a lightweight entity-systems architecture. Entities are plain data
 19. Level objective / wave end / game over checks
 20. `World.cleanup()` — removes inactive/distant entities (preserves towed salvage, skipped during final_wave)
 
+**Canvas stack (z-index order):**
+
+The game uses up to three layered canvases:
+
+| z-index | Canvas | Purpose |
+|---------|--------|---------|
+| 0 | 3D canvas (WebGL2) | Entity rendering — asteroids, enemies, player, bots, projectiles, salvage, home base |
+| 1 | 2D canvas (Canvas 2D) | Radar display, HUD, UI overlays, ability effects, floating text, 2D entity fallback |
+| 2 | Shader canvas (WebGL2) | Post-processing — bloom glow, damage distortion |
+
+When 3D is disabled (via pause menu or WebGL2 unavailable), the 3D canvas is unused and the 2D canvas handles entity rendering via `BlipRenderer` with an opaque background fill. The `use3D` flag in `main.ts` controls which render path is active each frame.
+
 **Render order:**
 
-1. Black background fill (theme-colored)
+0. **3D pass** (when `use3D` is true — skipped when 3D is off):
+   - `Renderer3D.beginFrame()` — clear 3D canvas, set camera matrices
+   - `EntityRenderer3D` renders: asteroids, home base, enemies (per subtype), salvage, mining bots, combat bots, projectiles (enemy, bot, homing missiles), player ship
+   - `Renderer3D.endFrame()`
+1. Background fill — when 3D active: clear 2D canvas and blit 3D canvas via `drawImage`. When 3D off: opaque theme background fill.
 2. Radar display (rings, crosshair, ping circle, scanlines — fixed to screen, scaled with zoom)
 3. Rotated world layer (canvas transform: `-player.heading - π/2`, scaled by zoom):
    - Ambient particles (deep layer)
-   - Motion trails (velocity streaks behind fast entities)
-   - Home base (boundary ring, inner ring, center hexagon — tints red when damaged)
-   - Combat bots (orange squares with health bars)
-   - Combat bot projectiles (small orange dots)
-   - Dropoff zones (pulsing gold rings with center diamond marker)
-   - Tow ropes (amber bezier curves from player to each salvage item)
-   - Towed salvage blips (amber diamond shapes)
-   - Entity blips via `BlipRenderer` (color-coded by type — asteroids, enemies, salvage)
-   - Mining bots (small amber circles orbiting asteroids)
+   - Entity blips via `BlipRenderer` — when 3D active: ghost-blips and labels only. When 3D off: full entity shapes (asteroids, enemies, salvage) with glow effects.
    - Sweep flash effects
    - Ability visual effects (blast ring, regen glow, missile launch flash)
-   - Enemy projectiles (red circles with glow)
-   - Homing missiles (orange streaks)
    - Floating damage/heal/collection text (counter-rotated to stay upright)
    - Ambient particles (foreground layer)
 4. Ping range vignette (subtle darkening outside radar ring)
-5. Player heading indicator (green triangle at screen center)
+5. Player heading indicator (green triangle at screen center — only when 3D is off; 3D renders the player ship)
 6. Damage flash vignette (red overlay on hit)
 7. HUD (health bar, energy, score, kills, distance, time, run timer, coordinates)
 8. Ability bar (bottom center, cooldown timers and keybind labels)
@@ -119,7 +125,7 @@ The game uses a lightweight entity-systems architecture. Entities are plain data
 10. Upgrade panel (right side, E key in base_mode — shows 3 building tabs with persistent upgrades)
 11. Game over / results overlay
 12. Key remap screen (modal overlay, toggled with K key)
-13. Pause menu (Escape key)
+13. Pause menu (Escape key — includes Toggle 3D and Toggle Shaders options)
 14. Post-processing shader pass (bloom glow + damage distortion, toggleable)
 
 ### Directory layout
@@ -156,13 +162,17 @@ src/
     levels.ts                # Tutorial/demo level definitions
   radar/
     RadarDisplay.ts          # Radar rendering — circle, rings, ping circle, scanlines
-    BlipRenderer.ts          # Entity blip rendering — colors, sizes, pulse animations, labels
+    BlipRenderer.ts          # Entity blip rendering — full 2D shapes (fallback) or ghost-blips + labels (3D active)
     SweepEffects.ts          # Expanding flash circles on ping interactions
     AbilityEffects.ts        # Blast ring, regen glow, missile launch flash
     AmbientParticles.ts      # Decorative floating particles inside radar
     MotionTrail.ts           # Velocity-based motion streaks behind fast-moving entities
     DeathParticles.ts        # Directional particle burst on entity destruction
   rendering/
+    Renderer3D.ts            # WebGL2 3D renderer — canvas, camera, Blinn-Phong lit shader, mesh upload/draw
+    EntityRenderer3D.ts      # 3D entity rendering — pre-generates mesh pools, per-frame entity iteration with culling
+    meshes.ts                # Procedural mesh generators — asteroids, player, enemies, bots, salvage, projectiles
+    math3d.ts                # Minimal 3D math library — mat4 (identity, multiply, translate, rotate, scale, ortho, lookAt), vec3
     ShaderPipeline.ts        # WebGL2 multi-pass post-processing pipeline (reads Canvas 2D as texture, ping-pong FBOs)
     ShaderEffect.ts          # ShaderEffect interface + compile/link helpers
     effects/
@@ -184,8 +194,40 @@ src/
     Minimap.ts               # Expandable minimap — collapsed bottom-left, click to expand fullscreen
     HelpScreen.ts            # H key toggle — scrollable help text overlay
     KeyRemapScreen.ts        # K key toggle — rebind ability keys and upgrades key, persists to localStorage
-    PauseMenu.ts             # Escape key — pause/resume, restart, toggle shaders, cycle themes, open keybinds
+    PauseMenu.ts             # Escape key — pause/resume, restart, toggle 3D, toggle shaders, cycle themes, open keybinds
 ```
+
+### 3D entity rendering
+
+The game has an optional WebGL2 3D rendering layer that renders entities as lit, textured 3D meshes. When enabled, entities appear as procedurally generated 3D shapes with Blinn-Phong lighting, specular highlights, emissive glow, and per-entity animations (rotation, banking, bobbing, pulsing). When disabled (or if WebGL2 is unavailable), the game falls back to 2D `BlipRenderer` shapes.
+
+**Architecture:**
+- `Renderer3D` creates a WebGL2 canvas positioned behind the 2D canvas (`z-index: 0`)
+- `Renderer3D.create()` returns `null` if WebGL2 is unavailable — the game runs in 2D-only mode
+- `EntityRenderer3D` pre-generates mesh pools at init (one-time GPU upload, never in hot path)
+- Each frame: `beginFrame()` clears and sets camera, entity render methods iterate and cull, `endFrame()` finalizes
+- The 2D canvas blits the 3D canvas via `drawImage()` so the `ShaderPipeline` can read both layers
+- Context loss (`webglcontextlost`) triggers automatic fallback to 2D; context restore reinitializes 3D resources
+- The `use3D` flag in `main.ts` controls the active render path, toggleable via the pause menu
+
+**Camera:**
+- Orthographic projection, tilted ~65 degrees from horizontal (isometric-like top-down view)
+- Camera follows the player, rotated to match player heading
+- Zoom scales the orthographic half-size
+
+**Lighting:**
+- Single directional light (above-right: `[0.3, 0.9, 0.4]`)
+- Slightly blue-tinted ambient (`[0.25, 0.25, 0.28]`)
+- Blinn-Phong specular on metallic entities (player, bots)
+- Per-entity emissive glow (enemies glow by subtype, projectiles bloom-ready)
+
+**Mesh types:**
+- Asteroids: irregular icosphere variants (10 per size), rotation based on position seed
+- Player: angular ship mesh, banks on turns, engine glow when thrusting
+- Enemies: scout (dart), brute (cube), ranged (diamond), boss (hexagonal prism with phase-based glow)
+- Bots: mining (icosphere), combat (chevron with lifetime pulse)
+- Salvage: rotating diamond with amber emissive
+- Projectiles: elongated capsule, tinted per source (red=enemy, blue=bot, orange=missile)
 
 ### Post-processing shader pipeline
 
