@@ -148,10 +148,14 @@ describe('Renderer3D', () => {
         // Should have set tint color, then reset it (2 calls)
         const uniform3fvCalls = (gl.uniform3fv as ReturnType<typeof vi.fn>).mock.calls;
         expect(uniform3fvCalls.length).toBe(2);
-        // First call: set tint
-        expect(uniform3fvCalls[0][1]).toEqual([0.8, 0.2, 0.1]);
-        // Second call: reset to white
-        expect(uniform3fvCalls[1][1]).toEqual([1, 1, 1]);
+        // First call: set tint (Float32Array)
+        expect(Array.from(uniform3fvCalls[0][1])).toEqual([
+          expect.closeTo(0.8, 4),
+          expect.closeTo(0.2, 4),
+          expect.closeTo(0.1, 4),
+        ]);
+        // Second call: reset to white (Float32Array)
+        expect(Array.from(uniform3fvCalls[1][1])).toEqual([1, 1, 1]);
 
         // Should have set flash, then reset it (2 calls)
         const uniform1fCalls = (gl.uniform1f as ReturnType<typeof vi.fn>).mock.calls;

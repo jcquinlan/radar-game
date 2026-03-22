@@ -123,6 +123,10 @@ export class Renderer3D {
   private clearB = 0;
   private clearA = 1;
 
+  // Pre-allocated arrays for tint uniforms (avoid per-frame allocation)
+  private tintArray = new Float32Array([1, 1, 1]);
+  private defaultTint = new Float32Array([1, 1, 1]);
+
   // Current camera matrices (reused each frame)
   private projectionMatrix: Float32Array = mat4.identity();
   private viewMatrix: Float32Array = mat4.identity();
@@ -146,7 +150,7 @@ export class Renderer3D {
     gl.uniform3fv(this.uAmbient, AMBIENT);
 
     // Set default tint (white = no tint) and no flash
-    gl.uniform3fv(this.uTintColor, [1, 1, 1]);
+    gl.uniform3fv(this.uTintColor, this.defaultTint);
     gl.uniform1f(this.uDamageFlash, 0);
 
     // Enable depth testing
@@ -364,11 +368,14 @@ export class Renderer3D {
     flash: number,
   ): void {
     const { gl } = this;
-    gl.uniform3fv(this.uTintColor, [tintR, tintG, tintB]);
+    this.tintArray[0] = tintR;
+    this.tintArray[1] = tintG;
+    this.tintArray[2] = tintB;
+    gl.uniform3fv(this.uTintColor, this.tintArray);
     gl.uniform1f(this.uDamageFlash, flash);
     this.drawMesh(handle, worldX, worldY, rotationY, scaleVal);
     // Reset to defaults so subsequent drawMesh calls are unaffected
-    gl.uniform3fv(this.uTintColor, [1, 1, 1]);
+    gl.uniform3fv(this.uTintColor, this.defaultTint);
     gl.uniform1f(this.uDamageFlash, 0);
   }
 
