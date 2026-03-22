@@ -90,7 +90,7 @@ export interface MeshHandle {
 // ─── Hex color parsing ──────────────────────────────────────────────────
 
 /** Parse a hex color string (#rgb, #rrggbb) into [r, g, b] floats 0-1 */
-function parseHexColor(hex: string): [number, number, number] {
+export function parseHexColor(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
   let r: number, g: number, b: number;
   if (h.length === 3) {

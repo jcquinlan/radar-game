@@ -9,11 +9,13 @@
  */
 
 import type { Renderer3D, MeshHandle } from './Renderer3D';
+import { parseHexColor } from './Renderer3D';
 import type { Asteroid, Enemy, GameEntity, HomeBase, Projectile, Salvage } from '../entities/Entity';
 import type { MiningBot } from '../systems/MiningBotSystem';
 import { MiningBotState } from '../systems/MiningBotSystem';
 import type { CombatBot } from '../systems/CombatBotSystem';
 import type { Missile } from '../systems/AbilitySystem';
+import { getTheme } from '../themes/theme';
 import { mat4 } from './math3d';
 import {
   createAsteroidMesh,
@@ -97,6 +99,81 @@ const COMBAT_BOT_PROJ_SCALE = 0.5;
 
 /** Homing missile scale (larger) */
 const HOMING_MISSILE_SCALE = 1.5;
+
+// ─── Material properties ──────────────────────────────────────────────────
+
+/** Specular intensity for metallic entities (player, bots) */
+const METALLIC_SPECULAR = 0.7;
+
+/** Specular intensity for home base */
+const HOME_BASE_SPECULAR = 0.3;
+
+/** Emissive intensity for scout enemies (subtle glow) */
+const SCOUT_EMISSIVE = 0.08;
+
+/** Emissive intensity for brute enemies */
+const BRUTE_EMISSIVE = 0.12;
+
+/** Emissive intensity for ranged enemies */
+const RANGED_EMISSIVE = 0.1;
+
+/** Boss emissive intensity at phase 2 */
+const BOSS_PHASE2_EMISSIVE = 0.2;
+
+/** Boss emissive intensity at phase 3 (base, before pulse) */
+const BOSS_PHASE3_EMISSIVE = 0.35;
+
+/** Boss emissive pulse amplitude at phase 3 */
+const BOSS_PHASE3_PULSE_AMP = 0.15;
+
+/** Boss emissive pulse frequency at phase 3 */
+const BOSS_PHASE3_PULSE_FREQ = 4;
+
+/** Salvage emissive glow (subtle amber) */
+const SALVAGE_EMISSIVE = 0.1;
+
+/** Projectile emissive intensity (bright, should trigger bloom) */
+const PROJECTILE_EMISSIVE = 0.4;
+
+// ─── Pre-allocated color cache for theme colors ──────────────────────────
+
+/** Cached parsed theme colors to avoid per-frame hex parsing.
+ *  Updated when theme name changes. */
+let cachedThemeName = '';
+const cachedColors = {
+  asteroid: [0, 0, 0] as [number, number, number],
+  enemyScout: [0, 0, 0] as [number, number, number],
+  enemyBrute: [0, 0, 0] as [number, number, number],
+  enemyRanged: [0, 0, 0] as [number, number, number],
+  enemyBoss: [0, 0, 0] as [number, number, number],
+  salvage: [0, 0, 0] as [number, number, number],
+  miningBot: [0, 0, 0] as [number, number, number],
+  combatBot: [0, 0, 0] as [number, number, number],
+  botProjectile: [0, 0, 0] as [number, number, number],
+  enemy: [0, 0, 0] as [number, number, number],
+};
+
+/** Refresh cached parsed colors if the theme has changed. No-alloc when unchanged. */
+function refreshThemeColors(): void {
+  const theme = getTheme();
+  if (theme.name === cachedThemeName) return;
+  cachedThemeName = theme.name;
+  const e = theme.entities;
+  const copy = (dst: [number, number, number], hex: string) => {
+    const [r, g, b] = parseHexColor(hex);
+    dst[0] = r; dst[1] = g; dst[2] = b;
+  };
+  copy(cachedColors.asteroid, e.asteroid);
+  copy(cachedColors.enemyScout, e.enemyScout);
+  copy(cachedColors.enemyBrute, e.enemyBrute);
+  copy(cachedColors.enemyRanged, e.enemyRanged);
+  copy(cachedColors.enemyBoss, e.enemyBoss);
+  copy(cachedColors.salvage, e.salvage);
+  copy(cachedColors.miningBot, e.miningBot);
+  copy(cachedColors.combatBot, e.combatBot);
+  copy(cachedColors.botProjectile, e.botProjectile);
+  copy(cachedColors.enemy, e.enemy);
+}
 
 // ─── Position hash for deterministic seeding ────────────────────────────
 
@@ -187,6 +264,7 @@ export class EntityRenderer3D {
     viewRadius: number,
     time: number,
   ): void {
+    refreshThemeColors();
     const viewRadiusSq = viewRadius * viewRadius;
 
     for (let i = 0; i < entities.length; i++) {
@@ -220,6 +298,7 @@ export class EntityRenderer3D {
       // Damage flash: override tint toward white
       const flash = asteroid.damageFlash > 0 ? Math.min(asteroid.damageFlash, 1) : 0;
 
+      // Asteroids are matte: zero specular, no emissive
       this.renderer.drawMeshTinted(
         handle,
         asteroid.x,
@@ -230,6 +309,7 @@ export class EntityRenderer3D {
         tintG,
         tintB,
         flash,
+        0, // matte - no specular
       );
     }
   }
@@ -261,6 +341,7 @@ export class EntityRenderer3D {
       tintG,
       tintB,
       0, // no flash
+      HOME_BASE_SPECULAR,
     );
   }
 
@@ -299,6 +380,9 @@ export class EntityRenderer3D {
     const tintG = 1 + glow;
     const tintB = 1 + glow * 0.8;
 
+    // Engine emissive: subtle glow when thrusting, visible even in shadow
+    const emissiveStr = thrustAmount * 0.15;
+
     this.renderer.drawMeshWithMatrix(
       this.playerHandle,
       model,
@@ -306,6 +390,10 @@ export class EntityRenderer3D {
       Math.min(tintG, 1.5),
       Math.min(tintB, 1.5),
       0, // no flash
+      METALLIC_SPECULAR,
+      emissiveStr * 0.3,  // warm R
+      emissiveStr,         // green (engine color)
+      emissiveStr * 0.8,   // cyan-ish B
     );
   }
 
@@ -360,6 +448,7 @@ export class EntityRenderer3D {
   }
 
   private renderScout(enemy: Enemy, heading: number, time: number): void {
+    refreshThemeColors();
     let model = mat4.translate(mat4.identity(), enemy.x, 0, enemy.y);
     model = mat4.rotateY(model, heading);
 
@@ -367,27 +456,45 @@ export class EntityRenderer3D {
     const wobble = Math.sin(time * SCOUT_WOBBLE_FREQ) * SCOUT_WOBBLE_AMP;
     model = mat4.rotateZ(model, wobble);
 
-    this.renderer.drawMeshWithMatrix(this.scoutHandle, model, 1, 1, 1, 0);
+    const c = cachedColors.enemyScout;
+    this.renderer.drawMeshWithMatrix(
+      this.scoutHandle, model, 1, 1, 1, 0,
+      0, // no specular (organic enemy)
+      c[0] * SCOUT_EMISSIVE, c[1] * SCOUT_EMISSIVE, c[2] * SCOUT_EMISSIVE,
+    );
   }
 
   private renderBrute(enemy: Enemy, heading: number, time: number): void {
+    refreshThemeColors();
     let model = mat4.translate(mat4.identity(), enemy.x, 0, enemy.y);
     // Face movement direction + slow constant rotation
     model = mat4.rotateY(model, heading + time * BRUTE_ROTATION_SPEED);
 
-    this.renderer.drawMeshWithMatrix(this.bruteHandle, model, 1, 1, 1, 0);
+    const c = cachedColors.enemyBrute;
+    this.renderer.drawMeshWithMatrix(
+      this.bruteHandle, model, 1, 1, 1, 0,
+      0,
+      c[0] * BRUTE_EMISSIVE, c[1] * BRUTE_EMISSIVE, c[2] * BRUTE_EMISSIVE,
+    );
   }
 
   private renderRanged(enemy: Enemy, heading: number, time: number): void {
+    refreshThemeColors();
     // Gentle bobbing: translate Y up/down
     const bob = Math.sin(time * RANGED_BOB_FREQ) * RANGED_BOB_AMP;
     let model = mat4.translate(mat4.identity(), enemy.x, bob, enemy.y);
     model = mat4.rotateY(model, heading);
 
-    this.renderer.drawMeshWithMatrix(this.rangedHandle, model, 1, 1, 1, 0);
+    const c = cachedColors.enemyRanged;
+    this.renderer.drawMeshWithMatrix(
+      this.rangedHandle, model, 1, 1, 1, 0,
+      0,
+      c[0] * RANGED_EMISSIVE, c[1] * RANGED_EMISSIVE, c[2] * RANGED_EMISSIVE,
+    );
   }
 
   private renderBoss(enemy: Enemy, heading: number, time: number): void {
+    refreshThemeColors();
     // Pulsing scale
     const pulse = 1 + Math.sin(time * BOSS_PULSE_FREQ) * BOSS_PULSE_AMP;
     let model = mat4.translate(mat4.identity(), enemy.x, 0, enemy.y);
@@ -401,17 +508,37 @@ export class EntityRenderer3D {
     let tintR = 1;
     let tintG = 1;
     let tintB = 1;
+
+    // Phase-based emissive glow
+    let emR = 0;
+    let emG = 0;
+    let emB = 0;
+    const c = cachedColors.enemyBoss;
+
     if (enemy.bossPhase >= 3) {
       tintR = 1.3;
       tintG = 0.5;
       tintB = 0.4;
+      // Phase 3: red pulsing emissive
+      const emPulse = BOSS_PHASE3_EMISSIVE + Math.sin(time * BOSS_PHASE3_PULSE_FREQ) * BOSS_PHASE3_PULSE_AMP;
+      emR = c[0] * emPulse;
+      emG = c[1] * emPulse * 0.5; // suppress green for redder glow
+      emB = c[2] * emPulse * 0.3;
     } else if (enemy.bossPhase >= 2) {
       tintR = 1.2;
       tintG = 0.8;
       tintB = 0.5;
+      // Phase 2: steady orange emissive
+      emR = c[0] * BOSS_PHASE2_EMISSIVE;
+      emG = c[1] * BOSS_PHASE2_EMISSIVE * 0.7;
+      emB = c[2] * BOSS_PHASE2_EMISSIVE * 0.3;
     }
 
-    this.renderer.drawMeshWithMatrix(this.bossHandle, model, tintR, tintG, tintB, 0);
+    this.renderer.drawMeshWithMatrix(
+      this.bossHandle, model, tintR, tintG, tintB, 0,
+      0, // no specular (boss is organic/magical)
+      emR, emG, emB,
+    );
   }
 
   /**
@@ -450,6 +577,7 @@ export class EntityRenderer3D {
         1,
         1, 1, 1, // white tint (no tint)
         0, // no flash
+        METALLIC_SPECULAR, // metallic bot
       );
     }
   }
@@ -497,6 +625,7 @@ export class EntityRenderer3D {
         model,
         tint, tint, tint,
         0, // no flash
+        METALLIC_SPECULAR, // metallic bot
       );
     }
   }
@@ -512,7 +641,9 @@ export class EntityRenderer3D {
     viewRadius: number,
     time: number,
   ): void {
+    refreshThemeColors();
     const viewRadiusSq = viewRadius * viewRadius;
+    const sc = cachedColors.salvage;
 
     for (let i = 0; i < entities.length; i++) {
       const entity = entities[i];
@@ -542,6 +673,8 @@ export class EntityRenderer3D {
         pulse,
         1, 1, 1, // white tint (mesh has amber color baked in)
         flash,
+        0, // no specular
+        sc[0] * SALVAGE_EMISSIVE, sc[1] * SALVAGE_EMISSIVE, sc[2] * SALVAGE_EMISSIVE,
       );
     }
   }
@@ -561,8 +694,9 @@ export class EntityRenderer3D {
     _time: number,
   ): void {
     const viewRadiusSq = viewRadius * viewRadius;
+    const pe = PROJECTILE_EMISSIVE;
 
-    // Enemy projectiles — red tint, normal scale
+    // Enemy projectiles — red tint, normal scale, red emissive
     for (let i = 0; i < enemyProjectiles.length; i++) {
       const p = enemyProjectiles[i];
       if (!p.active) continue;
@@ -581,10 +715,12 @@ export class EntityRenderer3D {
         model,
         1.2, 0.4, 0.3, // red tint
         0,
+        0, // no specular
+        pe, pe * 0.3, pe * 0.2, // red emissive for bloom
       );
     }
 
-    // Combat bot projectiles — blue tint, tiny scale
+    // Combat bot projectiles — blue tint, tiny scale, blue emissive
     for (let i = 0; i < combatBotProjectiles.length; i++) {
       const p = combatBotProjectiles[i];
       if (!p.active) continue;
@@ -603,10 +739,12 @@ export class EntityRenderer3D {
         model,
         0.4, 0.6, 1.2, // blue tint
         0,
+        0,
+        pe * 0.2, pe * 0.4, pe, // blue emissive for bloom
       );
     }
 
-    // Homing missiles — orange tint, larger scale
+    // Homing missiles — orange tint, larger scale, orange emissive
     for (let i = 0; i < homingMissiles.length; i++) {
       const m = homingMissiles[i];
       if (!m.active) continue;
@@ -625,6 +763,8 @@ export class EntityRenderer3D {
         model,
         1.3, 0.7, 0.2, // orange tint
         0,
+        0,
+        pe, pe * 0.5, pe * 0.1, // orange emissive for bloom
       );
     }
   }
