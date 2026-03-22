@@ -33,7 +33,8 @@ import { BotSlotSystem, SlotState } from './systems/BotSlotSystem';
 import { createZoomState, adjustZoom, updateZoom, resetZoom, ZOOM_WHEEL_SENSITIVITY, ZOOM_KEY_STEP, ZoomState } from './systems/ZoomState';
 import { Minimap } from './ui/Minimap';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
-import { Renderer3D, createTestCube, MeshHandle } from './rendering/Renderer3D';
+import { Renderer3D } from './rendering/Renderer3D';
+import { EntityRenderer3D } from './rendering/EntityRenderer3D';
 import { BloomEffect } from './rendering/effects/BloomEffect';
 import { DamageDistortionEffect } from './rendering/effects/DamageDistortionEffect';
 import { getTheme, cycleTheme } from './themes/theme';
@@ -60,9 +61,9 @@ if (shaderPipeline) {
 }
 // 3D renderer (renders behind the 2D canvas — optional, null if WebGL2 unavailable)
 const renderer3d = Renderer3D.create(canvas);
-let testCubeHandle: MeshHandle | null = null;
+let entityRenderer3d: EntityRenderer3D | null = null;
 if (renderer3d) {
-  testCubeHandle = renderer3d.uploadMesh(createTestCube(15));
+  entityRenderer3d = new EntityRenderer3D(renderer3d);
 }
 const pauseMenu = new PauseMenu();
 const helpScreen = new HelpScreen();
@@ -1141,13 +1142,26 @@ const loop = new GameLoop({
 
     const theme = getTheme();
 
-    // 3D renderer pass — renders the background and (future) 3D entities
-    if (renderer3d) {
+    // 3D renderer pass — renders background, asteroids, and home base
+    if (renderer3d && entityRenderer3d) {
       renderer3d.setClearColor(theme.radar.background);
       renderer3d.beginFrame(player.x, player.y, player.heading, zoom.current);
-      if (testCubeHandle) {
-        renderer3d.drawMesh(testCubeHandle, 0, 0); // Test cube at world origin
-      }
+
+      // View radius for culling — same formula used for 2D rendering below
+      const viewRadius3d = Math.sqrt(canvas.width * canvas.width + canvas.height * canvas.height) / 2 / zoom.current;
+
+      // Render asteroids with rotation, damage flash, mining darkening, and culling
+      entityRenderer3d.renderAsteroids(
+        world.entities,
+        player.x,
+        player.y,
+        viewRadius3d,
+        player.survivalTime,
+      );
+
+      // Render home base with HP-based red tinting and pulse
+      entityRenderer3d.renderHomeBase(homeBase, player.survivalTime);
+
       renderer3d.endFrame();
     }
 

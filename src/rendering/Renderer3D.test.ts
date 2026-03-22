@@ -31,6 +31,7 @@ function createMockGL() {
     getProgramInfoLog: vi.fn(() => ''),
     useProgram: vi.fn(),
     getUniformLocation: vi.fn(() => ({ __loc: true })),
+    uniform1f: vi.fn(),
     uniform3fv: vi.fn(),
     uniformMatrix4fv: vi.fn(),
     enable: vi.fn(),
@@ -122,6 +123,45 @@ describe('Renderer3D', () => {
           expect.closeTo(0xcc / 255, 2),
           1
         );
+      });
+    });
+  });
+
+  describe('drawMeshTinted', () => {
+    it('sets tint and flash uniforms before drawing, then resets them', () => {
+      withMockRenderer((renderer, gl) => {
+        const mesh = renderer.uploadMesh({
+          positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+          normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]),
+          colors: new Float32Array([1, 0, 0, 1, 0, 0, 1, 0, 0]),
+          indices: new Uint16Array([0, 1, 2]),
+        });
+
+        renderer.beginFrame(0, 0, 0, 1);
+
+        // Clear call counts to isolate drawMeshTinted calls
+        (gl.uniform3fv as ReturnType<typeof vi.fn>).mockClear();
+        (gl.uniform1f as ReturnType<typeof vi.fn>).mockClear();
+
+        renderer.drawMeshTinted(mesh, 10, 20, 0, 1, 0.8, 0.2, 0.1, 0.5);
+
+        // Should have set tint color, then reset it (2 calls)
+        const uniform3fvCalls = (gl.uniform3fv as ReturnType<typeof vi.fn>).mock.calls;
+        expect(uniform3fvCalls.length).toBe(2);
+        // First call: set tint (Float32Array)
+        expect(Array.from(uniform3fvCalls[0][1])).toEqual([
+          expect.closeTo(0.8, 4),
+          expect.closeTo(0.2, 4),
+          expect.closeTo(0.1, 4),
+        ]);
+        // Second call: reset to white (Float32Array)
+        expect(Array.from(uniform3fvCalls[1][1])).toEqual([1, 1, 1]);
+
+        // Should have set flash, then reset it (2 calls)
+        const uniform1fCalls = (gl.uniform1f as ReturnType<typeof vi.fn>).mock.calls;
+        expect(uniform1fCalls.length).toBe(2);
+        expect(uniform1fCalls[0][1]).toBe(0.5);
+        expect(uniform1fCalls[1][1]).toBe(0);
       });
     });
   });

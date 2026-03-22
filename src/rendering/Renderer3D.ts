@@ -34,14 +34,18 @@ in vec3 vWorldPos;
 
 uniform vec3 uLightDir;
 uniform vec3 uAmbient;
+uniform vec3 uTintColor;
+uniform float uDamageFlash;
 
 out vec4 fragColor;
 
 void main() {
   vec3 normal = normalize(vNormal);
   float diffuse = max(dot(normal, uLightDir), 0.0);
-  vec3 lit = vColor * (uAmbient + vec3(diffuse));
-  fragColor = vec4(lit, 1.0);
+  vec3 lit = vColor * uTintColor * (uAmbient + vec3(diffuse));
+  // Damage flash: mix toward white
+  vec3 finalColor = mix(lit, vec3(1.0), uDamageFlash);
+  fragColor = vec4(finalColor, 1.0);
 }
 `;
 
@@ -110,12 +114,18 @@ export class Renderer3D {
   private uModel: WebGLUniformLocation | null;
   private uLightDir: WebGLUniformLocation | null;
   private uAmbient: WebGLUniformLocation | null;
+  private uTintColor: WebGLUniformLocation | null;
+  private uDamageFlash: WebGLUniformLocation | null;
 
   // Clear color (defaults to transparent black)
   private clearR = 0;
   private clearG = 0;
   private clearB = 0;
   private clearA = 1;
+
+  // Pre-allocated arrays for tint uniforms (avoid per-frame allocation)
+  private tintArray = new Float32Array([1, 1, 1]);
+  private defaultTint = new Float32Array([1, 1, 1]);
 
   // Current camera matrices (reused each frame)
   private projectionMatrix: Float32Array = mat4.identity();
@@ -132,10 +142,16 @@ export class Renderer3D {
     this.uModel = gl.getUniformLocation(program, 'uModel');
     this.uLightDir = gl.getUniformLocation(program, 'uLightDir');
     this.uAmbient = gl.getUniformLocation(program, 'uAmbient');
+    this.uTintColor = gl.getUniformLocation(program, 'uTintColor');
+    this.uDamageFlash = gl.getUniformLocation(program, 'uDamageFlash');
 
     // Set static uniforms
     gl.uniform3fv(this.uLightDir, LIGHT_DIR);
     gl.uniform3fv(this.uAmbient, AMBIENT);
+
+    // Set default tint (white = no tint) and no flash
+    gl.uniform3fv(this.uTintColor, this.defaultTint);
+    gl.uniform1f(this.uDamageFlash, 0);
 
     // Enable depth testing
     gl.enable(gl.DEPTH_TEST);
@@ -326,6 +342,41 @@ export class Renderer3D {
     gl.uniformMatrix4fv(this.uModel, false, model);
     gl.bindVertexArray(handle.vao);
     gl.drawElements(gl.TRIANGLES, handle.indexCount, gl.UNSIGNED_SHORT, 0);
+  }
+
+  /**
+   * Draw a mesh with tint color and damage flash.
+   * @param handle Mesh handle from uploadMesh
+   * @param worldX World X position
+   * @param worldY World Y position (maps to 3D Z)
+   * @param rotationY Rotation around the Y (up) axis in radians
+   * @param scaleVal Uniform scale factor
+   * @param tintR Tint color red component (0-1, default 1)
+   * @param tintG Tint color green component (0-1, default 1)
+   * @param tintB Tint color blue component (0-1, default 1)
+   * @param flash Damage flash intensity (0 = none, 1 = full white)
+   */
+  drawMeshTinted(
+    handle: MeshHandle,
+    worldX: number,
+    worldY: number,
+    rotationY: number,
+    scaleVal: number,
+    tintR: number,
+    tintG: number,
+    tintB: number,
+    flash: number,
+  ): void {
+    const { gl } = this;
+    this.tintArray[0] = tintR;
+    this.tintArray[1] = tintG;
+    this.tintArray[2] = tintB;
+    gl.uniform3fv(this.uTintColor, this.tintArray);
+    gl.uniform1f(this.uDamageFlash, flash);
+    this.drawMesh(handle, worldX, worldY, rotationY, scaleVal);
+    // Reset to defaults so subsequent drawMesh calls are unaffected
+    gl.uniform3fv(this.uTintColor, this.defaultTint);
+    gl.uniform1f(this.uDamageFlash, 0);
   }
 
   /** End the frame. Currently a no-op but reserved for future use. */
