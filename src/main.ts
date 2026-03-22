@@ -8,7 +8,7 @@ import { Player } from './entities/Player';
 import { InputSystem } from './systems/InputSystem';
 import { PingSystem } from './systems/PingSystem';
 import { CombatSystem } from './systems/CombatSystem';
-import { Enemy, GameEntity, Dropoff, HomeBase, createHomeBase } from './entities/Entity';
+import { Enemy, GameEntity, HomeBase, createHomeBase } from './entities/Entity';
 import { spawnWave, spawnBoss } from './systems/WaveSpawner';
 import { BossSystem } from './systems/BossSystem';
 import { HomebaseUpgradeSystem } from './systems/HomebaseUpgradeSystem';
@@ -28,11 +28,13 @@ import { MotionTrail } from './radar/MotionTrail';
 import { DeathParticles } from './radar/DeathParticles';
 import { TowRopeSystem } from './systems/TowRopeSystem';
 import { CombatBotSystem } from './systems/CombatBotSystem';
-import { MiningBotSystem, MiningBotState } from './systems/MiningBotSystem';
+import { MiningBotSystem } from './systems/MiningBotSystem';
 import { BotSlotSystem, SlotState } from './systems/BotSlotSystem';
 import { createZoomState, adjustZoom, updateZoom, resetZoom, ZOOM_WHEEL_SENSITIVITY, ZOOM_KEY_STEP, ZoomState } from './systems/ZoomState';
 import { Minimap } from './ui/Minimap';
 import { ShaderPipeline } from './rendering/ShaderPipeline';
+import { Renderer3D } from './rendering/Renderer3D';
+import { EntityRenderer3D } from './rendering/EntityRenderer3D';
 import { BloomEffect } from './rendering/effects/BloomEffect';
 import { DamageDistortionEffect } from './rendering/effects/DamageDistortionEffect';
 import { getTheme, cycleTheme } from './themes/theme';
@@ -56,6 +58,37 @@ if (shaderPipeline) {
   const dmgEffect = new DamageDistortionEffect();
   shaderPipeline.addEffect(dmgEffect);
   damageDistortionEffect = dmgEffect;
+}
+// 3D renderer (renders behind the 2D canvas — optional, null if WebGL2 unavailable)
+let renderer3d = Renderer3D.create(canvas);
+let entityRenderer3d: EntityRenderer3D | null = null;
+if (renderer3d) {
+  entityRenderer3d = new EntityRenderer3D(renderer3d);
+}
+/** Whether to use 3D rendering. Set to false when WebGL2 is unavailable or user disables it. */
+let use3D = renderer3d !== null;
+
+// Handle WebGL context loss/restore — graceful fallback to 2D.
+// On context loss, switch to 2D immediately. On restore, recreate all GPU resources
+// (shaders, buffers, VAOs are invalidated by context loss).
+function attachContextHandlers(r: Renderer3D): void {
+  r.onContextLost = () => {
+    use3D = false;
+  };
+  r.onContextRestored = () => {
+    if (entityRenderer3d) entityRenderer3d.dispose();
+    entityRenderer3d = null;
+    if (renderer3d) renderer3d.dispose();
+    renderer3d = Renderer3D.create(canvas);
+    if (renderer3d) {
+      entityRenderer3d = new EntityRenderer3D(renderer3d);
+      attachContextHandlers(renderer3d);
+      use3D = true;
+    }
+  };
+}
+if (renderer3d) {
+  attachContextHandlers(renderer3d);
 }
 const pauseMenu = new PauseMenu();
 const helpScreen = new HelpScreen();
@@ -120,6 +153,8 @@ let baseModeClickHandler: ((e: MouseEvent) => void) | null = null;
 let bossSystem: BossSystem = new BossSystem();
 /** Current boss reference during final_wave (null when no boss is active) */
 let currentBoss: Enemy | null = null;
+/** Last frame's thrust input — captured in update, used in render for 3D player glow */
+let lastThrust = 0;
 
 function showMainMenu() {
   gameState = 'menu';
@@ -428,6 +463,10 @@ function togglePause() {
           shaderPipeline.setEnabled(!shaderPipeline.enabled);
         }
       },
+      onToggle3D: () => {
+        if (!renderer3d) return; // WebGL2 not available — can't enable 3D
+        use3D = !use3D;
+      },
       onCycleTheme: () => cycleTheme(),
       onOpenKeybinds: () => {
         gameState = previousState;
@@ -435,6 +474,7 @@ function togglePause() {
         keyRemapScreen.toggle();
       },
       isShaderEnabled: () => shaderPipeline ? shaderPipeline.enabled : false,
+      is3DEnabled: () => use3D,
       getThemeName: () => getTheme().name,
     });
   }
@@ -642,6 +682,7 @@ const loop = new GameLoop({
 
     // Tank-style movement: A/D turn, W/S thrust along heading
     const { turn, thrust } = input.getTankInput();
+    lastThrust = thrust;
     const oldX = player.x;
     const oldY = player.y;
 
@@ -1133,8 +1174,95 @@ const loop = new GameLoop({
     const cy = canvas.height / 2 + screenShake.offsetY;
 
     const theme = getTheme();
-    ctx.fillStyle = theme.radar.background;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 3D renderer pass — renders entities as 3D meshes on a separate WebGL2 canvas
+    if (use3D && renderer3d && entityRenderer3d) {
+      renderer3d.setClearColor(theme.radar.background);
+      renderer3d.beginFrame(player.x, player.y, player.heading, zoom.current);
+
+      // View radius for culling — same formula used for 2D rendering below
+      const viewRadius3d = Math.sqrt(canvas.width * canvas.width + canvas.height * canvas.height) / 2 / zoom.current;
+
+      // Render asteroids with rotation, damage flash, mining darkening, and culling
+      entityRenderer3d.renderAsteroids(
+        world.entities,
+        player.x,
+        player.y,
+        viewRadius3d,
+        player.survivalTime,
+      );
+
+      // Render home base with HP-based red tinting and pulse
+      entityRenderer3d.renderHomeBase(homeBase, player.survivalTime);
+
+      // Render enemies with subtype-specific 3D meshes and animations
+      entityRenderer3d.renderEnemies(
+        world.entities,
+        player.x,
+        player.y,
+        viewRadius3d,
+        player.survivalTime,
+      );
+
+      // Render salvage as rotating 3D diamonds
+      entityRenderer3d.renderSalvage(
+        world.entities,
+        player.x,
+        player.y,
+        viewRadius3d,
+        player.survivalTime,
+      );
+
+      // Render mining bots as 3D icospheres
+      entityRenderer3d.renderMiningBots(
+        miningBotSystem.getBots(),
+        player.x,
+        player.y,
+        viewRadius3d,
+        player.survivalTime,
+      );
+
+      // Render combat bots as 3D chevrons with lifetime pulse
+      entityRenderer3d.renderCombatBots(
+        combatBotSystem.bots,
+        player.x,
+        player.y,
+        viewRadius3d,
+        player.survivalTime,
+      );
+
+      // Render all projectile types as 3D shapes
+      entityRenderer3d.renderProjectiles(
+        combatSystem.projectiles,
+        combatBotSystem.botProjectiles,
+        abilitySystem.missiles,
+        player.x,
+        player.y,
+        viewRadius3d,
+        player.survivalTime,
+      );
+
+      // Render player ship with banking and engine glow
+      entityRenderer3d.renderPlayer(
+        player.x,
+        player.y,
+        player.turnVelocity,
+        lastThrust,
+        player.survivalTime,
+      );
+
+      renderer3d.endFrame();
+    }
+
+    // When 3D is active: clear transparently and blit the 3D canvas as background.
+    // When 3D is off: draw an opaque background for the 2D fallback path.
+    if (use3D && renderer3d) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(renderer3d.getCanvas(), 0, 0);
+    } else {
+      ctx.fillStyle = theme.radar.background;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
 
     // Radar (drawn without rotation — rings/crosshair are fixed, but scaled with zoom)
     radar.render(ctx, cx, cy, player.x, player.y, player.heading, zoom.current);
@@ -1151,241 +1279,10 @@ const loop = new GameLoop({
     // View radius covers the full screen — divide by zoom so we don't cull entities that are
     // visible when zoomed out (zoom < 1 means more world is visible)
     const viewRadius = Math.sqrt(canvas.width * canvas.width + canvas.height * canvas.height) / 2 / zoom.current;
-    const viewRadiusSq = viewRadius * viewRadius;
-
     ambientParticles.renderDeep(ctx, cx, cy, viewRadius, player.x, player.y);
 
-    // Motion trails (rendered behind blips)
-    motionTrail.render(ctx, player.x, player.y, cx, cy);
-
-    // Home base — boundary ring and center marker (tints toward red when damaged)
-    {
-      const hbx = homeBase.x - player.x;
-      const hby = homeBase.y - player.y;
-      if (hbx * hbx + hby * hby <= viewRadiusSq) {
-        const hsx = cx + hbx;
-        const hsy = cy + hby;
-        const pulse = 1 + Math.sin(player.survivalTime * 1.5) * 0.05;
-
-        // Interpolate color from cyan (100,220,255) to red (255,60,60) based on damage
-        const hpRatio = homeBase.maxHealth > 0 ? homeBase.health / homeBase.maxHealth : 1;
-        const hbR = Math.round(100 + (255 - 100) * (1 - hpRatio));
-        const hbG = Math.round(220 * hpRatio + 60 * (1 - hpRatio));
-        const hbB = Math.round(255 * hpRatio + 60 * (1 - hpRatio));
-        const hbHex = `#${hbR.toString(16).padStart(2, '0')}${hbG.toString(16).padStart(2, '0')}${hbB.toString(16).padStart(2, '0')}`;
-
-        ctx.save();
-
-        // Outer boundary ring
-        ctx.beginPath();
-        ctx.arc(hsx, hsy, homeBase.radius * pulse, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(${hbR}, ${hbG}, ${hbB}, 0.25)`;
-        ctx.lineWidth = 2;
-        ctx.shadowColor = hbHex;
-        ctx.shadowBlur = 10;
-        ctx.stroke();
-
-        // Inner glow fill
-        ctx.beginPath();
-        ctx.arc(hsx, hsy, homeBase.radius * pulse, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${hbR}, ${hbG}, ${hbB}, 0.03)`;
-        ctx.fill();
-
-        // Inner ring (second boundary line for depth)
-        ctx.beginPath();
-        ctx.arc(hsx, hsy, homeBase.radius * 0.6 * pulse, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(${hbR}, ${hbG}, ${hbB}, 0.12)`;
-        ctx.lineWidth = 1;
-        ctx.shadowBlur = 0;
-        ctx.stroke();
-
-        // Center structure — hexagon shape
-        ctx.translate(hsx, hsy);
-        const hexRadius = 10;
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-          const angle = (Math.PI / 3) * i - Math.PI / 6;
-          const hxp = Math.cos(angle) * hexRadius;
-          const hyp = Math.sin(angle) * hexRadius;
-          if (i === 0) ctx.moveTo(hxp, hyp);
-          else ctx.lineTo(hxp, hyp);
-        }
-        ctx.closePath();
-        ctx.fillStyle = `rgba(${hbR}, ${hbG}, ${hbB}, 0.4)`;
-        ctx.strokeStyle = `rgba(${hbR}, ${hbG}, ${hbB}, 0.7)`;
-        ctx.lineWidth = 1.5;
-        ctx.shadowColor = hbHex;
-        ctx.shadowBlur = 8;
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.restore();
-      }
-    }
-
-    // Combat bots — blue chevrons with health indicator
-    {
-      const combatColor = theme.entities.combatBot;
-      for (let i = 0; i < combatBotSystem.bots.length; i++) {
-        const bot = combatBotSystem.bots[i];
-        if (!bot.active) continue;
-        const bdx = bot.x - player.x;
-        const bdy = bot.y - player.y;
-        if (bdx * bdx + bdy * bdy > viewRadiusSq) continue;
-        const bsx = cx + bdx;
-        const bsy = cy + bdy;
-
-        // Pulsing glow based on remaining lifetime
-        const lifeFrac = bot.lifetime / bot.maxLifetime;
-        const pulseAlpha = lifeFrac > 0.25 ? 0.8 : 0.4 + Math.sin(player.survivalTime * 8) * 0.4;
-        ctx.globalAlpha = pulseAlpha;
-
-        // Chevron/arrow shape — signals active, aggressive friendly
-        ctx.beginPath();
-        ctx.moveTo(bsx, bsy - 5);
-        ctx.lineTo(bsx + 4, bsy + 3);
-        ctx.lineTo(bsx + 1, bsy + 1);
-        ctx.lineTo(bsx, bsy + 4);
-        ctx.lineTo(bsx - 1, bsy + 1);
-        ctx.lineTo(bsx - 4, bsy + 3);
-        ctx.closePath();
-        ctx.fillStyle = combatColor;
-        ctx.fill();
-
-        // Health bar above bot (only if damaged)
-        if (bot.health < bot.maxHealth) {
-          const hpFrac = bot.health / bot.maxHealth;
-          ctx.globalAlpha = 0.7;
-          ctx.fillStyle = '#333';
-          ctx.fillRect(bsx - 6, bsy - 10, 12, 2);
-          ctx.fillStyle = hpFrac > 0.5 ? combatColor : '#ff4444';
-          ctx.fillRect(bsx - 6, bsy - 10, 12 * hpFrac, 2);
-        }
-        ctx.globalAlpha = 1;
-      }
-    }
-
-    // Combat bot projectiles — small cyan dots
-    {
-      const projColor = theme.entities.botProjectile;
-      for (let i = 0; i < combatBotSystem.botProjectiles.length; i++) {
-        const p = combatBotSystem.botProjectiles[i];
-        if (!p.active) continue;
-        const pdx = p.x - player.x;
-        const pdy = p.y - player.y;
-        if (pdx * pdx + pdy * pdy > viewRadiusSq) continue;
-        const psx = cx + pdx;
-        const psy = cy + pdy;
-        ctx.beginPath();
-        ctx.arc(psx, psy, 2.5, 0, Math.PI * 2);
-        ctx.fillStyle = projColor;
-        ctx.fill();
-      }
-    }
-
-    // Dropoff zones — pulsing ring markers
-    for (const entity of world.entities) {
-      if (!entity.active || entity.type !== 'dropoff') continue;
-      const dropoff = entity as Dropoff;
-      const ddx = dropoff.x - player.x;
-      const ddy = dropoff.y - player.y;
-      if (ddx * ddx + ddy * ddy > viewRadiusSq) continue;
-      const dsx = cx + (dropoff.x - player.x);
-      const dsy = cy + (dropoff.y - player.y);
-      const pulse = 1 + Math.sin(player.survivalTime * 2) * 0.08;
-
-      const dropoffColor = theme.entities.dropoff;
-      ctx.save();
-      // Outer ring
-      ctx.beginPath();
-      ctx.arc(dsx, dsy, dropoff.radius * pulse, 0, Math.PI * 2);
-      ctx.strokeStyle = dropoffColor;
-      ctx.globalAlpha = 0.3;
-      ctx.lineWidth = 2;
-      ctx.shadowColor = dropoffColor;
-      ctx.shadowBlur = 8;
-      ctx.stroke();
-
-      // Inner glow fill
-      ctx.globalAlpha = 0.04;
-      ctx.beginPath();
-      ctx.arc(dsx, dsy, dropoff.radius * pulse, 0, Math.PI * 2);
-      ctx.fillStyle = dropoffColor;
-      ctx.fill();
-
-      // Center diamond marker
-      ctx.globalAlpha = 0.6;
-      ctx.translate(dsx, dsy);
-      ctx.rotate(Math.PI / 4);
-      ctx.beginPath();
-      ctx.rect(-5, -5, 10, 10);
-      ctx.strokeStyle = dropoffColor;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    // Tow ropes and towed salvage blips (hub-and-spoke: all anchored to player)
-    const towedItems = towRopeSystem.getTowedItems();
-    if (towedItems.length > 0) {
-      ctx.save();
-      for (const item of towedItems) {
-        const sal = item.salvage;
-        const itemSX = cx + (sal.x - player.x);
-        const itemSY = cy + (sal.y - player.y);
-
-        // Fade-out alpha
-        const alpha = item.fadeOut !== null ? Math.max(0, item.fadeOut / 0.3) : 1;
-        ctx.globalAlpha = alpha;
-
-        // Bezier rope: control point offset perpendicular to line by velocity delta
-        const midX = (cx + itemSX) / 2;
-        const midY = (cy + itemSY) / 2;
-        const dvx = player.vx - item.vx;
-        const dvy = player.vy - item.vy;
-        const cpX = midX + (-dvy) * 0.3;
-        const cpY = midY + dvx * 0.3;
-
-        // Draw rope
-        const salvageColor = theme.entities.salvage;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.quadraticCurveTo(cpX, cpY, itemSX, itemSY);
-        ctx.strokeStyle = salvageColor;
-        ctx.globalAlpha = 0.5 * alpha;
-        ctx.lineWidth = 1.5;
-        ctx.shadowColor = salvageColor;
-        ctx.shadowBlur = 4;
-        ctx.stroke();
-
-        // Draw towed salvage blip (diamond shape)
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.translate(itemSX, itemSY);
-        ctx.rotate(Math.PI / 4);
-        ctx.beginPath();
-        ctx.rect(-4.5, -4.5, 9, 9);
-        ctx.fillStyle = salvageColor;
-        ctx.shadowColor = salvageColor;
-        ctx.shadowBlur = 8;
-        ctx.fill();
-
-        // Damage flash overlay — white flash when recently hit
-        if (item.salvage.damageFlash > 0) {
-          ctx.globalAlpha = Math.min(item.salvage.damageFlash / 0.15, 1);
-          ctx.fillStyle = '#ffffff';
-          ctx.shadowBlur = 0;
-          ctx.fill();
-        }
-
-        ctx.restore();
-      }
-      ctx.globalAlpha = 1;
-      ctx.shadowBlur = 0;
-      ctx.restore();
-    }
-
-    // Entity blips (positions are rotated by the canvas transform)
+    // Entity blips (2D fallback) — when 3D is active, only render ghost-blips and labels.
+    // When 3D is off, render full entity shapes.
     const worldRot = -player.heading - Math.PI / 2;
     blipRenderer.renderBlips(
       ctx,
@@ -1396,117 +1293,17 @@ const loop = new GameLoop({
       cy,
       viewRadius,
       resolutionLevel,
-      worldRot
+      worldRot,
+      !use3D,
     );
+
+    // Sweep effects (radar ping visual feedback — stays on 2D overlay)
     sweepEffects.render(ctx, cx, cy);
 
-    // Ability visual effects
+    // Ability visual effects (player feedback — stays on 2D overlay)
     abilityEffects.render(ctx, cx, cy, player.x, player.y, player.survivalTime);
 
-    // Death particles
-    deathParticles.render(ctx, player.x, player.y, cx, cy, viewRadius);
-
-    // Render projectiles
-    for (const p of combatSystem.projectiles) {
-      const prx = p.x - player.x;
-      const pry = p.y - player.y;
-      if (prx * prx + pry * pry > viewRadiusSq) continue;
-      const px = cx + prx;
-      const py = cy + pry;
-      ctx.save();
-      ctx.shadowColor = theme.effects.projectileGlow;
-      ctx.shadowBlur = 6;
-      ctx.beginPath();
-      ctx.arc(px, py, 2, 0, Math.PI * 2);
-      ctx.fillStyle = theme.effects.projectile;
-      ctx.fill();
-      ctx.restore();
-    }
-
-    // Render mining bots and laser lines
-    {
-      const miningColor = theme.entities.miningBot;
-      const bots = miningBotSystem.getBots();
-      for (let i = 0; i < bots.length; i++) {
-        const mb = bots[i];
-        if (!mb.active) continue;
-        const mbrx = mb.x - player.x;
-        const mbry = mb.y - player.y;
-        if (mbrx * mbrx + mbry * mbry > viewRadiusSq) continue;
-        const mbX = cx + mbrx;
-        const mbY = cy + mbry;
-
-        // Laser line to asteroid while mining
-        if (mb.state === MiningBotState.Mining && mb.targetAsteroid) {
-          const tarx = mb.targetAsteroid.x - player.x;
-          const tary = mb.targetAsteroid.y - player.y;
-          const tarX = cx + tarx;
-          const tarY = cy + tary;
-          ctx.save();
-          ctx.strokeStyle = miningColor;
-          ctx.globalAlpha = 0.6;
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(mbX, mbY);
-          ctx.lineTo(tarX, tarY);
-          ctx.stroke();
-          ctx.restore();
-        }
-
-        // Bot dot — double circle (filled inner + outer ring)
-        ctx.save();
-        ctx.shadowColor = miningColor;
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        ctx.arc(mbX, mbY, 3, 0, Math.PI * 2);
-        ctx.fillStyle = miningColor;
-        ctx.fill();
-        // Outer ring
-        ctx.beginPath();
-        ctx.arc(mbX, mbY, 5, 0, Math.PI * 2);
-        ctx.strokeStyle = miningColor;
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.restore();
-      }
-    }
-
-    // Render missiles
-    for (const missile of abilitySystem.missiles) {
-      const mrx = missile.x - player.x;
-      const mry = missile.y - player.y;
-      if (mrx * mrx + mry * mry > viewRadiusSq) continue;
-      const mx = cx + mrx;
-      const my = cy + mry;
-      ctx.save();
-      ctx.shadowColor = theme.effects.missile;
-      ctx.shadowBlur = 10;
-      ctx.beginPath();
-      ctx.arc(mx, my, 3, 0, Math.PI * 2);
-      ctx.fillStyle = theme.effects.missile;
-      ctx.fill();
-      ctx.restore();
-    }
-
-    // Mouse cursor indicator (crosshair at mouse world position)
-    if (input.mouseOver) {
-      const cursorSX = cx + (input.mouseWorldX - player.x);
-      const cursorSY = cy + (input.mouseWorldY - player.y);
-      ctx.globalAlpha = 0.3;
-      ctx.strokeStyle = theme.radar.primary;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      // Horizontal line
-      ctx.moveTo(cursorSX - 8, cursorSY);
-      ctx.lineTo(cursorSX + 8, cursorSY);
-      // Vertical line
-      ctx.moveTo(cursorSX, cursorSY - 8);
-      ctx.lineTo(cursorSX, cursorSY + 8);
-      ctx.stroke();
-      ctx.globalAlpha = 1.0;
-    }
-
-    // Floating text (counter-rotated so text stays upright)
+    // Floating text (counter-rotated so text stays upright — stays on 2D overlay)
     const worldRotation = -player.heading - Math.PI / 2;
     floatingText.render(ctx, player.x, player.y, cx, cy, worldRotation);
 
@@ -1524,19 +1321,16 @@ const loop = new GameLoop({
     ctx.fill();
     ctx.restore();
 
-    // Player heading indicator (fixed to screen, always points up)
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.fillStyle = theme.radar.primary;
-    ctx.shadowColor = theme.radar.primary;
-    ctx.shadowBlur = 6;
-    ctx.beginPath();
-    ctx.moveTo(0, -8);
-    ctx.lineTo(-5, 5);
-    ctx.lineTo(5, 5);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
+    // Player heading indicator — only shown in 2D mode (3D renders the player ship)
+    if (!use3D) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 8);
+      ctx.lineTo(cx - 5, cy + 5);
+      ctx.lineTo(cx + 5, cy + 5);
+      ctx.closePath();
+      ctx.fillStyle = '#00ff41';
+      ctx.fill();
+    }
 
     // Bot slot UI — row of small circles below the player indicator
     {

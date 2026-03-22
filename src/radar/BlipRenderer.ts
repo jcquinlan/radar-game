@@ -1,4 +1,4 @@
-import { GameEntity, Enemy, Salvage, Asteroid } from '../entities/Entity';
+import { GameEntity, Enemy, Asteroid, Salvage } from '../entities/Entity';
 import { getTheme } from '../themes/theme';
 
 
@@ -91,6 +91,16 @@ function drawEnemyShape(
   }
 }
 
+/**
+ * BlipRenderer — renders entity blips on the 2D canvas.
+ *
+ * Supports two rendering modes controlled by the `renderShapes` parameter:
+ * - `renderShapes = true` (2D fallback): Renders full entity shapes (asteroids as
+ *   irregular polygons, enemies as subtype shapes, salvage as diamonds) with glow effects.
+ *   Used when 3D rendering is unavailable or disabled.
+ * - `renderShapes = false` (3D active): Only renders ghost blips for invisible enemies
+ *   and resolution labels. Entity shapes are rendered in 3D by EntityRenderer3D.
+ */
 export class BlipRenderer {
   private time = 0;
 
@@ -98,6 +108,10 @@ export class BlipRenderer {
     this.time += dt;
   }
 
+  /**
+   * @param renderShapes When true, renders full 2D entity shapes (fallback mode).
+   *   When false, only renders ghost-blips and labels (3D handles shapes).
+   */
   renderBlips(
     ctx: CanvasRenderingContext2D,
     entities: GameEntity[],
@@ -107,7 +121,8 @@ export class BlipRenderer {
     radarCenterY: number,
     radarRadius: number,
     resolutionLevel: number,
-    worldRotation?: number
+    worldRotation?: number,
+    renderShapes = false,
   ): void {
     const themeColors = getTheme().entities;
     const radarRadiusSq = radarRadius * radarRadius;
@@ -144,11 +159,10 @@ export class BlipRenderer {
 
       let currentSize = size;
 
-      // Enemy subtype sizes, colors, and effects
+      // Enemy subtype sizes and colors
       if (entity.type === 'enemy') {
         const enemy = entity as Enemy;
         if (enemy.isBoss) {
-          // Boss: large pulsing hexagon
           currentSize = (8 + Math.sin(this.time * 3) * 2) * 2;
           color = themeColors.enemyBoss;
         } else if (enemy.subtype === 'scout') {
@@ -158,53 +172,53 @@ export class BlipRenderer {
           currentSize = 7 + Math.sin(this.time * 2) * 2;
           color = themeColors.enemyBrute;
         } else {
-          // ranged: steady medium diamond
           currentSize = 4;
           color = themeColors.enemyRanged;
         }
       }
 
-      // Dropoffs are rendered in full by main.ts — skip blip
+      // Dropoffs are rendered in full by main.ts — skip
       if (entity.type === 'dropoff') continue;
 
-      // Asteroids: irregular circle, size varies by asteroid size category
+      // Asteroids
       if (entity.type === 'asteroid') {
         const asteroid = entity as Asteroid;
         const asteroidRadius = asteroid.size === 'small' ? 4
           : asteroid.size === 'medium' ? 7
           : 10;
 
-        // Faked glow behind the asteroid
-        ctx.globalAlpha = GLOW_ALPHA;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, asteroidRadius * GLOW_RADIUS_MULT, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.globalAlpha = 1;
-
-        // Irregular polygon shape (6 vertices with jitter based on position for consistency)
-        ctx.beginPath();
-        const vertices = 6;
-        for (let v = 0; v < vertices; v++) {
-          const angle = (v / vertices) * Math.PI * 2;
-          // Use position-based seed for consistent jitter per asteroid
-          const jitter = 0.7 + 0.3 * Math.abs(Math.sin(asteroid.x * 13.7 + asteroid.y * 7.3 + v * 2.1));
-          const r = asteroidRadius * jitter;
-          const px = screenX + Math.cos(angle) * r;
-          const py = screenY + Math.sin(angle) * r;
-          if (v === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        ctx.fillStyle = color;
-        ctx.fill();
-
-        // Damage flash overlay
-        if (asteroid.damageFlash > 0) {
-          ctx.globalAlpha = Math.min(asteroid.damageFlash / 0.15, 1);
-          ctx.fillStyle = '#ffffff';
+        if (renderShapes) {
+          // Full 2D rendering: irregular polygon with glow
+          ctx.globalAlpha = GLOW_ALPHA;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, asteroidRadius * GLOW_RADIUS_MULT, 0, Math.PI * 2);
+          ctx.fillStyle = color;
           ctx.fill();
           ctx.globalAlpha = 1;
+
+          // Irregular polygon shape (6 vertices with jitter based on position for consistency)
+          ctx.beginPath();
+          const vertices = 6;
+          for (let v = 0; v < vertices; v++) {
+            const angle = (v / vertices) * Math.PI * 2;
+            const jitter = 0.7 + 0.3 * Math.abs(Math.sin(asteroid.x * 13.7 + asteroid.y * 7.3 + v * 2.1));
+            const r = asteroidRadius * jitter;
+            const px = screenX + Math.cos(angle) * r;
+            const py = screenY + Math.sin(angle) * r;
+            if (v === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.fillStyle = color;
+          ctx.fill();
+
+          // Damage flash overlay
+          if (asteroid.damageFlash > 0) {
+            ctx.globalAlpha = Math.min(asteroid.damageFlash / 0.15, 1);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          }
         }
 
         // Resolution label for asteroids (S/M/L)
@@ -225,63 +239,65 @@ export class BlipRenderer {
         continue;
       }
 
-      // Salvage: pulsing diamond with aura (skip if already towed — rendered by tow rope system)
+      // Salvage
       if (entity.type === 'salvage') {
         const salvage = entity as Salvage;
         if (salvage.towedByPlayer) continue;
 
-        const pulse = 1 + Math.sin(this.time * 4) * 0.3;
-        const auraSize = currentSize + 8 + Math.sin(this.time * 3) * 3;
-        ctx.globalAlpha = 0.12 + Math.sin(this.time * 3) * 0.04;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, auraSize, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.globalAlpha = 1;
-
-        // Faked glow behind the diamond
-        ctx.globalAlpha = GLOW_ALPHA;
-        ctx.beginPath();
-        const glowS = currentSize * pulse * GLOW_RADIUS_MULT;
-        ctx.arc(screenX, screenY, glowS, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.globalAlpha = 1;
-
-        // Diamond shape — needs save/restore for translate+rotate
-        ctx.save();
-        ctx.translate(screenX, screenY);
-        ctx.rotate(Math.PI / 4);
-        const s = currentSize * pulse;
-        ctx.beginPath();
-        ctx.rect(-s, -s, s * 2, s * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-
-        // Damage flash overlay — white flash when recently hit
-        if (salvage.damageFlash > 0) {
-          ctx.globalAlpha = Math.min(salvage.damageFlash / 0.15, 1);
-          ctx.fillStyle = '#ffffff';
+        if (renderShapes) {
+          const pulse = 1 + Math.sin(this.time * 4) * 0.3;
+          const auraSize = currentSize + 8 + Math.sin(this.time * 3) * 3;
+          ctx.globalAlpha = 0.12 + Math.sin(this.time * 3) * 0.04;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, auraSize, 0, Math.PI * 2);
+          ctx.fillStyle = color;
           ctx.fill();
           ctx.globalAlpha = 1;
+
+          // Faked glow behind the diamond
+          ctx.globalAlpha = GLOW_ALPHA;
+          ctx.beginPath();
+          const glowS = currentSize * pulse * GLOW_RADIUS_MULT;
+          ctx.arc(screenX, screenY, glowS, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+
+          // Diamond shape
+          ctx.save();
+          ctx.translate(screenX, screenY);
+          ctx.rotate(Math.PI / 4);
+          const s = currentSize * pulse;
+          ctx.beginPath();
+          ctx.rect(-s, -s, s * 2, s * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+
+          // Damage flash overlay
+          if (salvage.damageFlash > 0) {
+            ctx.globalAlpha = Math.min(salvage.damageFlash / 0.15, 1);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          }
+
+          ctx.restore();
         }
-
-        ctx.restore();
       } else if (entity.type === 'enemy') {
-        const enemy = entity as Enemy;
+        if (renderShapes) {
+          // Full 2D rendering: subtype-specific shape with glow
+          ctx.globalAlpha = GLOW_ALPHA;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, currentSize * GLOW_RADIUS_MULT, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+          ctx.globalAlpha = 1;
 
-        // Faked glow: larger, lower-alpha circle behind the blip
-        ctx.globalAlpha = GLOW_ALPHA;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, currentSize * GLOW_RADIUS_MULT, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.globalAlpha = 1;
-
-        // Main blip — subtype-specific shape
-        drawEnemyShape(ctx, screenX, screenY, currentSize, enemy);
-        ctx.fillStyle = color;
-        ctx.fill();
+          // Main blip — subtype-specific shape
+          drawEnemyShape(ctx, screenX, screenY, currentSize, entity as Enemy);
+          ctx.fillStyle = color;
+          ctx.fill();
+        }
       } else {
         // Non-enemy, non-salvage entities (resource, etc.) — circle blip
         // Faked glow: larger, lower-alpha circle behind the blip
