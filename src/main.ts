@@ -67,6 +67,21 @@ if (renderer3d) {
 }
 /** Whether to use 3D rendering. Set to false when WebGL2 is unavailable or user disables it. */
 let use3D = renderer3d !== null;
+
+// Handle WebGL context loss/restore — graceful fallback to 2D
+if (renderer3d) {
+  renderer3d.onContextLost = () => {
+    use3D = false;
+  };
+  renderer3d.onContextRestored = () => {
+    // Reinitialize 3D resources after context restore
+    if (renderer3d) {
+      if (entityRenderer3d) entityRenderer3d.dispose();
+      entityRenderer3d = new EntityRenderer3D(renderer3d);
+      use3D = true;
+    }
+  };
+}
 const pauseMenu = new PauseMenu();
 const helpScreen = new HelpScreen();
 const levelManager = new LevelManager();
@@ -440,6 +455,10 @@ function togglePause() {
           shaderPipeline.setEnabled(!shaderPipeline.enabled);
         }
       },
+      onToggle3D: () => {
+        if (!renderer3d) return; // WebGL2 not available — can't enable 3D
+        use3D = !use3D;
+      },
       onCycleTheme: () => cycleTheme(),
       onOpenKeybinds: () => {
         gameState = previousState;
@@ -447,6 +466,7 @@ function togglePause() {
         keyRemapScreen.toggle();
       },
       isShaderEnabled: () => shaderPipeline ? shaderPipeline.enabled : false,
+      is3DEnabled: () => use3D,
       getThemeName: () => getTheme().name,
     });
   }

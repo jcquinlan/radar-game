@@ -157,6 +157,14 @@ export class Renderer3D {
   private projectionMatrix: Float32Array = mat4.identity();
   private viewMatrix: Float32Array = mat4.identity();
 
+  /** Callback invoked when the WebGL context is lost */
+  onContextLost: (() => void) | null = null;
+  /** Callback invoked when the WebGL context is restored */
+  onContextRestored: (() => void) | null = null;
+
+  private contextLostHandler: ((e: Event) => void) | null = null;
+  private contextRestoredHandler: ((e: Event) => void) | null = null;
+
   private constructor(gl: WebGL2RenderingContext, canvas3d: HTMLCanvasElement, program: WebGLProgram) {
     this.gl = gl;
     this.canvas3d = canvas3d;
@@ -231,7 +239,20 @@ export class Renderer3D {
       const vertexShader = compileShader(gl, gl.VERTEX_SHADER, VERTEX_SOURCE);
       const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SOURCE);
       const program = createProgram(gl, vertexShader, fragmentShader);
-      return new Renderer3D(gl, canvas3d, program);
+      const renderer = new Renderer3D(gl, canvas3d, program);
+
+      // Context loss/restore event listeners
+      renderer.contextLostHandler = (e: Event) => {
+        e.preventDefault(); // allows context to be restored
+        if (renderer.onContextLost) renderer.onContextLost();
+      };
+      renderer.contextRestoredHandler = () => {
+        if (renderer.onContextRestored) renderer.onContextRestored();
+      };
+      canvas3d.addEventListener('webglcontextlost', renderer.contextLostHandler);
+      canvas3d.addEventListener('webglcontextrestored', renderer.contextRestoredHandler);
+
+      return renderer;
     } catch {
       canvas3d.remove();
       return null;
@@ -511,9 +532,15 @@ export class Renderer3D {
     return this.canvas3d;
   }
 
-  /** Clean up all GPU resources */
+  /** Clean up all GPU resources and event listeners */
   dispose(): void {
     const { gl } = this;
+    if (this.contextLostHandler) {
+      this.canvas3d.removeEventListener('webglcontextlost', this.contextLostHandler);
+    }
+    if (this.contextRestoredHandler) {
+      this.canvas3d.removeEventListener('webglcontextrestored', this.contextRestoredHandler);
+    }
     gl.deleteProgram(this.program);
     this.canvas3d.remove();
   }

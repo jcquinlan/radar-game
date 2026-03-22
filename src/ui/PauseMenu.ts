@@ -4,9 +4,11 @@ export interface PauseMenuCallbacks {
   onResume: () => void;
   onRestart: () => void;
   onToggleShaders: () => void;
+  onToggle3D: () => void;
   onCycleTheme: () => void;
   onOpenKeybinds: () => void;
   isShaderEnabled: () => boolean;
+  is3DEnabled: () => boolean;
   getThemeName: () => string;
 }
 
@@ -63,6 +65,11 @@ export class PauseMenu {
     const cb = this.callbacks;
     return [
       { label: 'RESUME', action: () => cb.onResume() },
+      {
+        label: '',
+        dynamicLabel: () => `3D: ${cb.is3DEnabled() ? 'ON' : 'OFF'}`,
+        action: () => cb.onToggle3D(),
+      },
       {
         label: '',
         dynamicLabel: () => `SHADERS: ${cb.isShaderEnabled() ? 'ON' : 'OFF'}`,
