@@ -105,6 +105,57 @@ describe('AbilitySystem', () => {
       expect(texts[0].color).toBe('#ff4141');
     });
 
+    it('applies knockback impulse to surviving enemies in range', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      const enemy = createEnemy(100, 0, 'brute'); // 100px to the right
+      enemy.health = 80;
+      enemy.vx = 0;
+      enemy.vy = 0;
+
+      system.activate('damage_blast', [enemy], () => {});
+
+      // Enemy should be pushed away from player (positive x direction)
+      expect(enemy.vx).toBeGreaterThan(0);
+      expect(enemy.vy).toBeCloseTo(0, 1);
+      // Knockback force is ~400 px/s
+      expect(enemy.vx).toBeCloseTo(400, 0);
+    });
+
+    it('knockback direction matches player-to-enemy vector', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      const enemy = createEnemy(0, -100, 'brute'); // 100px above
+      enemy.health = 80;
+      enemy.vx = 0;
+      enemy.vy = 0;
+
+      system.activate('damage_blast', [enemy], () => {});
+
+      // Enemy should be pushed upward (negative y)
+      expect(enemy.vx).toBeCloseTo(0, 1);
+      expect(enemy.vy).toBeCloseTo(-400, 0);
+    });
+
+    it('does not apply knockback to enemies killed by blast', () => {
+      const { system, player } = buildAbilitySystem();
+      player.x = 0;
+      player.y = 0;
+      const enemy = createEnemy(50, 0, 'scout');
+      enemy.health = 10; // Will die from 20 blast damage
+      enemy.vx = 0;
+      enemy.vy = 0;
+
+      system.activate('damage_blast', [enemy], () => {});
+
+      // Enemy died — no knockback applied
+      expect(enemy.vx).toBe(0);
+      expect(enemy.vy).toBe(0);
+      expect(enemy.active).toBe(false);
+    });
+
     it('sets aggro on enemies hit by blast', () => {
       const { system, player } = buildAbilitySystem();
       player.x = 0;

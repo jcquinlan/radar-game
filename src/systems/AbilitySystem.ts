@@ -181,6 +181,8 @@ export class AbilitySystem {
     const blastRadius = 200;
     const blastDamage = 20;
 
+    const knockbackForce = 400;
+
     for (const entity of entities) {
       if (!entity.active || entity.type !== 'enemy') continue;
       const enemy = entity as Enemy;
@@ -193,6 +195,13 @@ export class AbilitySystem {
         enemy.health -= blastDamage;
         enemy.aggro = true;
         addFloatingText(`-${blastDamage}`, enemy.x, enemy.y, getTheme().events.damage);
+
+        // Knockback impulse — push enemy away from player
+        if (enemy.health > 0 && distSq > 0) {
+          const dist = Math.sqrt(distSq);
+          enemy.vx += (dx / dist) * knockbackForce;
+          enemy.vy += (dy / dist) * knockbackForce;
+        }
 
         if (enemy.health <= 0) {
           enemy.active = false;
